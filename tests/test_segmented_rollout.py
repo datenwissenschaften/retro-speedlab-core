@@ -1,8 +1,9 @@
 import numpy as np
 import torch
-from datenwissenschaften.segmented_rollout import SegmentedRecurrentRollouts, StateTransition, _advantages
 from gymnasium import spaces
 from sb3_contrib.common.recurrent.type_aliases import RNNStates
+
+from datenwissenschaften.segmented_rollout import SegmentedRecurrentRollouts, StateTransition, _advantages
 
 
 def transition(

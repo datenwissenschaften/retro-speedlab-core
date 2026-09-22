@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Lint (ruff check)
+        run: poetry run ruff check .
+
+      - name: Format check (ruff format)
+        run: poetry run ruff format --check .
+
+      - name: Test (pytest)
+        run: poetry run pytest -q
+
+      - name: Package import smoke test
+        run: poetry run python -c "import datenwissenschaften; print(datenwissenschaften.__file__)"
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/datenwissenschaften/ui/frontend/package-lock.json
+
+      - name: Build dashboard assets
+        working-directory: src/datenwissenschaften/ui/frontend
+        run: |
+          npm ci
+          npm run build

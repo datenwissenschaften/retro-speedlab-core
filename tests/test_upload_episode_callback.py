@@ -2,10 +2,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+from loguru import logger
+
 from datenwissenschaften.callbacks.episode_record import EpisodeRecord
 from datenwissenschaften.callbacks.upload_episode_callback import UploadEpisodeCallback
 from datenwissenschaften.settings import UploadSettings
-from loguru import logger
 
 
 def test_uploads_every_won_episode_started_from_initial_savestate(monkeypatch):

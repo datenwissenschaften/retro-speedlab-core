@@ -15,7 +15,9 @@ from datenwissenschaften.settings import DEFAULT_CONFIG_PATH, load_config
 GameProvider = Callable[[], str]
 SavestateProvider = Callable[[], str | None]
 SavestateSetter = Callable[[str | None], None]
-EnvWrapperFactory = Callable[[Any], Any]
+# Called as ``wrapper(env, obs_size=obs_size)`` by both ``EnvironmentBuilder``
+# and ``RetroEnvironmentFactory``.
+EnvWrapperFactory = Callable[..., Any]
 _last_environment_wrapper: EnvWrapperFactory | None = None
 
 
@@ -108,6 +110,7 @@ class EnvironmentBuilder:
         render_mode: str = "rgb_array",
         n_stack: int = 1,
         n_envs: int | None = None,
+        obs_size: tuple[int, int] = (96, 96),
         config_path: str | Path = DEFAULT_CONFIG_PATH,
     ) -> None:
         global _last_environment_wrapper
@@ -121,12 +124,13 @@ class EnvironmentBuilder:
         self.render_mode = render_mode
         self.n_stack = n_stack
         self.n_envs = n_envs if n_envs is not None else config.training.num_envs
+        self.obs_size = obs_size
 
     def make_env(self, rank: int = 0):
         record_dir = os.path.join(self.record_dir, self.game, self.state or "default", str(rank))
         os.makedirs(record_dir, exist_ok=True)
         env = retro.make(self.game, self.state, render_mode=self.render_mode, record=record_dir)
-        return self.wrapper(env)
+        return self.wrapper(env, obs_size=self.obs_size)
 
     def build(self, n_envs: int | None = None, n_stack: int | None = None):
         from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecFrameStack, VecMonitor

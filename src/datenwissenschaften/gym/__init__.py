@@ -267,6 +267,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         self._set_recording_savestate(previous_savestate, savestate)
         self.initial_savestate = savestate
         self.curriculum = self._create_curriculum()
+        TargetMemory.set_active_savestate(savestate)
         self._publish_curriculum_progress()
         return savestate
 

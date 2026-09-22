@@ -66,6 +66,5 @@ class TrainingSession:
             return
         if self._active_game != game:
             raise RuntimeError(
-                f"TrainingSession is already bound to {self._active_game!r}. "
-                f"Create a new session to train {game!r}."
+                f"TrainingSession is already bound to {self._active_game!r}. Create a new session to train {game!r}."
             )

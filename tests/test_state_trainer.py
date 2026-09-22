@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
+
 from datenwissenschaften import state_trainer
 from datenwissenschaften.state_trainer import (
     SavestateScheduler,

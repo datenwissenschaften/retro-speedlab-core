@@ -1,193 +1,160 @@
-# Retro Speedlab Library
+# Retro Speedlab Core
 
-**Reinforcement-learning engine for training recurrent agents on classic video games.**
+Recurrent PPO + Random Network Distillation training engine for classic
+video games, built on Stable-Baselines3, sb3-contrib, and Stable Retro.
 
-[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
+Retro Speedlab Core is the reusable RL engine behind
+[Retro Speedlab](https://github.com/datenwissenschaften/retro-speedlab), which
+provides the project scaffold, game packages, and end-to-end tooling built on
+top of this engine.
 
-The reusable reinforcement-learning engine behind
-[Retro Speedlab](https://github.com/datenwissenschaften/retro-speedlab).
+## Highlights
 
-It combines **visual observations, emulator RAM, recurrent PPO, Random Network
-Distillation (RND), vectorized environments, resumable training, replay capture,
-and live telemetry** in a reproducible Python training system.
-
-### Highlights
-
-- Recurrent **CNN-LSTM PPO** for partially observable environments
+- Recurrent **CNN-LSTM PPO** (`sb3-contrib`) for partially observable environments
 - Multi-input policies combining **RGB frames and emulator RAM**
-- Adaptive **Random Network Distillation (RND)** for sparse-reward exploration
-- Parallel vectorized emulator environments
-- Automatic worker selection, CUDA tuning, and CPU fallback
-- Atomic, resumable checkpoints including exploration state
-- `.bk2` episode recording
-- Live Vue-based training telemetry
-- Reusable abstractions for RAM, game states, rewards, and actions
-
-> **Looking for game runners, end-to-end examples, and user-facing
-> documentation?**
-> Start with [Retro Speedlab](https://github.com/datenwissenschaften/retro-speedlab).
+- Adaptive **Random Network Distillation (RND)** for sparse-reward exploration,
+  with a frozen target network and a trained predictor
+- Vectorized emulator environments, with a bounded, cgroup-aware worker-count
+  heuristic when `num_envs: auto`
+- Atomic, resumable checkpoints that include policy, RND, and exploration
+  adaptation state
+- A `ReverseCurriculum` for mastering a sequence of in-level states with
+  automatic savestate checkpointing and evidence-based rollback
+- State-routed training (`StateTrainer`) that trains one recurrent policy per
+  game state from a shared set of vectorized workers
+- `.bk2` episode recording via Stable Retro
+- Live Vue-based training telemetry over a local dashboard, persisted to Redis
 
 ## Architecture
 
-A training run combines game-specific definitions with reusable environment,
-model, training, persistence, and monitoring components.
+```mermaid
+flowchart TD
+    Game["Game package (Retro Speedlab)<br/>RAM · States · Rewards · Actions"]
+    Env["Vectorized Stable Retro environments<br/>(SubprocVecEnv / DummyVecEnv)"]
+    RGB["RGB frames"]
+    RAM["Emulator RAM"]
+    CNN["CNN encoder"]
+    RAMEnc["RAM / auxiliary encoder"]
+    LSTM["LSTM"]
+    PPO["Recurrent PPO + RND"]
+    CKPT["Checkpoints"]
+    REC["BK2 replays"]
+    TEL["Telemetry"]
+    UI["Vue dashboard"]
 
-```text
-                         Retro Speedlab
-                              │
-                    ┌─────────▼─────────┐
-                    │  Game Definition  │
-                    │                   │
-                    │ RAM · Rewards ·   │
-                    │ States · Actions  │
-                    └─────────┬─────────┘
-                              │
-                    ┌─────────▼─────────┐
-                    │ Vectorized Retro  │
-                    │   Environments    │
-                    └─────────┬─────────┘
-                              │
-                 ┌────────────┴────────────┐
-                 │                         │
-             RGB Frames                 RAM State
-                 │                         │
-            CNN Encoder                 Encoder
-                 │                         │
-                 └────────────┬────────────┘
-                              │
-                             LSTM
-                              │
-                    ┌─────────▼─────────┐
-                    │  Recurrent PPO    │
-                    │      + RND        │
-                    └─────────┬─────────┘
-                              │
-               ┌──────────────┼──────────────┐
-               │              │              │
-          Checkpoints      Replays       Telemetry
-                                             │
-                                     ┌───────▼───────┐
-                                     │ Live Dashboard │
-                                     └───────────────┘
+    Game --> Env
+    Env --> RGB
+    Env --> RAM
+    RGB --> CNN
+    RAM --> RAMEnc
+    CNN --> LSTM
+    RAMEnc --> LSTM
+    LSTM --> PPO
+    PPO --> CKPT
+    PPO --> REC
+    PPO --> TEL
+    TEL --> UI
 ```
 
-At runtime:
+A game package (defined in `retro-speedlab` or a compatible project) supplies
+RAM structures, training states, rewards, and action translation by
+subclassing this engine's `StateMachineGymWrapper`. This repository owns
+everything downstream of that: environment vectorization, the model, training
+loop, checkpointing, replay capture, and telemetry.
 
-1. A game package defines RAM structures, training states, rewards, and action
-   translation.
-2. The environment factory creates vectorized emulator workers and processed
-   visual observations.
-3. A model builder creates or restores the selected policy.
-4. The trainer coordinates learning, checkpoints, replay capture, telemetry,
-   and optional uploads.
-5. The dashboard exposes the active run without coupling the learner to a
-   separate monitoring service.
+## Training pipeline
 
-## Why this engine
+Each step produces a `{"visual": RGB frame, "ram": normalized RAM vector,
+"auxiliary": optional per-state features}` dictionary observation. `sb3-contrib`'s
+`MultiInputLstmPolicy` encodes the visual frame with a CNN and the RAM/auxiliary
+vector with an MLP, concatenates them, and feeds the result to an LSTM before
+the PPO actor-critic heads. `AdaptiveRecurrentRNDPPO` wraps this with a
+Random Network Distillation reward computed from the same visual frames.
 
-### Exploration for sparse rewards
+## Why recurrent PPO + RND
 
-`AdaptiveRecurrentRNDModel` combines visual frames, normalized RAM, temporal
-memory, and recurrent PPO with normalized, clipped, and annealed Random Network
-Distillation.
+Many of these games are partially observable from a single frame (off-screen
+state, delayed effects, multi-step sequences), so the policy carries an LSTM
+hidden state across steps rather than relying on frame stacking alone.
 
-RND provides an intrinsic reward for novel observations, encouraging exploration
-when useful external rewards are rare. Its influence decays during training so
-that learned external rewards increasingly determine policy behavior.
+Random Network Distillation adds an intrinsic reward proportional to how
+poorly a trained predictor network reconstructs the (frozen, randomly
+initialized) target network's features for the current frame — novel frames
+produce a larger predictor error and a larger intrinsic reward. This gives the
+agent a training signal in games where extrinsic reward is sparse. The
+intrinsic coefficient anneals from an initial to a final value over
+`rnd_anneal_steps`, and is additionally scaled by an adaptation multiplier
+that rises when episode fitness or win rate stalls and relaxes as progress
+resumes (`AdaptiveRecurrentRNDPPO._adapt_exploration`).
 
-### Temporal and state-aware policies
+## Checkpointing and reproducibility
 
-Visual observations are processed alongside structured emulator RAM. An LSTM
-maintains temporal context for environments where the current observation alone
-does not fully describe the game state.
+Checkpoints are written atomically: the model is saved to a temporary file in
+the target directory and moved into place with `os.replace`, so a crash or
+interrupted write during `model.save()` cannot leave a corrupted file at the
+path the trainer reads on restart (`callbacks/save_model_callback.py`).
+Loading validates the checkpoint's parameters are finite; a load failure or a
+non-finite checkpoint is discarded and training restarts fresh rather than
+resuming into a broken state (`model.load_or_create_model`).
 
-Environment wrappers use RGB observations and one emulator step per selected
-action as fixed engine defaults rather than game-level options.
+For `AdaptiveRecurrentRNDPPO`, a checkpoint includes:
 
-### Efficient execution
+- policy weights and optimizer state (via Stable-Baselines3)
+- the RND predictor and frozen target network weights, and the RND optimizer
+- RND reward normalization statistics (running mean/variance/count) and the
+  observation count used for coefficient annealing
+- the adaptation multiplier and its inputs (episodes since score improvement,
+  episodes since a win, recent fitness history)
 
-Training supports vectorized environments, automatic worker selection, CUDA
-tuning, and CPU fallback.
+This is verified by an automated round-trip test
+(`tests/test_checkpoint_round_trip.py`): a model is trained for a few steps,
+saved, reloaded, and its policy weights, RND weights, reward statistics, and
+adaptation state are compared against the original.
 
-The engine is designed to separate game-specific definitions from reusable
-training infrastructure, allowing the same training pipeline to operate across
-different environments.
+**Reproducibility is semantic, not bit-exact.** Resuming training continues
+from equivalent policy, RND, and exploration state, and training loss/reward
+trends continue coherently — but the engine does not currently seed Python,
+NumPy, PyTorch, and every vectorized worker into a single deterministic
+stream, and `SubprocVecEnv` workers, CUDA kernels, and the emulator itself are
+not guaranteed to replay identically. Treat resumed runs as continuing the
+same training process, not as reproducing an exact trajectory.
 
-### Reliable, resumable training
+## Vectorized execution
 
-Training state is persisted through atomic checkpoints.
+Environments run in `SubprocVecEnv` (or `DummyVecEnv` for a single worker),
+wrapped with `VecMonitor` and `VecFrameStack`. Setting `num_envs: auto` uses a
+bounded heuristic (`parallelism.optimal_env_count`) based on available CPU
+count and memory, both cgroup-aware where cgroup limits are present, so a
+containerized or CI environment does not oversubscribe. This heuristic is a
+starting point, not a measured throughput optimization; no benchmark numbers
+are published because none have been measured for this repository.
 
-For the adaptive recurrent RND model, checkpoints preserve:
+## Telemetry
 
-- policy state
-- RND predictor
-- fixed RND target
-- optimizer state
-- reward statistics
-- adaptation state
-- annealing progress
+The training dashboard (`ui.enable: true`, served locally by a
+zero-dependency HTTP server) shows live, in-memory **aggregate** statistics —
+episode counts, win rates, best fitness, durations — broken out by training
+state and by savestate, plus current model/RND/environment metadata. It does
+**not** retain a scrollable list of individual past episodes; only running
+summaries persist to Redis so they survive a restart. (`ui.max_episodes` is
+accepted for configuration compatibility but does not currently bound
+anything, since no per-episode list is kept.)
 
-This allows interrupted experiments to resume without silently resetting the
-exploration process.
+Training does not fail if the dashboard is disabled; `ui.enable: false` skips
+starting the HTTP server and the Redis-backed history store entirely.
 
-### Operational visibility
+## Redis persistence
 
-Training telemetry is exposed through a local browser dashboard without
-requiring a separate monitoring service.
-
-Episode recordings can additionally be persisted as `.bk2` replays for later
-inspection.
-
-## Models
-
-### `AdaptiveRecurrentRNDModel`
-
-The recommended model for sparse-reward games and partially observable
-environments.
-
-It combines:
-
-- visual CNN encoding
-- normalized emulator RAM
-- LSTM temporal memory
-- recurrent PPO
-- adaptive intrinsic RND exploration
-
-The model automatically configures parameters including score-staleness windows,
-missing-win windows, exploration multipliers, entropy, learning rate, clip
-range, and RND update pressure using characteristics of the action space,
-rollout size, training horizon, fitness volatility, score staleness, and win
-staleness.
-
-The default profile uses:
-
-| Parameter | Default |
-| --- | ---: |
-| Rollout length | `512` steps |
-| LSTM size | `256` units |
-| `gamma` | `0.999` |
-| `gae_lambda` | `0.98` |
-| RND decay horizon | `5,000,000` steps |
-
-These defaults preserve more temporal context and delayed reward information
-than a shorter arcade-oriented baseline while retaining conservative PPO
-updates.
-
-### Custom Stable-Baselines3 model
-
-Experiments requiring a standard Stable-Baselines3 algorithm can integrate
-through the same model builder, trainer, callbacks, and dashboard
-infrastructure.
-
-| Model | Best suited to |
-| --- | --- |
-| `AdaptiveRecurrentRNDModel` | Sparse-reward games and partially observable state |
-| Custom SB3 model | Experiments using standard Stable-Baselines3 algorithms |
+Non-file training state — telemetry summaries, best-episode references,
+curriculum/target-memory state, and the active savestate for rotation — is
+stored in Redis under `RedisStore`, namespaced by key prefix, game identity,
+and (where relevant) savestate, so unrelated experiments sharing a Redis
+instance do not overwrite each other's state. Model checkpoints and `.bk2`
+recordings stay on disk.
 
 ## Installation
 
-Retro Speedlab Library requires **Python 3.12**.
+Retro Speedlab Core requires **Python 3.12**.
 
 Install the published package:
 
@@ -195,144 +162,93 @@ Install the published package:
 pip install datenwissenschaften
 ```
 
+> The published PyPI package name is `datenwissenschaften` (this repository's
+> pre-rename identity); the import path and package name have not been
+> renamed to match the repository to avoid a breaking change. See
+> [Package naming](#package-naming) below.
+
 For local development:
 
 ```bash
-git clone https://github.com/datenwissenschaften/retro-speedlab-library.git
-cd retro-speedlab-library
+git clone https://github.com/datenwissenschaften/retro-speedlab-core.git
+cd retro-speedlab-core
 
 poetry install
 cp config.example.yaml config.yaml
 ```
 
-> The Python package is currently published as `datenwissenschaften`.
+## Minimal usage
 
-## Training dashboard
+This repository does not ship a runnable game; a concrete game package (RAM
+layout, states, rewards, and a `StateMachineGymWrapper` subclass) is supplied
+by a project such as [Retro Speedlab](https://github.com/datenwissenschaften/retro-speedlab)
+or your own. Given one, training composes from this engine's public API:
 
-Enable the dashboard in the configuration:
+```python
+from datenwissenschaften import AdaptiveRecurrentRNDModel, EnvironmentBuilder, ModelBuilder, Trainer
 
-```yaml
-ui:
-  enable: true
+from my_game import MyGameWrapper  # wraps a Stable Retro env into a Dict-observation
+                                    # Gym env; see StateMachineGymWrapper
+
+venv = EnvironmentBuilder(MyGameWrapper).build()
+model = ModelBuilder(AdaptiveRecurrentRNDModel).build(venv, state_name="default")
+Trainer(state_name="default").train(model)
 ```
 
-Then open:
+`EnvironmentBuilder` and `RetroVecEnvBuilder` are both public vector-environment
+builders; both call `wrapper(env, obs_size=obs_size)` (`obs_size` defaults to
+`(96, 96)` and is configurable on either builder), so `MyGameWrapper` can rely
+on the same construction contract regardless of which builder composes it
+(`tests/test_environment_builder.py`).
 
-```text
-http://127.0.0.1:18080
-```
+This also requires a `config.yaml` (see below) and a ROM imported through
+Stable Retro (`roms.import_roms`); the engine does not bundle or require any
+commercial ROM for its own test suite.
 
-The dashboard exposes live training telemetry without interrupting the learner,
-including:
+## Configuration
 
-- episode outcomes
-- reward distributions
-- environment details
-- PPO parameters
-- RND progress
+Copy `config.example.yaml` to `config.yaml` and adjust it; `load_config`
+validates paths, training, upload, and UI settings eagerly and raises a clear
+`RuntimeError` for missing or malformed values (see `tests/test_settings.py`).
+Notably:
 
-Dashboard history and non-file training state are persisted to Redis. This
-includes best-episode references and metrics, callback state, and target memory.
+- `training.savestate` or `training.savestates` (a rotation list) is required
+- `training.num_envs` accepts a positive integer or `"auto"`
+- `paths.roms`, `paths.models`, `paths.recordings`, and `paths.cache` are all required
+- `ui.port` must be `1`–`65535`; `ui.max_episodes` must be `null` or positive
+- `ui.enable` and the legacy `ui.enabled` key are mutually exclusive
 
-Best episodes are scoped independently by game identity and game savestate, for
-example:
+A rotating curriculum (`StateTrainer`) that masters multiple `training.savestates`
+persists the active savestate to Redis and keeps game-state features such as
+`TargetMemory` (a remembered on-screen target position) scoped to it, so a
+position learned under one savestate is never read back while training a
+different one (`tests/test_target_memory.py`).
 
-```text
-level1-1
-```
+PPO and RND hyperparameters (`NES_PPO_DEFAULTS` in `rnd/model.py`, and the RND
+constructor arguments) are Python-level defaults tuned for NES/Genesis-scale
+action spaces and rollout lengths; they are not currently exposed through
+`config.yaml`, but `AdaptiveRecurrentRNDPPO` validates them (e.g. RND's
+`update_proportion`, `intrinsic_gamma`, `anneal_steps`, and `reward_clip`) and
+raises `ValueError` for out-of-range values.
 
-Model checkpoints and `.bk2` episode recordings remain on disk.
-
-The default Redis connection is:
-
-```text
-redis://127.0.0.1:6379/0
-```
-
-History keys use:
-
-```text
-datenwissenschaften:history
-```
-
-The `ui` configuration accepts:
-
-```yaml
-ui:
-  enable: true
-  host: 127.0.0.1
-  port: 18080
-  max_episodes: 1000
-  redis_url: redis://127.0.0.1:6379/0
-  history_key_prefix: datenwissenschaften:history
-```
-
-Snapshots retain the latest 1,000 episodes by default and include summarized
-totals for discarded episodes.
-
-Set `max_episodes` to another positive integer or `null` for unlimited retained
-rows.
-
-> Binding the dashboard to `0.0.0.0` makes it reachable from other machines on
-> the local network. Use this only on a trusted network.
-
-## Project responsibilities
-
-The library focuses on the reusable reinforcement-learning engine rather than
-individual game implementations.
-
-Its responsibilities include:
-
-```text
-Environment
-├── emulator integration
-├── vectorized workers
-├── visual observations
-└── action translation
-
-Game state
-├── RAM models
-├── state machines
-├── rewards
-└── training objectives
-
-Learning
-├── CNN encoding
-├── recurrent PPO
-├── LSTM memory
-└── RND exploration
-
-Training
-├── model construction
-├── checkpointing
-├── callbacks
-├── replay capture
-└── telemetry
-
-Monitoring
-├── episode history
-├── training metrics
-├── Redis persistence
-└── Vue dashboard
-```
-
-Game runners, end-to-end examples, and higher-level project documentation live
-in [Retro Speedlab](https://github.com/datenwissenschaften/retro-speedlab).
-
-## Development
-
-Install the development environment:
+## Testing
 
 ```bash
 poetry install
+poetry run pytest
 ```
 
-Run the Python quality checks:
+Tests run entirely on CPU with fake/minimal environments — no ROM, GPU, or
+Redis server is required. This includes RND target-network immutability,
+RND/policy checkpoint round-trips, recurrent-rollout GAE across interleaved
+vector workers and state-segment boundaries, curriculum checkpoint logic, and
+configuration validation.
+
+## Development
 
 ```bash
-ruff check src
-black --check src
-python -m compileall -q src
+poetry run ruff check .
+poetry run ruff format --check .
 ```
 
 After modifying the Vue dashboard frontend, rebuild its assets:
@@ -342,6 +258,37 @@ cd src/datenwissenschaften/ui/frontend
 npm ci
 npm run build
 ```
+
+## Relationship to Retro Speedlab
+
+- **Retro Speedlab Core** (this repository): the reusable engine — environment
+  vectorization, models, training, exploration, checkpointing, telemetry, and
+  Redis persistence.
+- **[Retro Speedlab](https://github.com/datenwissenschaften/retro-speedlab)**:
+  the project scaffold — concrete game packages, runnable entry points, and
+  end-to-end examples built on this engine.
+
+## Package naming
+
+The repository is `retro-speedlab-core`; the published PyPI package and
+import path remain `datenwissenschaften` for compatibility with existing
+installations and game projects that depend on it. A rename to
+`retro-speedlab-core` (or similar) is a deliberate, separately-planned
+breaking change, not something this pass performs automatically.
+
+## Limitations
+
+- Training is semantically resumable, not bit-exact reproducible (see
+  [Checkpointing and reproducibility](#checkpointing-and-reproducibility)).
+- The dashboard keeps aggregate episode statistics, not a browsable history of
+  individual episodes.
+- `num_envs: auto` picks a bounded worker count from CPU/memory heuristics; it
+  is not a measured throughput optimization.
+- Binding the dashboard to `0.0.0.0` exposes it to the local network with no
+  authentication; use `127.0.0.1` (the default) unless the network is trusted.
+- PPO/RND hyperparameters are tuned defaults for NES/Genesis-scale games, not
+  yet configurable through `config.yaml`. Making them configurable is a
+  deliberate follow-up feature, not something this pass adds.
 
 ## License
 

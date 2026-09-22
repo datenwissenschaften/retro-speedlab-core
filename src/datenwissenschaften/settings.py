@@ -149,7 +149,9 @@ def _nullable_string(values: dict[str, Any], key: str) -> str | None:
 
 
 def _string_tuple(values: dict[str, Any], key: str, *, default: tuple[str, ...]) -> tuple[str, ...]:
-    value = values.get(key, default)
+    if key not in values:
+        return tuple(default)
+    value = values.get(key)
     if value is None:
         return ()
     if not isinstance(value, list):

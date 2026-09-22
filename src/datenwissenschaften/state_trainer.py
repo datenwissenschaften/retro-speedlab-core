@@ -258,9 +258,7 @@ class StateTrainer:
                 "training_state": "state-routed",
                 "savestate": savestate,
                 "savestates": list(config.training.savestates),
-                "savestate_rotation": (
-                    "after a completed run from the initial savestate " "or daily at local midnight"
-                ),
+                "savestate_rotation": ("after a completed run from the initial savestate or daily at local midnight"),
                 "configured_envs": config.training.num_envs,
                 "state_models": list(models),
             },
@@ -394,9 +392,7 @@ class StateTrainer:
                 "training_state": "state-routed",
                 "savestate": savestate,
                 "savestates": list(config.training.savestates),
-                "savestate_rotation": (
-                    "after a completed run from the initial savestate " "or daily at local midnight"
-                ),
+                "savestate_rotation": ("after a completed run from the initial savestate or daily at local midnight"),
                 "configured_envs": config.training.num_envs,
                 "state_models": list(models),
             },

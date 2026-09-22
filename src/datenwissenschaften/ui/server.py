@@ -165,8 +165,7 @@ def start_ui(settings: UISettings) -> DashboardServer | None:
             return None
     browser_host = "127.0.0.1" if settings.host == "0.0.0.0" else settings.host
     logger.info(
-        f"Training UI listening on {settings.host}:{settings.port}; "
-        f"open http://{browser_host}:{settings.port} locally"
+        f"Training UI listening on {settings.host}:{settings.port}; open http://{browser_host}:{settings.port} locally"
     )
     return _server
 

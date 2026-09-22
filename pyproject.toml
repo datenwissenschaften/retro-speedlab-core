@@ -38,18 +38,14 @@ keywords = ["reinforcement-learning", "retro-gaming", "stable-baselines3", "stab
 
 [project.urls]
 Homepage = "https://speedlab.datenwissenschaften.com"
-Repository = "https://github.com/datenwissenschaften/datenwissenschaften"
+Repository = "https://github.com/datenwissenschaften/retro-speedlab-core"
 Documentation = "https://speedlab.datenwissenschaften.com/getting-started"
 
 [dependency-groups]
 dev = [
-    "black==26.5.1",
     "ruff==0.15.20",
+    "pytest (>=9.1.1,<10.0.0)",
 ]
-
-[tool.black]
-line-length = 120
-target-version = ['py312']
 
 [tool.ruff]
 line-length = 120

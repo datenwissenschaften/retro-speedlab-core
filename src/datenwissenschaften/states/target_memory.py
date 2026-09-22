@@ -18,14 +18,16 @@ class TargetMemory:
         config = load_config()
         self.key = key
         self._store = RedisStore(config.ui.redis_url)
-        self._scope = (
-            "target-memory",
-            config.training.game_identity,
-            config.training.active_savestate or "default",
-            key,
-        )
+        self._game_identity = config.training.game_identity
+        self._fallback_savestate = config.training.active_savestate or "default"
         self.origin = self._coordinates(origin)
         self.scale = self._scale(scale, len(self.origin))
+        # The configured savestate is only a starting point: a rotating
+        # curriculum (``StateTrainer``) can change the active savestate at
+        # runtime without recreating this process, and each savestate must
+        # keep its own remembered target position. ``set_active_savestate``
+        # keeps ``_current_savestate`` in sync with that rotation.
+        self._current_savestate = self._resolve_active_savestate()
         self.coordinates = self._load()
 
     @classmethod
@@ -45,6 +47,20 @@ class TargetMemory:
         if memory.origin != expected_origin or memory.scale != expected_scale:
             raise ValueError(f"Target memory {key} was requested with an incompatible coordinate schema")
         return memory
+
+    @classmethod
+    def set_active_savestate(cls, savestate: str) -> None:
+        """Rescope every live target memory to ``savestate``.
+
+        ``StateMachineGymWrapper.set_initial_savestate`` calls this whenever
+        the active savestate changes, so a position remembered for one
+        savestate is never read back while training a different one.
+        """
+        for memory in cls._registry.values():
+            if memory._current_savestate == savestate:
+                continue
+            memory._current_savestate = savestate
+            memory.coordinates = memory._load()
 
     def remember(self, coordinates: Sequence[float]) -> bool:
         if self.coordinates is not None:
@@ -84,6 +100,14 @@ class TargetMemory:
         if len(values) != len(self.origin):
             raise ValueError(f"Expected {len(self.origin)} target coordinates, received {len(values)}")
         return values
+
+    def _resolve_active_savestate(self) -> str:
+        persisted = self._store.get("active-savestate", self._game_identity)
+        return persisted if isinstance(persisted, str) and persisted else self._fallback_savestate
+
+    @property
+    def _scope(self) -> tuple[str, ...]:
+        return ("target-memory", self._game_identity, self._current_savestate, self.key)
 
     def _load(self) -> tuple[float, ...] | None:
         try:
