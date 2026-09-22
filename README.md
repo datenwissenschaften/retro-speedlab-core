@@ -1,5 +1,7 @@
 # Retro Speedlab Core
 
+[![CI](https://github.com/datenwissenschaften/retro-speedlab-core/actions/workflows/ci.yml/badge.svg)](https://github.com/datenwissenschaften/retro-speedlab-core/actions/workflows/ci.yml) ![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg) ![Reinforcement Learning](https://img.shields.io/badge/RL-Recurrent%20PPO%20%2B%20RND-6f42c1.svg) [![Last commit](https://img.shields.io/github/last-commit/datenwissenschaften/retro-speedlab-core)](https://github.com/datenwissenschaften/retro-speedlab-core/commits/main) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Recurrent PPO + Random Network Distillation training engine for classic
 video games, built on Stable-Baselines3, sb3-contrib, and Stable Retro.
 
