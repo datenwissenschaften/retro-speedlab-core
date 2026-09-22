@@ -31,8 +31,10 @@ jobs:
       - name: Format check (ruff format)
         run: poetry run ruff format --check .
 
-      - name: Test (pytest)
-        run: poetry run pytest -q
+      - name: Test with coverage
+        run: |
+          poetry run pip install pytest-cov
+          poetry run pytest -q --cov=src --cov-report=term-missing --cov-report=xml
 
       - name: Package import smoke test
         run: poetry run python -c "import datenwissenschaften; print(datenwissenschaften.__file__)"
