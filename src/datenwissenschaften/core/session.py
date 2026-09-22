@@ -58,7 +58,7 @@ class TrainingSession:
         self.initialize()
         model = self.build()
         self.train_forever(model)
-        return model
+        return model  # pragma: no cover - train_forever loops forever and only ever exits via exception
 
     def _claim_game(self, game: str) -> None:
         if self._active_game is None:

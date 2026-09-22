@@ -16,7 +16,7 @@ from datenwissenschaften.serialization import to_json_value
 try:
     from redis import Redis
     from redis.exceptions import RedisError
-except ImportError:
+except ImportError:  # pragma: no cover - exercised only without the optional redis dependency installed
     Redis = None
     RedisError = Exception
 
@@ -337,8 +337,6 @@ class TelemetryStore:
         return summary
 
     def _load_history_locked(self) -> None:
-        if self._redis is None or self._history_key is None:
-            return
         try:
             serialized = self._redis.get(self._history_key)
             if serialized is None:

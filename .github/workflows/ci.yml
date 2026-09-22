@@ -32,7 +32,7 @@ jobs:
         run: poetry run ruff format --check .
 
       - name: Test (pytest)
-        run: poetry run pytest -q
+        run: poetry run pytest -q --cov=src/datenwissenschaften --cov-report=term-missing
 
       - name: Package import smoke test
         run: poetry run python -c "import datenwissenschaften; print(datenwissenschaften.__file__)"

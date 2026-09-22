@@ -174,8 +174,6 @@ class StateTrainer:
             for env_index, info in enumerate(infos):
                 if not info.get("state_segment_end"):
                     continue
-                if state_names[env_index] not in enabled_states:
-                    continue
                 model = models[state_names[env_index]]
                 segment_counts[state_names[env_index]] += 1
                 state_fitness = float(info.get("state_return", rewards[env_index]))

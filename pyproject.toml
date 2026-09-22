@@ -45,6 +45,7 @@ Documentation = "https://speedlab.datenwissenschaften.com/getting-started"
 dev = [
     "ruff==0.15.20",
     "pytest (>=9.1.1,<10.0.0)",
+    "pytest-cov (>=7.1.0,<8.0.0)",
 ]
 
 [tool.ruff]
@@ -53,6 +54,18 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+
+[tool.coverage.run]
+source = ["src/datenwissenschaften"]
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
 
 [tool.poetry]
 package-mode = true

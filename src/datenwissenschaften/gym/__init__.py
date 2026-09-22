@@ -400,7 +400,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         if not self.action_space.contains(action_index):
             raise ValueError(f"Action {action_index} is outside {self.action_space}")
 
-        if action_index >= len(self.action_table):
+        if action_index >= len(self.action_table):  # pragma: no cover
             raise ValueError(f"Action {action_index} has no entry in the action table")
 
         return self.action_table[action_index]

@@ -268,15 +268,6 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_binary(self, path: Path, content_type: str) -> None:
-        body = path.read_bytes()
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Cache-Control", "no-cache")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
     def _send_video(self, path: Path) -> None:
         size = path.stat().st_size
         start, end = 0, size - 1
@@ -313,7 +304,7 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             while remaining:
                 chunk = video_file.read(min(256 * 1024, remaining))
                 if not chunk:
-                    break
+                    break  # pragma: no cover - only reachable if the file shrinks mid-read
                 self.wfile.write(chunk)
                 remaining -= len(chunk)
 
