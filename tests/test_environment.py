@@ -6,12 +6,11 @@ import numpy as np
 import pytest
 from fakes import FakeEmulator, FakeWrapper, fake_environment, write_config
 
+from datenwissenschaften.curriculum import ReverseCurriculum
 from datenwissenschaften.environment import factory
 from datenwissenschaften.environment.curriculum_run import CurriculumRun
 from datenwissenschaften.environment.recording import active_movie_path
 from datenwissenschaften.settings import load_config
-
-WIN_TARGET = 64
 
 
 def test_reset_describes_the_ram_and_asks_the_start_question(tmp_path: Path):
@@ -78,7 +77,7 @@ def test_reset_resumes_from_the_active_curriculum_checkpoint(tmp_path: Path):
     env = fake_environment(tmp_path, [(3, 0)])
     curriculum = env.curriculum.curriculum
     curriculum.save_checkpoint("Boss", b"boss")
-    for _ in range(WIN_TARGET):
+    for _ in range(ReverseCurriculum.WIN_TARGET):
         curriculum.record_success("Survive", 10)
 
     observation, info = env.reset()

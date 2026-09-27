@@ -106,7 +106,7 @@ const savestateCurriculum = computed(() => snapshot.value.metadata?.savestate_cu
 const curriculumRows = computed(() => Object.entries(savestateCurriculum.value).map(([state, value]) => {
   const curriculum = value && typeof value === 'object' ? value : {}
   const wins = Math.max(0, Number(curriculum.wins) || 0)
-  const target = Math.max(1, Number(curriculum.win_target) || 64)
+  const target = Math.max(1, Number(curriculum.win_target))
   return {
     state,
     wins,
