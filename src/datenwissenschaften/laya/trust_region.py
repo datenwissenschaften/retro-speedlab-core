@@ -3,6 +3,7 @@ import math
 TARGET_KL = 0.01
 KL_TOLERANCE = 2.0
 LEARNING_RATE_DECREASE = 0.5
+STRONGEST_DECREASE = 0.1
 LEARNING_RATE_INCREASE = 1.2
 MIN_LEARNING_RATE_SCALE = 1e-3
 MAX_LEARNING_RATE_SCALE = 10.0
@@ -24,7 +25,7 @@ class TrustRegion:
 
     def _adapt_learning_rate(self, kl: float) -> None:
         if kl > TARGET_KL * KL_TOLERANCE:
-            self.learning_rate_scale *= LEARNING_RATE_DECREASE
+            self.learning_rate_scale *= max(STRONGEST_DECREASE, min(LEARNING_RATE_DECREASE, TARGET_KL / kl))
         elif kl < TARGET_KL / KL_TOLERANCE:
             self.learning_rate_scale *= LEARNING_RATE_INCREASE
         self.learning_rate_scale = min(MAX_LEARNING_RATE_SCALE, max(MIN_LEARNING_RATE_SCALE, self.learning_rate_scale))

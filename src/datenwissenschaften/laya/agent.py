@@ -59,5 +59,7 @@ class LayaAgent:
             "parameters": sum(parameter.numel() for parameter in self.network.parameters()),
             "num_timesteps": self.num_timesteps,
             "exploration": round(self.exploration, 3),
+            "precision": str(self.network.dtype).removeprefix("torch."),
+            "minibatch_size": self.learner.minibatch_size,
             **self.last_update,
         }

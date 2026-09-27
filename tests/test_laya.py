@@ -112,3 +112,23 @@ def test_exploration_fades_as_laya_gains_experience(network: LayaNetwork):
     assert FINAL_EXPLORATION < halfway < INITIAL_EXPLORATION
     assert agent.exploration == pytest.approx(FINAL_EXPLORATION)
     assert agent.metadata()["exploration"] == FINAL_EXPLORATION
+
+
+def test_float16_learning_scales_gradients_and_stays_finite(monkeypatch):
+    monkeypatch.setattr(network_module, "autocast_dtype", lambda device: torch.float16)
+    monkeypatch.setattr(network_module.laya, "load", fake_laya_load)
+    network = LayaNetwork("fake/laya", ACTIONS, "cpu")
+    agent = LayaAgent(network, (QUESTION,))
+    before = [parameter.detach().clone() for parameter in network.parameters()]
+    rollout = Rollout()
+    for step in range(12):
+        rollout.add(
+            OBSERVATION["state"], QUESTION, Decision(step % 2, {"left": 0.5, "right": 0.5}, 0.5), 1.0, step == 5
+        )
+
+    agent.learn(rollout)
+
+    assert agent.learner.scaler.is_enabled()
+    assert agent.metadata()["precision"] == "float16"
+    assert all(torch.isfinite(parameter).all() for parameter in network.parameters())
+    assert any(not torch.equal(old, new) for old, new in zip(before, network.parameters(), strict=True))

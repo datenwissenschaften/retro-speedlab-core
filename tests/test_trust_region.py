@@ -1,3 +1,5 @@
+import pytest
+
 from datenwissenschaften.laya.trust_region import (
     INITIAL_ENTROPY_COEFFICIENT,
     MIN_LEARNING_RATE_SCALE,
@@ -8,12 +10,16 @@ from datenwissenschaften.laya.trust_region import (
 ACTIONS = 3
 
 
-def test_learning_rate_shrinks_after_a_step_that_moved_the_policy_too_far():
-    region = TrustRegion()
+def test_learning_rate_shrinks_in_proportion_to_the_overshoot():
+    mild, severe, extreme = TrustRegion(), TrustRegion(), TrustRegion()
 
-    region.adapt(TARGET_KL * 10, 0.8, ACTIONS)
+    mild.adapt(TARGET_KL * 2.5, 0.8, ACTIONS)
+    severe.adapt(TARGET_KL * 5, 0.8, ACTIONS)
+    extreme.adapt(TARGET_KL * 60, 0.8, ACTIONS)
 
-    assert region.learning_rate_scale == 0.5
+    assert mild.learning_rate_scale == pytest.approx(0.4)
+    assert severe.learning_rate_scale == pytest.approx(0.2)
+    assert extreme.learning_rate_scale == pytest.approx(0.1)
 
 
 def test_learning_rate_grows_after_a_timid_step_and_stays_within_bounds():

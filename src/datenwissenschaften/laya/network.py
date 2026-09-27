@@ -2,6 +2,7 @@ import laya
 import torch
 from torch import nn
 
+from datenwissenschaften.laya.precision import autocast_dtype
 from datenwissenschaften.laya.question import LayaQuestion
 
 
@@ -15,6 +16,7 @@ class LayaNetwork(nn.Module):
         self.decision.encoder.gradient_checkpointing_enable()
         self.decision.head_checkpointing = True
         self.to(device)
+        self.dtype = autocast_dtype(self.device)
 
     @property
     def device(self) -> torch.device:
@@ -22,7 +24,7 @@ class LayaNetwork(nn.Module):
 
     def forward(self, states: list[str], questions: list[str]) -> torch.Tensor:
         batch = self.question.encode(states, questions, self.device)
-        with torch.autocast(self.device.type, dtype=torch.bfloat16):
+        with torch.autocast(self.device.type, dtype=self.dtype):
             logits, _ = self.decision(**batch)
         return logits.float()
 
