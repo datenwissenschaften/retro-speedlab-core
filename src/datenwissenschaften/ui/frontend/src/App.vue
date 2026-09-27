@@ -156,20 +156,13 @@ const summarizedAvgDuration = computed(() => {
 const latestTrainingState = computed(() => activeSummary.value.latest_training_state || summary.value.latest_training_state)
 const latestDuration = computed(() => activeSummary.value.latest_full_run_duration_seconds ?? null)
 const model = computed(() => snapshot.value.metadata?.model || {})
-const ppo = computed(() => model.value.ppo || {})
-const rnd = computed(() => model.value.rnd || {})
+const laya = computed(() => model.value.laya || {})
 const environment = computed(() => snapshot.value.metadata?.environment || {})
-const runtimeDetails = computed(() => {
-  const { class: _environmentClass, ...details } = environment.value
-  return { class: model.value.class || 'Unknown', ...details }
-})
 const run = computed(() => snapshot.value.metadata?.run || {})
 const server = computed(() => snapshot.value.server || {})
 const versionLabel = computed(() => server.value.version === 'DEVELOPMENT'
   ? 'DEVELOPMENT'
   : server.value.version ? `v${server.value.version}` : '—')
-const activeAlgorithm = computed(() => entries(ppo.value).length ? 'ppo' : null)
-const modelName = computed(() => model.value.display_name || (entries(rnd.value).length ? 'Adaptive Recurrent PPO + RND' : 'PPO'))
 const control = computed(() => snapshot.value.control || {})
 
 const resetModel = async () => {
@@ -220,6 +213,7 @@ const label = key => key.replaceAll('_', ' ')
         <span class="separator">/</span>
         <span>{{ latestTrainingState || run.savestate || 'no state' }}</span>
         <span class="endpoint">{{ server.bind_address || '—' }}</span>
+        <a class="stream-link" href="/stream" target="_blank">Stream view</a>
         <span :class="['connection', { offline: !connected }]"><i></i>{{ connected ? 'Live' : 'Disconnected' }}</span>
       </div>
     </header>
@@ -304,25 +298,16 @@ const label = key => key.replaceAll('_', ' ')
 
     <section class="observatory-section">
       <div class="section-heading">
-        <div><p class="eyebrow">TRAINING ENGINE</p><h2>Runtime and learning system</h2><p>Shared environment configuration and optimization details used by every state model.</p></div>
+        <div><p class="eyebrow">TRAINING ENGINE</p><h2>Runtime and learning system</h2><p>The game Laya plays and the Laya model making every decision.</p></div>
       </div>
-      <div :class="['details-grid system-grid', { 'two-column': !entries(rnd).length }]">
+      <div class="details-grid system-grid two-column">
       <article class="panel detail-card">
-        <div class="card-heading"><div><p class="eyebrow">SHARED RUNTIME</p><h2>Environment</h2><p class="card-description">Emulator, wrappers, observations, and action spaces.</p></div><span class="chip">{{ environment.num_envs || run.configured_envs || '—' }} envs</span></div>
-        <dl><template v-for="([key, value]) in entries(runtimeDetails)" :key="key"><dt>{{ label(key) }}</dt><dd>{{ display(value) }}</dd></template></dl>
+        <div class="card-heading"><div><p class="eyebrow">GAME</p><h2>Environment</h2><p class="card-description">Emulator, state machine, and the actions Laya can choose.</p></div><span class="chip">1 env</span></div>
+        <dl><template v-for="([key, value]) in entries(environment)" :key="key"><dt>{{ label(key) }}</dt><dd>{{ display(value) }}</dd></template></dl>
       </article>
-      <article v-if="activeAlgorithm === 'ppo'" class="panel detail-card">
-        <div class="card-heading"><div><p class="eyebrow">SHARED OPTIMIZER</p><h2>{{ modelName }}</h2><p class="card-description">PPO settings used to update each learned state policy.</p><p v-if="model.description" class="placeholder">{{ model.description }}</p></div><span class="chip" :class="{ muted: !entries(ppo).length }">{{ entries(ppo).length ? 'Configured' : 'Not active' }}</span></div>
-        <dl v-if="entries(ppo).length"><template v-for="([key, value]) in entries(ppo)" :key="key"><dt>{{ label(key) }}</dt><dd>{{ display(value) }}</dd></template></dl>
-        <p v-else class="placeholder">No PPO parameters on the active model.</p>
-      </article>
-      <article v-if="activeAlgorithm === 'ppo' && entries(rnd).length" class="panel detail-card">
-        <div class="card-heading"><div><p class="eyebrow">SHARED EXPLORATION</p><h2>Self-tuned RND</h2><p class="card-description">Curiosity and exploration pressure shared across state training.</p><p class="placeholder">Uses score staleness and missing wins to tune curiosity, entropy, PPO step size, clip range, and RND update pressure.</p></div><span class="chip">Active</span></div>
-        <dl><template v-for="([key, value]) in entries(rnd)" :key="key"><dt>{{ label(key) }}</dt><dd>{{ display(value) }}</dd></template></dl>
-      </article>
-      <article v-if="!activeAlgorithm" class="panel detail-card">
-        <div class="card-heading"><div><p class="eyebrow">MODEL</p><h2>Algorithm</h2></div><span class="chip muted">Waiting</span></div>
-        <p class="placeholder">Algorithm details appear when PPO starts.</p>
+      <article class="panel detail-card">
+        <div class="card-heading"><div><p class="eyebrow">DECISION MODEL</p><h2>{{ model.display_name || 'Laya' }}</h2><p class="card-description">{{ model.description || 'Laya details appear when training starts.' }}</p></div><span class="chip" :class="{ muted: !entries(laya).length }">{{ entries(laya).length ? 'Active' : 'Loading' }}</span></div>
+        <dl><template v-for="([key, value]) in entries(laya)" :key="key"><dt>{{ label(key) }}</dt><dd>{{ display(value) }}</dd></template></dl>
       </article>
       </div>
     </section>

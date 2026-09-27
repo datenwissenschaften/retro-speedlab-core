@@ -3,12 +3,15 @@ paths:
   models: working/models
   recordings: working/recordings
   cache: working/cache
+  database: working/database.json
 
 training:
   game: Airstriker-Genesis-v0
+  savestate: Level1
   fingerprint: null
-  savestate: null
-  num_envs: auto
+
+laya:
+  checkpoint: convaiinnovations/laya
 
 log_level: INFO
 
@@ -21,5 +24,3 @@ ui:
   host: 127.0.0.1
   port: 18080
   max_episodes: 1000
-  redis_url: redis://127.0.0.1:6379/0
-  history_key_prefix: datenwissenschaften:history

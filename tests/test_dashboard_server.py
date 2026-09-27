@@ -9,6 +9,7 @@ import pytest
 
 from datenwissenschaften.settings import UISettings
 from datenwissenschaften.ui import server as server_module
+from datenwissenschaften.ui.live import LiveFeed
 from datenwissenschaften.ui.server import (
     DashboardServer,
     _redact_config_secrets,
@@ -26,15 +27,11 @@ def _ui_settings(*, port: int = 0, enabled: bool = True) -> UISettings:
         host="127.0.0.1",
         port=port,
         max_episodes=10,
-        redis_url="redis://127.0.0.1:6379/0",
-        history_key_prefix="test:history",
     )
 
 
 @contextmanager
 def _running_server(monkeypatch, *, runtime=None, store=None, control_metadata=None, request_model_reset=None):
-    if runtime is not None:
-        monkeypatch.setattr(server_module, "get_runtime", lambda: runtime)
     if store is not None:
         monkeypatch.setattr(server_module, "get_store", lambda: store)
     if control_metadata is not None:
@@ -42,7 +39,7 @@ def _running_server(monkeypatch, *, runtime=None, store=None, control_metadata=N
     if request_model_reset is not None:
         monkeypatch.setattr(server_module, "request_model_reset", request_model_reset)
 
-    server = DashboardServer(_ui_settings())
+    server = DashboardServer(_ui_settings(), Path.cwd() if runtime is None else runtime.record_dir)
     server.start()
     try:
         yield server
@@ -113,8 +110,6 @@ def test_redact_config_secrets_only_redacts_the_upload_section():
 
 
 def test_rollout_videos_skips_malformed_and_incomplete_entries(tmp_path: Path, monkeypatch):
-    runtime = SimpleNamespace(record_dir=tmp_path)
-    monkeypatch.setattr(server_module, "get_runtime", lambda: runtime)
 
     good = tmp_path / "good.rollout.json"
     good.write_text(json.dumps({"recorded_at": "2024-01-02T00:00:00Z", "score": 1.0}), encoding="utf-8")
@@ -131,35 +126,33 @@ def test_rollout_videos_skips_malformed_and_incomplete_entries(tmp_path: Path, m
 
     (tmp_path / "corrupt.rollout.json").write_text("not-json", encoding="utf-8")
 
-    videos = rollout_videos()
+    videos = rollout_videos(tmp_path)
 
     names = [entry["path"] for entry in videos]
     assert names == ["good.mp4", "older.mp4"]
 
 
 def test_rollout_video_path_rejects_wrong_suffix_traversal_and_missing_sidecar(tmp_path: Path, monkeypatch):
-    runtime = SimpleNamespace(record_dir=tmp_path)
-    monkeypatch.setattr(server_module, "get_runtime", lambda: runtime)
 
     (tmp_path / "video.txt").write_bytes(b"not a video")
     with pytest.raises(FileNotFoundError):
-        rollout_video_path("video.txt")
+        rollout_video_path(tmp_path, "video.txt")
 
     outside = tmp_path.parent / "outside.mp4"
     outside.write_bytes(b"video")
     try:
         with pytest.raises(FileNotFoundError):
-            rollout_video_path("../outside.mp4")
+            rollout_video_path(tmp_path, "../outside.mp4")
     finally:
         outside.unlink(missing_ok=True)
 
     (tmp_path / "no-sidecar.mp4").write_bytes(b"video")
     with pytest.raises(FileNotFoundError):
-        rollout_video_path("no-sidecar.mp4")
+        rollout_video_path(tmp_path, "no-sidecar.mp4")
 
     (tmp_path / "with-sidecar.mp4").write_bytes(b"video")
     (tmp_path / "with-sidecar.rollout.json").write_text("{}", encoding="utf-8")
-    assert rollout_video_path("with-sidecar.mp4") == (tmp_path / "with-sidecar.mp4").resolve()
+    assert rollout_video_path(tmp_path, "with-sidecar.mp4") == (tmp_path / "with-sidecar.mp4").resolve()
 
 
 def test_datenwissenschaften_version_falls_back_when_package_metadata_is_missing(monkeypatch):
@@ -182,6 +175,28 @@ def test_health_endpoint_returns_ok(monkeypatch):
 
     assert response.status == 200
     assert json.loads(response.body) == {"status": "ok"}
+
+
+def test_live_endpoints_serve_the_latest_finished_episode_in_chunks(monkeypatch):
+    feed = LiveFeed()
+    feed.record(b"one", {"timesteps": 1})
+    feed.record(b"two", {"timesteps": 2})
+    feed.finish_episode(7, 60.0, {"score": 3.0, "won": False, "new_best": True}, {"recent_scores": [3.0]})
+    monkeypatch.setattr(server_module, "live_feed", feed)
+
+    with _running_server(monkeypatch) as server:
+        latest = json.loads(_get(server, "/api/live/episode").body)
+        frames = json.loads(_get(server, "/api/live/frames?episode=7&start=1").body)
+        missing = _get(server, "/api/live/frames?episode=99&start=0")
+
+    assert latest["episode"] == {
+        "id": 7,
+        "frame_rate": 60.0,
+        "frame_count": 2,
+        "result": {"score": 3.0, "won": False, "new_best": True},
+    }
+    assert [frame["status"]["timesteps"] for frame in frames["frames"]] == [2]
+    assert missing.status == 404
 
 
 def test_snapshot_endpoint_merges_control_and_server_metadata(monkeypatch):
@@ -343,7 +358,8 @@ def test_static_asset_serving_falls_back_to_index_and_rejects_traversal(monkeypa
     assert traversal.status == 404
 
 
-def test_static_asset_serving_404s_when_assets_are_not_installed(monkeypatch):
+def test_static_asset_serving_404s_when_assets_are_not_installed(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(server_module, "files", lambda _package: tmp_path)
     with _running_server(monkeypatch) as server:
         response = _get(server, "/")
 
@@ -378,7 +394,7 @@ def test_handler_ignores_client_disconnects_but_not_other_errors(monkeypatch):
 def test_start_ui_returns_none_when_disabled(monkeypatch):
     monkeypatch.setattr(server_module, "_server", None)
 
-    assert server_module.start_ui(_ui_settings(enabled=False)) is None
+    assert server_module.start_ui(_ui_settings(enabled=False), Path.cwd()) is None
 
 
 def test_start_ui_starts_and_reuses_the_singleton_server(monkeypatch):
@@ -386,9 +402,9 @@ def test_start_ui_starts_and_reuses_the_singleton_server(monkeypatch):
     store = SimpleNamespace(resize=lambda _max_episodes: None)
     monkeypatch.setattr(server_module, "get_store", lambda: store)
 
-    server = server_module.start_ui(_ui_settings())
+    server = server_module.start_ui(_ui_settings(), Path.cwd())
     try:
-        again = server_module.start_ui(_ui_settings())
+        again = server_module.start_ui(_ui_settings(), Path.cwd())
         assert again is server
     finally:
         server.stop()
@@ -405,13 +421,13 @@ def test_start_ui_returns_none_and_logs_when_the_port_is_taken(monkeypatch):
         blocker.listen(1)
         taken_port = blocker.getsockname()[1]
 
-        result = server_module.start_ui(_ui_settings(port=taken_port))
+        result = server_module.start_ui(_ui_settings(port=taken_port), Path.cwd())
 
     assert result is None
     assert server_module._server is None
 
 
 def test_dashboard_server_start_and_stop_lifecycle():
-    server = DashboardServer(_ui_settings())
+    server = DashboardServer(_ui_settings(), Path.cwd())
     server.start()
     server.stop()

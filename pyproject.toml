@@ -4,8 +4,8 @@ build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "datenwissenschaften"
-version = "2.10.17"
-description = "Core library for Retro Speedlab: A high-performance RL toolkit for classic games."
+version = "3.0.0"
+description = "Core library for Retro Speedlab: retro game agents built entirely on the Laya decision model."
 readme = "README.md"
 authors = [
     { name = "datenwissenschaften", email = "martin.franke@datenwissenschaften.com" }
@@ -17,14 +17,14 @@ dependencies = [
     "numpy==2.5.1",
     "opencv-python==4.13.0.92",
     "pyyaml==6.0.3",
-    "requests==2.34.2",
-    "redis==6.4.0",
-    "stable-baselines3==2.9.0",
-    "sb3-contrib==2.9.0",
     "stable-retro==1.0.1",
     "torch==2.12.1",
     "itsdangerous==2.2.0",
     "loguru==0.7.3",
+    "laya==0.3.20",
+    "bitsandbytes==0.50.2",
+    "httpx==0.28.1",
+    "python-box==7.4.1",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -34,7 +34,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
 ]
-keywords = ["reinforcement-learning", "retro-gaming", "stable-baselines3", "stable-retro", "ai", "gymnasium"]
+keywords = ["laya", "decision-model", "reinforcement-learning", "retro-gaming", "stable-retro", "gymnasium"]
 
 [project.urls]
 Homepage = "https://speedlab.datenwissenschaften.com"

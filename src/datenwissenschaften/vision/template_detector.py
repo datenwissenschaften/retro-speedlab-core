@@ -3,67 +3,40 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from datenwissenschaften.helpers.position import Position
+from datenwissenschaften.vision.detection import Detection
 
 
 class TemplateDetector:
-    def __init__(
-        self,
-        template_path: str | Path,
-        threshold: float = 0.85,
-        method: int = cv2.TM_CCOEFF_NORMED,
-    ) -> None:
-        self.template_path = self._resolve_template_path(template_path)
+    def __init__(self, label: str, template_paths: tuple[Path, ...], threshold: float, minimum_distance: float) -> None:
+        if not template_paths:
+            raise ValueError("At least one template is required.")
+        self.label = label
+        self.templates = tuple(self._load(path) for path in template_paths)
         self.threshold = threshold
-        self.method = method
-        self.position = None
-        self.seen = None
-        self.score = None
-        self.__post_init__()
+        self.minimum_distance = minimum_distance
 
-    def __post_init__(self) -> None:
-        self.template = cv2.imread(
-            self.template_path,
-            cv2.IMREAD_GRAYSCALE,
-        )
+    def detect(self, frame: np.ndarray) -> tuple[Detection, ...]:
+        image = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+        candidates: list[tuple[float, Detection]] = []
+        for template in self.templates:
+            height, width = template.shape
+            scores = cv2.matchTemplate(image, template, cv2.TM_CCOEFF_NORMED)
+            for top, left in np.argwhere(scores >= self.threshold):
+                candidates.append((float(scores[top, left]), Detection(self.label, int(left), int(top), width, height)))
+        candidates.sort(key=lambda candidate: candidate[0], reverse=True)
+        selected: list[Detection] = []
+        for _, detection in candidates:
+            if all(self._apart(detection, other) for other in selected):
+                selected.append(detection)
+        return tuple(selected)
 
-        if self.template is None:
-            raise FileNotFoundError(self.template_path)
-
-        self.template_h, self.template_w = self.template.shape[:2]
+    def _apart(self, first: Detection, second: Detection) -> bool:
+        (first_x, first_y), (second_x, second_y) = first.center, second.center
+        return float(np.hypot(first_x - second_x, first_y - second_y)) >= self.minimum_distance
 
     @staticmethod
-    def _resolve_template_path(template_path: str | Path) -> str:
-        path = Path(template_path).expanduser()
-        if path.is_absolute() or path.is_file():
-            return str(path.resolve())
-        return str((Path.cwd() / "assets" / path).resolve())
-
-    def detect(self, frame: np.ndarray) -> None:
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY) if frame.ndim == 3 else frame
-        result = cv2.matchTemplate(
-            gray_frame,
-            self.template,
-            self.method,
-        )
-
-        _, score, _, location = cv2.minMaxLoc(result)
-
-        if score < self.threshold:
-            self.position = None
-            self.seen = False
-            self.score = None
-            return
-
-        self.score = score
-
-        x, y = location
-
-        self.seen = True
-        self.position = Position(
-            position_x=x + self.template_w // 2,
-            position_y=y + self.template_h // 2,
-        )
-
-    def distance(self, position: Position) -> float | None:
-        return position.distance_to(self.position) if self.seen else None
+    def _load(path: Path) -> np.ndarray:
+        template = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
+        if template is None:
+            raise FileNotFoundError(path)
+        return template

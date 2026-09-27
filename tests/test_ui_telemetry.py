@@ -1,45 +1,8 @@
-import json
 import time
 
-import pytest
-from redis.exceptions import RedisError
-
+from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.ui import telemetry as telemetry_module
 from datenwissenschaften.ui.telemetry import TelemetryStore
-
-
-class FakeRedisClient:
-    instances: list["FakeRedisClient"] = []
-
-    def __init__(self) -> None:
-        self.store: dict[str, str] = {}
-        self.ping_error: Exception | None = None
-        self.set_error: Exception | None = None
-        self.delete_error: Exception | None = None
-        FakeRedisClient.instances.append(self)
-
-    @classmethod
-    def from_url(cls, redis_url, **kwargs):
-        client = cls()
-        client.redis_url = redis_url
-        return client
-
-    def ping(self):
-        if self.ping_error is not None:
-            raise self.ping_error
-
-    def get(self, key):
-        return self.store.get(key)
-
-    def set(self, key, value):
-        if self.set_error is not None:
-            raise self.set_error
-        self.store[key] = value
-
-    def delete(self, key):
-        if self.delete_error is not None:
-            raise self.delete_error
-        self.store.pop(key, None)
 
 
 def test_publish_episode_and_metadata_update_the_snapshot():
@@ -124,214 +87,10 @@ def test_clear_metadata_is_a_noop_for_an_unknown_section():
     assert store.snapshot()["metadata"] == {}
 
 
-def test_configure_history_requires_the_redis_package(monkeypatch):
-    monkeypatch.setattr(telemetry_module, "Redis", None)
-    store = TelemetryStore()
-
-    with pytest.raises(RuntimeError, match="requires the 'redis' package"):
-        store.configure_history("Game")
-
-
-def test_configure_history_raises_when_redis_is_unreachable(monkeypatch):
-    FakeRedisClient.instances.clear()
-    monkeypatch.setattr(telemetry_module, "Redis", FakeRedisClient)
-
-    def failing_from_url(redis_url, **kwargs):
-        client = FakeRedisClient()
-        client.ping_error = RedisError("boom")
-        return client
-
-    monkeypatch.setattr(FakeRedisClient, "from_url", staticmethod(failing_from_url))
-    store = TelemetryStore()
-
-    with pytest.raises(RuntimeError, match="Could not connect to Redis"):
-        store.configure_history("Game", redis_url="redis://example")
-
-
-def test_configure_history_is_idempotent_for_the_same_scope(monkeypatch):
-    FakeRedisClient.instances.clear()
-    monkeypatch.setattr(telemetry_module, "Redis", FakeRedisClient)
-    store = TelemetryStore()
-
-    store.configure_history("Game", redis_url="redis://example", key_prefix="prefix")
-    first_client = FakeRedisClient.instances[-1]
-    store.configure_history("Game", redis_url="redis://example", key_prefix="prefix")
-
-    assert len(FakeRedisClient.instances) == 1
-    assert store._redis is first_client
-
-
-def test_configure_history_loads_a_valid_persisted_summary(monkeypatch):
-    FakeRedisClient.instances.clear()
-    monkeypatch.setattr(telemetry_module, "Redis", FakeRedisClient)
-    payload = {
-        "started_at": "2024-01-01T00:00:00+00:00",
-        "metadata": {"run": {"game": "Game"}},
-        "summary": {
-            "episodes": 5,
-            "wins": 2,
-            "full_run_episodes": 3,
-            "full_run_wins": 1,
-            "timed_episodes": 4,
-            "full_run_timed_episodes": 2,
-            "duration_seconds_total": 12.5,
-            "full_run_duration_seconds_total": 6.0,
-            "best_fitness": 9.5,
-            "full_run_best_fitness": 8.0,
-            "latest_index": 5,
-            "latest_timestamp": "2024-01-01T00:01:00+00:00",
-            "latest_training_state": "Explore",
-            "latest_duration_seconds": 1.5,
-            "latest_full_run_duration_seconds": 1.0,
-            "latest_final_state": "Explore",
-            "by_state": {
-                "Explore": {"episodes": 5, "wins": 2},
-                "": {"episodes": 1},
-                "bad": "not-a-dict",
-            },
-            "by_savestate": {"Level1": {"episodes": 5, "wins": 2}},
-        },
-    }
-
-    def from_url(redis_url, **kwargs):
-        client = FakeRedisClient()
-        client.store["prefix:Game"] = json.dumps(payload)
-        return client
-
-    monkeypatch.setattr(FakeRedisClient, "from_url", staticmethod(from_url))
-    store = TelemetryStore()
-
-    store.configure_history("Game", redis_url="redis://example", key_prefix="prefix")
-
-    snapshot = store.snapshot()
-    assert snapshot["metadata"]["run"] == {"game": "Game"}
-    assert snapshot["summary"]["episodes"] == 5
-    assert snapshot["summary"]["by_state"]["Explore"]["wins"] == 2
-    assert "" not in snapshot["summary"]["by_state"]
-    assert "bad" not in snapshot["summary"]["by_state"]
-    assert snapshot["summary"]["by_savestate"]["Level1"]["episodes"] == 5
-
-
-def test_configure_history_ignores_malformed_persisted_history(monkeypatch):
-    FakeRedisClient.instances.clear()
-    monkeypatch.setattr(telemetry_module, "Redis", FakeRedisClient)
-
-    def from_url(redis_url, **kwargs):
-        client = FakeRedisClient()
-        client.store["prefix:Game"] = "not-json"
-        return client
-
-    monkeypatch.setattr(FakeRedisClient, "from_url", staticmethod(from_url))
-    store = TelemetryStore()
-
-    store.configure_history("Game", redis_url="redis://example", key_prefix="prefix")
-
-    assert store.snapshot()["summary"]["episodes"] == 0
-
-
-def test_configure_history_ignores_history_with_wrong_metadata_type(monkeypatch):
-    FakeRedisClient.instances.clear()
-    monkeypatch.setattr(telemetry_module, "Redis", FakeRedisClient)
-
-    def from_url(redis_url, **kwargs):
-        client = FakeRedisClient()
-        client.store["prefix:Game"] = json.dumps({"metadata": "not-a-dict", "summary": {}})
-        return client
-
-    monkeypatch.setattr(FakeRedisClient, "from_url", staticmethod(from_url))
-    store = TelemetryStore()
-
-    store.configure_history("Game", redis_url="redis://example", key_prefix="prefix")
-
-    assert store.snapshot()["metadata"] == {}
-
-
-def test_configure_history_falls_back_to_an_empty_summary_when_summary_is_not_a_dict(monkeypatch):
-    FakeRedisClient.instances.clear()
-    monkeypatch.setattr(telemetry_module, "Redis", FakeRedisClient)
-
-    def from_url(redis_url, **kwargs):
-        client = FakeRedisClient()
-        client.store["prefix:Game"] = json.dumps({"metadata": {}, "summary": "not-a-dict"})
-        return client
-
-    monkeypatch.setattr(FakeRedisClient, "from_url", staticmethod(from_url))
-    store = TelemetryStore()
-
-    store.configure_history("Game", redis_url="redis://example", key_prefix="prefix")
-
-    assert store.snapshot()["summary"]["episodes"] == 0
-
-
-def test_configure_history_handles_no_persisted_history(monkeypatch):
-    FakeRedisClient.instances.clear()
-    monkeypatch.setattr(telemetry_module, "Redis", FakeRedisClient)
-    store = TelemetryStore()
-
-    store.configure_history("Game", redis_url="redis://example", key_prefix="prefix")
-
-    assert store.snapshot()["summary"]["episodes"] == 0
-
-
-def test_flush_persists_the_current_snapshot_to_redis(monkeypatch):
-    FakeRedisClient.instances.clear()
-    monkeypatch.setattr(telemetry_module, "Redis", FakeRedisClient)
-    store = TelemetryStore()
-    store.configure_history("Game", redis_url="redis://example", key_prefix="prefix")
-    store.publish_episode({"won": True})
-
-    store.flush()
-
-    client = FakeRedisClient.instances[-1]
-    persisted = json.loads(client.store["prefix:Game"])
-    assert persisted["summary"]["episodes"] == 1
-
-
 def test_flush_is_a_noop_when_history_is_not_configured():
     store = TelemetryStore()
 
     store.flush()
-
-
-def test_flush_skips_when_expected_version_is_stale(monkeypatch):
-    FakeRedisClient.instances.clear()
-    monkeypatch.setattr(telemetry_module, "Redis", FakeRedisClient)
-    store = TelemetryStore()
-    store.configure_history("Game", redis_url="redis://example", key_prefix="prefix")
-
-    store.flush(expected_version=store._history_version - 1)
-
-    client = FakeRedisClient.instances[-1]
-    assert "prefix:Game" not in client.store
-
-
-def test_flush_logs_and_swallows_redis_errors(monkeypatch):
-    FakeRedisClient.instances.clear()
-    monkeypatch.setattr(telemetry_module, "Redis", FakeRedisClient)
-    store = TelemetryStore()
-    store.configure_history("Game", redis_url="redis://example", key_prefix="prefix")
-    client = FakeRedisClient.instances[-1]
-    client.set_error = RedisError("boom")
-
-    store.flush()
-
-
-def test_reset_for_restart_clears_local_and_redis_state(monkeypatch):
-    FakeRedisClient.instances.clear()
-    monkeypatch.setattr(telemetry_module, "Redis", FakeRedisClient)
-    store = TelemetryStore()
-    store.configure_history("Game", redis_url="redis://example", key_prefix="prefix")
-    store.publish_episode({"won": True})
-    store.flush()
-    client = FakeRedisClient.instances[-1]
-    assert "prefix:Game" in client.store
-
-    cleanup_calls = []
-    store.reset_for_restart(lambda: cleanup_calls.append(True))
-
-    assert cleanup_calls == [True]
-    assert "prefix:Game" not in client.store
-    assert store.snapshot()["summary"]["episodes"] == 0
 
 
 def test_reset_for_restart_without_redis_configured_still_runs_cleanup():
@@ -343,38 +102,10 @@ def test_reset_for_restart_without_redis_configured_still_runs_cleanup():
     assert cleanup_calls == [True]
 
 
-def test_reset_for_restart_logs_and_swallows_redis_delete_errors(monkeypatch):
-    FakeRedisClient.instances.clear()
-    monkeypatch.setattr(telemetry_module, "Redis", FakeRedisClient)
-    store = TelemetryStore()
-    store.configure_history("Game", redis_url="redis://example", key_prefix="prefix")
-    client = FakeRedisClient.instances[-1]
-    client.delete_error = RedisError("boom")
-
-    store.reset_for_restart(lambda: None)
-
-
 def test_resize_is_a_noop():
     store = TelemetryStore()
 
     assert store.resize(10) is None
-
-
-def test_persist_loop_flushes_after_a_publish(monkeypatch):
-    FakeRedisClient.instances.clear()
-    monkeypatch.setattr(telemetry_module, "Redis", FakeRedisClient)
-    store = TelemetryStore()
-    store.configure_history("Game", redis_url="redis://example", key_prefix="prefix")
-    client = FakeRedisClient.instances[-1]
-
-    store.publish_episode({"won": True})
-
-    for _ in range(20):
-        if "prefix:Game" in client.store:
-            break
-        time.sleep(0.05)
-
-    assert "prefix:Game" in client.store
 
 
 def test_module_level_helpers_delegate_to_the_shared_store(monkeypatch):
@@ -389,12 +120,109 @@ def test_module_level_helpers_delegate_to_the_shared_store(monkeypatch):
     assert telemetry_module.get_store().snapshot()["summary"]["episodes"] == 0
 
 
-def test_module_level_configure_history_delegates_to_the_shared_store(monkeypatch):
-    FakeRedisClient.instances.clear()
-    monkeypatch.setattr(telemetry_module, "Redis", FakeRedisClient)
-    fake_store = TelemetryStore()
-    monkeypatch.setattr(telemetry_module, "_store", fake_store)
+def test_configure_history_loads_a_persisted_summary(tmp_path):
+    database = JsonDatabase(tmp_path / "database.json")
+    database.set(
+        "history:Game",
+        {"started_at": "2024-01-01T00:00:00Z", "metadata": {"run": {"game": "Game"}}, "summary": {"episodes": 4}},
+    )
+    store = TelemetryStore()
 
-    telemetry_module.configure_history("Game", redis_url="redis://example", key_prefix="prefix")
+    store.configure_history("Game", database)
 
-    assert fake_store._history_key == "prefix:Game"
+    snapshot = store.snapshot()
+    assert snapshot["metadata"]["run"] == {"game": "Game"}
+    assert snapshot["summary"]["episodes"] == 4
+
+
+def test_configure_history_is_idempotent_for_the_same_scope(tmp_path):
+    database = JsonDatabase(tmp_path / "database.json")
+    store = TelemetryStore()
+    store.configure_history("Game", database)
+    store.publish_metadata("run", {"game": "Game"})
+
+    store.configure_history("Game", database)
+
+    assert store.snapshot()["metadata"]["run"] == {"game": "Game"}
+
+
+def test_configure_history_ignores_malformed_history(tmp_path):
+    database = JsonDatabase(tmp_path / "database.json")
+    database.set("history:Game", {"metadata": ["not", "a", "mapping"]})
+    store = TelemetryStore()
+
+    store.configure_history("Game", database)
+
+    assert store.snapshot()["metadata"] == {}
+
+
+def test_flush_persists_the_snapshot_to_the_json_database(tmp_path):
+    path = tmp_path / "database.json"
+    store = TelemetryStore()
+    store.configure_history("Game", JsonDatabase(path))
+    store.publish_episode({"fitness": 3.0, "won": True})
+
+    store.flush()
+
+    persisted = JsonDatabase(path).get("history:Game")
+    assert persisted["summary"]["episodes"] == 1
+    assert persisted["summary"]["wins"] == 1
+
+
+def test_flush_skips_a_stale_history_version(tmp_path):
+    database = JsonDatabase(tmp_path / "database.json")
+    store = TelemetryStore()
+    store.configure_history("Game", database)
+
+    store.flush(expected_version=-1)
+
+    assert not database.contains("history:Game")
+
+
+def test_reset_for_restart_deletes_persisted_history(tmp_path):
+    database = JsonDatabase(tmp_path / "database.json")
+    store = TelemetryStore()
+    store.configure_history("Game", database)
+    store.publish_episode({"fitness": 1.0, "won": False})
+    store.flush()
+    cleaned = []
+
+    store.reset_for_restart(lambda: cleaned.append(True))
+
+    assert cleaned == [True]
+    assert not database.contains("history:Game")
+    assert store.snapshot()["summary"]["episodes"] == 0
+
+
+def test_persist_loop_flushes_after_a_publish(tmp_path):
+    database = JsonDatabase(tmp_path / "database.json")
+    store = TelemetryStore()
+    store.configure_history("Game", database)
+
+    store.publish_episode({"fitness": 2.0, "won": False})
+    deadline = time.monotonic() + 3
+    while not database.contains("history:Game") and time.monotonic() < deadline:
+        time.sleep(0.05)
+
+    assert database.get("history:Game")["summary"]["episodes"] == 1
+
+
+def test_module_level_configure_history_delegates_to_the_shared_store(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(telemetry_module._store, "configure_history", lambda scope, database: calls.append(scope))
+
+    telemetry_module.configure_history("Game", JsonDatabase(tmp_path / "database.json"))
+
+    assert calls == ["Game"]
+
+
+def test_best_fitness_reports_the_all_time_best_episode():
+    store = TelemetryStore()
+    assert store.best_fitness() is None
+
+    store.publish_episode({"fitness": 2.0, "won": False})
+    store.publish_episode({"fitness": 5.0, "won": False})
+    store.publish_episode({"fitness": 1.0, "won": False})
+
+    assert store.best_fitness() == 5.0
+    assert store.episode_count() == 3

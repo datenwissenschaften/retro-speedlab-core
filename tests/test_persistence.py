@@ -1,29 +1,35 @@
-from types import SimpleNamespace
+import json
+from pathlib import Path
 
-from datenwissenschaften.persistence import RedisStore
+import pytest
+
+from datenwissenschaften.persistence import JsonDatabase
 
 
-def test_delete_prefix_removes_namespace_and_nested_keys():
-    deleted = []
-    redis = SimpleNamespace(
-        scan_iter=lambda *, match: iter(
-            [
-                b"datenwissenschaften:state:Game:Level:door",
-                b"datenwissenschaften:state:Game:Level:score",
-            ]
-        ),
-        delete=lambda *keys: deleted.append(keys),
-    )
-    store = RedisStore.__new__(RedisStore)
-    store._redis = redis
-    store._prefix = "datenwissenschaften"
+def test_values_survive_a_reload(tmp_path: Path):
+    path = tmp_path / "nested" / "database.json"
+    JsonDatabase(path).set("engine-version:Game", "2.10.17")
 
-    store.delete_prefix("state", "Game")
+    database = JsonDatabase(path)
 
-    assert deleted == [
-        (
-            b"datenwissenschaften:state:Game:Level:door",
-            b"datenwissenschaften:state:Game:Level:score",
-        ),
-        ("datenwissenschaften:state:Game",),
-    ]
+    assert database.contains("engine-version:Game")
+    assert database.get("engine-version:Game") == "2.10.17"
+    assert json.loads(path.read_text(encoding="utf-8")) == {"engine-version:Game": "2.10.17"}
+
+
+def test_missing_keys_fail_fast(tmp_path: Path):
+    database = JsonDatabase(tmp_path / "database.json")
+
+    assert not database.contains("missing")
+    with pytest.raises(KeyError):
+        database.get("missing")
+
+
+def test_delete_removes_the_key_and_tolerates_absent_keys(tmp_path: Path):
+    database = JsonDatabase(tmp_path / "database.json")
+    database.set("history:Game", {"episodes": 1})
+
+    database.delete("history:Game")
+    database.delete("history:Game")
+
+    assert not JsonDatabase(tmp_path / "database.json").contains("history:Game")

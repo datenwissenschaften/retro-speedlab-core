@@ -13,9 +13,9 @@ from urllib.parse import parse_qs, urlsplit
 
 from loguru import logger
 
-from datenwissenschaften.runtime import get_runtime
 from datenwissenschaften.settings import UISettings
 from datenwissenschaften.ui.control import control_metadata, request_model_reset
+from datenwissenschaften.ui.live import live_feed
 from datenwissenschaften.ui.telemetry import get_store
 
 
@@ -98,8 +98,8 @@ def _redact_config_secrets(content: str) -> str:
     return "".join(lines)
 
 
-def rollout_videos() -> list[dict[str, str | int | float | bool]]:
-    root = get_runtime().record_dir.resolve()
+def rollout_videos(record_root: Path) -> list[dict[str, str | int | float | bool]]:
+    root = record_root.resolve()
     result = []
     for metadata_path in root.glob("**/*.rollout.json"):
         try:
@@ -119,8 +119,8 @@ def rollout_videos() -> list[dict[str, str | int | float | bool]]:
     return sorted(result, key=lambda item: str(item.get("recorded_at", "")), reverse=True)
 
 
-def rollout_video_path(relative_path: str) -> Path:
-    root = get_runtime().record_dir.resolve()
+def rollout_video_path(record_root: Path, relative_path: str) -> Path:
+    root = record_root.resolve()
     candidate = (root / relative_path).resolve()
     if candidate.suffix.lower() != ".mp4" or not candidate.is_relative_to(root) or not candidate.is_file():
         raise FileNotFoundError(relative_path)
@@ -130,11 +130,12 @@ def rollout_video_path(relative_path: str) -> Path:
 
 
 class DashboardServer:
-    def __init__(self, settings: UISettings) -> None:
+    def __init__(self, settings: UISettings, record_root: Path) -> None:
         self.settings = settings
         self._httpd = ThreadingHTTPServer((settings.host, settings.port), _DashboardHandler)
         self._httpd.csrf_token = secrets.token_urlsafe(32)
         self._httpd.ui_settings = settings
+        self._httpd.record_root = record_root
         self._thread = threading.Thread(target=self._httpd.serve_forever, name="training-ui", daemon=True)
 
     def start(self) -> None:
@@ -149,7 +150,7 @@ _server: DashboardServer | None = None
 _server_lock = threading.Lock()
 
 
-def start_ui(settings: UISettings) -> DashboardServer | None:
+def start_ui(settings: UISettings, record_root: Path) -> DashboardServer | None:
     global _server
     if not settings.enabled:
         return None
@@ -158,7 +159,7 @@ def start_ui(settings: UISettings) -> DashboardServer | None:
         if _server is not None:
             return _server
         try:
-            _server = DashboardServer(settings)
+            _server = DashboardServer(settings, record_root)
             _server.start()
         except OSError as error:
             logger.error(f"Could not start training UI on {settings.host}:{settings.port}: {error}")
@@ -200,6 +201,18 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             }
             self._send_json(snapshot)
             return
+        if path == "/api/live/episode":
+            self._send_json(live_feed.latest_episode())
+            return
+        if path == "/api/live/frames":
+            query = parse_qs(request.query)
+            try:
+                frames = live_feed.episode_frames(int(query["episode"][0]), int(query["start"][0]))
+            except KeyError:
+                self.send_error(HTTPStatus.NOT_FOUND, "Episode is no longer available")
+                return
+            self._send_json({"frames": frames})
+            return
         if path == "/api/health":
             self._send_json({"status": "ok"})
             return
@@ -214,12 +227,12 @@ class _DashboardHandler(BaseHTTPRequestHandler):
                 self.send_error(HTTPStatus.NOT_FOUND, "Generated source file not found")
             return
         if path == "/api/rollout-videos":
-            self._send_json({"videos": rollout_videos()})
+            self._send_json({"videos": rollout_videos(self.server.record_root)})
             return
         if path == "/api/rollout-video":
             requested = parse_qs(request.query).get("path", [""])[0]
             try:
-                video_path = rollout_video_path(requested)
+                video_path = rollout_video_path(self.server.record_root, requested)
             except (FileNotFoundError, OSError):
                 self.send_error(HTTPStatus.NOT_FOUND, "Rollout video not found")
                 return

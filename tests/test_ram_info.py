@@ -36,12 +36,3 @@ def test_to_dict_reports_scalar_and_list_fields():
     ram_info = _SampleRam(health=10, inventory=[1, 2, 3])
 
     assert ram_info.to_dict() == {"health": 10, "inventory": [1, 2, 3]}
-
-
-def test_features_normalizes_scalar_and_list_fields_to_unit_range():
-    ram_info = _SampleRam(health=255, inventory=[0, 255, 128])
-
-    features = ram_info.features()
-
-    assert features[0] == pytest.approx(1.0)
-    assert features[1:] == [pytest.approx(0.0), pytest.approx(1.0), pytest.approx(128 / 255)]

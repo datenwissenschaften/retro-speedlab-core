@@ -1,63 +1,40 @@
 from abc import ABC
-from pathlib import Path
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 import numpy as np
 
 from datenwissenschaften.ram import RamInfo
-from datenwissenschaften.vision.hybrid_encoder import HybridEncoder
-from datenwissenschaften.vision.template_detector import TemplateDetector
+from datenwissenschaften.vision.detection import Detection
 
 T = TypeVar("T", bound=RamInfo)
 
 
 class State(ABC, Generic[T]):
-    description = ""
-    visual_encoder = HybridEncoder()
+    description: str
 
     ram: T
     frame: np.ndarray
-    observation: np.ndarray
 
-    def __init__(self) -> None:
-        if not hasattr(self, "target_detector") and hasattr(self, "template_file"):
-            template_path = Path("assets") / self.template_file
-            if template_path.exists():
-                self.target_detector = TemplateDetector(self.template_file)
-
-    def reset(
-        self,
-        ram: T,
-        frame: np.ndarray,
-        observation: np.ndarray,
-    ) -> None:
+    def reset(self, ram: T, frame: np.ndarray) -> None:
         self.ram = ram
         self.frame = frame
-        self.observation = observation
+        self._see()
         self._on_reset()
 
-    def step(
-        self,
-        ram: T,
-        frame: np.ndarray,
-        observation: np.ndarray,
-    ) -> tuple[float, bool, bool, type["State[T]"] | None]:
+    def step(self, ram: T, frame: np.ndarray) -> tuple[float, bool, bool, type["State[T]"] | None]:
         self.ram = ram
         self.frame = frame
-        self.observation = observation
+        self._see()
+        return self._reward(), self._terminated(), self._truncated(), self._next()
 
-        reward = self._reward()
-        terminated = self._terminated()
-        truncated = self._truncated()
-        next_state = self._next()
+    def describe(self) -> dict[str, Any]:
+        return {}
 
-        return reward, terminated, truncated, next_state
+    def detections(self) -> tuple[Detection, ...]:
+        return ()
 
-    def features(self) -> list[float]:
-        return self.visual_encoder.encode(self.observation, self.ram) + self.auxiliary_features(self.ram)
-
-    def auxiliary_features(self, ram: T | None = None) -> list[float]:
-        return []
+    def _see(self) -> None:
+        pass
 
     def _on_reset(self) -> None:
         pass
