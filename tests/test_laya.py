@@ -92,7 +92,6 @@ def test_agent_learning_changes_every_trainable_part(network: LayaNetwork):
         "entropy",
         "step_kl",
         "kl",
-        "entropy_coefficient",
         "learning_rate_scale",
     }
     assert agent.last_update["kl"] >= 0.0
@@ -102,7 +101,7 @@ def test_agent_learning_changes_every_trainable_part(network: LayaNetwork):
 def test_agent_checkpoint_round_trip(network: LayaNetwork, monkeypatch, tmp_path: Path):
     agent = LayaAgent(network, (QUESTION,))
     agent.num_timesteps = 42
-    agent.learner.trust_region.entropy_coefficient = 0.3
+    agent.learner.trust_region.learning_rate_scale = 0.3
     agent.last_update = {"kl": 0.01}
     path = tmp_path / "laya.pt"
     agent.save(path)
@@ -111,7 +110,7 @@ def test_agent_checkpoint_round_trip(network: LayaNetwork, monkeypatch, tmp_path
     restored.load(path)
 
     assert restored.num_timesteps == 42
-    assert restored.learner.trust_region.entropy_coefficient == 0.3
+    assert restored.learner.trust_region.learning_rate_scale == 0.3
     assert restored.last_update == {"kl": 0.01}
     assert restored.metadata()["actions"] == ACTIONS
     for original, loaded in zip(network.parameters(), restored.network.parameters(), strict=True):

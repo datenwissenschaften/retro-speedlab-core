@@ -16,6 +16,7 @@ GAMMA = 0.99
 PROBABILITY_FLOOR = 1e-8
 MAX_GRADIENT_NORM = 1.0
 MAX_BACKTRACKS = 3
+ENTROPY_COEFFICIENT = 0.001
 
 
 class GroupRelativeLearner:
@@ -40,7 +41,7 @@ class GroupRelativeLearner:
         policy_loss, entropy = self._step(rollout, previous)
         step_kl = self._measure_kl(rollout, previous)
         kl = self._backtrack(rollout, previous, step_kl)
-        self.trust_region.adapt(step_kl, entropy, previous.shape[1])
+        self.trust_region.adapt(step_kl)
         for group, base in zip(self.optimizer.param_groups, self.base_learning_rates, strict=True):
             group["lr"] = base * self.trust_region.learning_rate_scale
         return {
@@ -48,7 +49,6 @@ class GroupRelativeLearner:
             "entropy": entropy,
             "step_kl": step_kl,
             "kl": kl,
-            "entropy_coefficient": self.trust_region.entropy_coefficient,
             "learning_rate_scale": self.trust_region.learning_rate_scale,
         }
 
@@ -90,7 +90,7 @@ class GroupRelativeLearner:
             chosen = log_probs.gather(1, actions[start:end, None]).squeeze(1)
             entropy = -(log_probs.exp() * log_probs).sum(-1)
             policy_loss = -(weighted[start:end] * chosen).sum()
-            loss = (policy_loss - self.trust_region.entropy_coefficient * entropy.sum()) / count
+            loss = (policy_loss - ENTROPY_COEFFICIENT * entropy.sum()) / count
             self.scaler.scale(loss).backward()
             policy_loss_total += policy_loss.item()
             entropy_total += entropy.sum().item()
