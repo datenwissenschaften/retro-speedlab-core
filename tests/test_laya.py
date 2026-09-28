@@ -69,6 +69,24 @@ def test_agent_decision_carries_every_action_probability(network: LayaNetwork):
     )
 
 
+def test_options_appear_in_a_stable_order_per_state_that_varies_across_states():
+    question = LayaQuestion(FakeTokenizer(), {"max_len": 128, "head_max_len": 48}, dict.fromkeys("abcdef", "move"))
+
+    orders = {tuple(question._order(f'{{"x": {x}}}', QUESTION)) for x in range(20)}
+
+    assert question._order('{"x": 1}', QUESTION) == question._order('{"x": 1}', QUESTION)
+    assert all(sorted(order) == list(range(6)) for order in orders)
+    assert len(orders) > 1
+
+
+def test_shuffled_option_scores_are_returned_in_action_order(network: LayaNetwork, monkeypatch):
+    monkeypatch.setattr(network.question, "_order", lambda state, question: [1, 0])
+    swapped = network([OBSERVATION["state"]], [QUESTION])
+    monkeypatch.setattr(network.question, "_order", lambda state, question: [0, 1])
+
+    assert torch.allclose(swapped, network([OBSERVATION["state"]], [QUESTION]))
+
+
 def test_agent_learning_changes_every_trainable_part(network: LayaNetwork):
     agent = LayaAgent(network, (QUESTION,))
     before = [parameter.detach().clone() for parameter in network.parameters()]

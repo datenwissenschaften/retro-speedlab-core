@@ -26,10 +26,10 @@ class LayaNetwork(nn.Module):
         return next(self.parameters()).device
 
     def forward(self, states: list[str], questions: list[str]) -> torch.Tensor:
-        batch = self.question.encode(states, questions, self.device)
+        batch, orders = self.question.encode(states, questions, self.device)
         with torch.autocast(self.device.type, dtype=self.dtype):
             logits, _ = self.decision(**batch)
-        return logits.float()
+        return torch.empty_like(logits, dtype=torch.float32).scatter_(1, orders, logits.float())
 
     def encoder_parameters(self) -> list[nn.Parameter]:
         return list(self.decision.encoder.parameters())

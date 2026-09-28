@@ -13,7 +13,7 @@ DEVELOPMENT_VERSION = "DEVELOPMENT"
 VERSION_KEY = "engine-version"
 FINGERPRINT_KEY = "database-fingerprint"
 MODEL_LAYOUT_KEY = "model-layout"
-MODEL_LAYOUT = "laya-per-state"
+MODEL_LAYOUT = "laya-per-state-shuffled-options"
 MAJOR_MINOR = re.compile(r"^v?(\d+)\.(\d+)")
 
 
