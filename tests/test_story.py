@@ -107,3 +107,13 @@ def test_danger_spots_rank_places_by_recent_failures_with_their_latest_picture(t
         (1, "far"),
         (1, "door"),
     ]
+
+
+def test_a_story_in_an_older_format_is_replaced(tmp_path: Path, published):
+    database = JsonDatabase(tmp_path / "db.json")
+    database.set(story_key("Game"), {"reached": {"FindDoor": 3}, "visits": {}, "ends": {}})
+
+    view = StoryBook(database, "Game", PHASES).view()
+
+    assert view["danger"] == []
+    assert view["phases"][0]["reached"] is False

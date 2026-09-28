@@ -3,10 +3,13 @@ from collections import Counter
 from datetime import date
 from typing import Any
 
+from loguru import logger
+
 from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.ui.telemetry import publish_metadata
 
 STORY_KEY = "story"
+STORY_FORMAT = 2
 DANGER_WINDOW = 100
 DANGER_CELL = 32
 DANGER_SPOTS = 3
@@ -24,6 +27,7 @@ def label(name: str) -> str:
 
 def empty_story() -> dict[str, Any]:
     return {
+        "format": STORY_FORMAT,
         "reached": {},
         "day": date.today().isoformat(),
         "failures_today": {},
@@ -37,8 +41,17 @@ class StoryBook:
         self.database = database
         self.key = story_key(identity)
         self.phases = phases
-        self.data = database.get(self.key) if database.contains(self.key) else empty_story()
+        self.data = self._load()
         self.publish()
+
+    def _load(self) -> dict[str, Any]:
+        if not self.database.contains(self.key):
+            return empty_story()
+        stored = self.database.get(self.key)
+        if "format" in stored and stored["format"] == STORY_FORMAT:
+            return stored
+        logger.warning(f"Replacing a story stored in an older format under {self.key}")
+        return empty_story()
 
     def has_reached(self, phase: str) -> bool:
         return phase in self.data["reached"]

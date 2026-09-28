@@ -2,16 +2,14 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = defineProps({
-  phase: { type: String, required: true },
   danger: { type: Array, required: true },
 })
 
 const SLIDE_MS = 20000
 const VIDEO_REFRESH_MS = 60000
-const CLIP_SECONDS = 10
+const MINUTE_MS = 60000
 const videos = ref([])
-const slide = ref('then-now')
-const clip = ref('then')
+const slide = ref('best')
 let slideTimer
 let videoTimer
 
@@ -24,22 +22,17 @@ const loadVideos = async () => {
   }
 }
 
-const phaseVideos = computed(() => videos.value
-  .filter(video => video.curriculum === props.phase)
-  .sort((first, second) => String(first.recorded_at).localeCompare(String(second.recorded_at))))
-const then = computed(() => phaseVideos.value.length > 1 ? phaseVideos.value[0] : null)
-const now = computed(() => phaseVideos.value.at(-1) || null)
-const shown = computed(() => clip.value === 'then' && then.value ? then.value : now.value)
-const caption = computed(() => {
-  if (!then.value) return `Best so far · ${now.value.score.toFixed(1)} points`
-  return clip.value === 'then' ? `Then · ${then.value.score.toFixed(1)} points` : `Now · ${now.value.score.toFixed(1)} points`
-})
+const best = computed(() => videos.value.reduce((top, video) => (!top || video.score > top.score ? video : top), null))
+const phaseLabel = name => name.replace(/([a-z])([A-Z])/g, '$1 $2')
+const age = recordedAt => {
+  const minutes = Math.round((Date.now() - new Date(recordedAt).getTime()) / MINUTE_MS)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes} min ago`
+  return `${Math.round(minutes / 60)} h ago`
+}
 const source = video => `/api/rollout-video?path=${encodeURIComponent(video.path)}`
-
-const switchClip = () => { clip.value = clip.value === 'then' ? 'now' : 'then' }
-const limitClip = event => { if (event.target.currentTime >= CLIP_SECONDS) switchClip() }
 const nextSlide = () => {
-  slide.value = slide.value === 'then-now' && props.danger.length ? 'danger' : 'then-now'
+  slide.value = slide.value === 'best' && props.danger.length ? 'danger' : 'best'
 }
 
 onMounted(() => {
@@ -56,19 +49,14 @@ onBeforeUnmount(() => {
 <template>
   <section class="spotlight-panel">
     <Transition name="fade" mode="out-in">
-      <div v-if="slide === 'then-now'" key="then-now" class="spotlight-slide">
-        <span class="sight-title">Then vs now</span>
-        <figure v-if="now" class="then-now">
-          <video
-            :key="shown.path"
-            :src="source(shown)"
-            autoplay
-            muted
-            playsinline
-            @timeupdate="limitClip"
-            @ended="switchClip"
-          ></video>
-          <figcaption :class="{ then: clip === 'then' && then }">{{ caption }}</figcaption>
+      <div v-if="slide === 'best'" key="best" class="spotlight-slide">
+        <span class="sight-title">Best attempt so far</span>
+        <figure v-if="best" class="best-attempt">
+          <video :key="best.path" :src="source(best)" autoplay muted loop playsinline></video>
+          <figcaption>
+            <b>{{ best.score.toFixed(1) }} points</b>
+            <span>{{ phaseLabel(best.curriculum) }} · {{ age(best.recorded_at) }}</span>
+          </figcaption>
         </figure>
         <span v-else class="game-cover-loading">Collecting the first attempts</span>
       </div>

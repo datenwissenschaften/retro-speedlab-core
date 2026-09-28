@@ -11,7 +11,8 @@ const STAGE_HEIGHT = 720
 const SNAPSHOT_INTERVAL_MS = 1500
 const TOAST_MS = 4500
 const TICKER_SIZE = 3
-const TICKER_MS = 7000
+const TICKER_MS = 8000
+const MAX_TICKER_BACKLOG = 6
 const SITE_URL = 'https://www.retrospeedlab.com'
 const SITE_LABEL = 'www.retrospeedlab.com'
 const RELOAD_DEADLINE_MS = 90000
@@ -27,6 +28,7 @@ const scale = ref(1)
 const toast = ref(null)
 const changedFields = ref(new Set())
 const tickerEvents = ref([])
+const tickerQueue = []
 let lastStep = null
 let eventKey = 0
 let snapshotTimer
@@ -52,10 +54,20 @@ const announce = (title, detail) => {
   toastTimer = window.setTimeout(() => { toast.value = null }, TOAST_MS)
 }
 
+const showQueued = () => {
+  while (tickerEvents.value.length < TICKER_SIZE && tickerQueue.length) {
+    const entry = tickerQueue.shift()
+    tickerEvents.value = [...tickerEvents.value, entry]
+    window.setTimeout(() => {
+      tickerEvents.value = tickerEvents.value.filter(other => other.key !== entry.key)
+      showQueued()
+    }, TICKER_MS)
+  }
+}
 const tell = item => {
-  const entry = { ...item, key: eventKey += 1 }
-  tickerEvents.value = [...tickerEvents.value, entry].slice(-TICKER_SIZE)
-  window.setTimeout(() => { tickerEvents.value = tickerEvents.value.filter(other => other.key !== entry.key) }, TICKER_MS)
+  tickerQueue.push({ ...item, key: eventKey += 1 })
+  tickerQueue.splice(0, Math.max(0, tickerQueue.length - MAX_TICKER_BACKLOG))
+  showQueued()
   if (item.kind === 'milestone') announce(item.text, item.detail)
 }
 const tellStep = status => {
@@ -178,7 +190,7 @@ watch(() => live.value.ram, (current, previous) => {
           <span v-if="!sightings.length" class="game-cover-loading">Waiting for the first attempt</span>
         </section>
 
-        <SpotlightPanel :phase="phase" :danger="story.danger" />
+        <SpotlightPanel :danger="story.danger" />
       </div>
 
       <div class="stream-screen">
