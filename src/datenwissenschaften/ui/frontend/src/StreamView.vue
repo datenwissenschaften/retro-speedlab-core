@@ -17,6 +17,8 @@ const MAX_TICKER_BACKLOG = 6
 const SITE_URL = 'https://www.retrospeedlab.com'
 const SITE_LABEL = 'www.retrospeedlab.com'
 const RELOAD_DEADLINE_MS = 90000
+const RELOAD_SETTLE_MS = 15000
+const RELOAD_RETRY_MS = 5000
 const CLOCK_INTERVAL_MS = 1000
 const clock = new Intl.DateTimeFormat('en-GB', { timeZone: STREAM_TIME_ZONE, dateStyle: 'medium', timeStyle: 'medium' })
 
@@ -41,6 +43,7 @@ let toastTimer
 let reloadTimer
 let loadedRelease = null
 let reloadPending = false
+let reloading = false
 
 const fmt = (value, digits = 0) => value == null ? '—' : Intl.NumberFormat('en', { maximumFractionDigits: digits }).format(value)
 const percent = value => `${Math.round(value * 100)}%`
@@ -92,7 +95,24 @@ const drawFrame = frame => {
   replayProgress.value = frame.progress
   frame.passed.forEach(tellStep)
 }
-const reloadIfPending = () => { if (reloadPending) window.location.reload() }
+const pause = milliseconds => new Promise(resolve => { window.setTimeout(resolve, milliseconds) })
+const pageServed = async () => {
+  try {
+    const response = await fetch(window.location.href, { cache: 'no-store' })
+    return response.ok && (await response.text()).includes('id="app"')
+  } catch {
+    return false
+  }
+}
+const reload = async () => {
+  if (reloading) return
+  reloading = true
+  window.clearTimeout(reloadTimer)
+  await pause(RELOAD_SETTLE_MS)
+  while (!(await pageServed())) await pause(RELOAD_RETRY_MS)
+  window.location.reload()
+}
+const reloadIfPending = () => { if (reloadPending) reload() }
 const player = createReplayPlayer({
   onFrame: drawFrame,
   onEpisode: episode => {
@@ -155,8 +175,8 @@ watch(release, current => {
   }
   if (current === loadedRelease || reloadPending) return
   reloadPending = true
-  if (waiting.value) window.location.reload()
-  reloadTimer = window.setTimeout(() => window.location.reload(), RELOAD_DEADLINE_MS)
+  if (waiting.value) reload()
+  reloadTimer = window.setTimeout(reload, RELOAD_DEADLINE_MS)
 })
 
 watch(() => live.value.ram, (current, previous) => {

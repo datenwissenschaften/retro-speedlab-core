@@ -14,6 +14,7 @@ const fetchJson = async url => {
 }
 
 export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting, onSummary, onConnection }) => {
+  let generation = null
   let latest = null
   let lastPlayedId = null
   let episode = null
@@ -29,6 +30,7 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
       const payload = await fetchJson('/api/live/episode')
       onConnection(true)
       onSummary(payload.summary)
+      if (payload.generation !== generation) startGeneration(payload.generation)
       latest = payload.episode
       if (!episode && latest && latest.id !== lastPlayedId) begin(latest)
     } catch {
@@ -36,11 +38,24 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
     }
   }
 
-  const begin = next => {
+  const release = () => {
     bitmaps.forEach(bitmap => bitmap?.close())
-    episode = next
-    frames = []
     bitmaps = new Map()
+    frames = []
+  }
+
+  const startGeneration = next => {
+    const interrupted = episode !== null
+    generation = next
+    lastPlayedId = null
+    episode = null
+    release()
+    if (interrupted) onWaiting()
+  }
+
+  const begin = next => {
+    release()
+    episode = next
     startedAt = null
     shown = -1
     onEpisode(next)
@@ -50,18 +65,17 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
   const finish = () => {
     onEpisodeEnd(episode)
     lastPlayedId = episode.id
-    bitmaps.forEach(bitmap => bitmap?.close())
-    bitmaps = new Map()
-    frames = []
+    release()
     episode = null
     if (latest && latest.id !== lastPlayedId) begin(latest)
     else onWaiting()
   }
 
   const download = async target => {
+    const source = generation
     try {
       while (episode === target && frames.length < target.frame_count) {
-        const payload = await fetchJson(`/api/live/frames?episode=${target.id}&start=${frames.length}`)
+        const payload = await fetchJson(`/api/live/frames?generation=${source}&episode=${target.id}&start=${frames.length}`)
         if (episode !== target) return
         frames.push(...payload.frames)
       }
@@ -126,8 +140,7 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
     stop() {
       window.clearInterval(timer)
       cancelAnimationFrame(animation)
-      bitmaps.forEach(bitmap => bitmap?.close())
-      bitmaps = new Map()
+      release()
     },
   }
 }

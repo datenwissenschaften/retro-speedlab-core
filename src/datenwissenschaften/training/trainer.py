@@ -23,6 +23,7 @@ from datenwissenschaften.training.telemetry_hook import TelemetryHook
 from datenwissenschaften.training.upload_hook import UploadHook
 from datenwissenschaften.training.video_hook import BestVideoHook
 from datenwissenschaften.ui.control import ModelResetRequest, configure_training_control, perform_model_reset
+from datenwissenschaften.ui.live import live_feed
 from datenwissenschaften.ui.server import start_ui
 from datenwissenschaften.ui.telemetry import configure_history, publish_metadata
 
@@ -44,6 +45,7 @@ class LayaTrainer:
             request = self._train_until_reset(env, database)
             torch.cuda.empty_cache()
             perform_model_reset(request)
+            live_feed.clear()
 
     def _train_until_reset(self, env: StateMachineGymWrapper, database: JsonDatabase) -> ModelResetRequest:
         models = self._models()

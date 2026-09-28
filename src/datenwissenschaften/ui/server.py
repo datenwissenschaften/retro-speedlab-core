@@ -208,7 +208,9 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         if path == "/api/live/frames":
             query = parse_qs(request.query)
             try:
-                frames = live_feed.episode_frames(int(query["episode"][0]), int(query["start"][0]))
+                frames = live_feed.episode_frames(
+                    query["generation"][0], int(query["episode"][0]), int(query["start"][0])
+                )
             except KeyError:
                 self.send_error(HTTPStatus.NOT_FOUND, "Episode is no longer available")
                 return

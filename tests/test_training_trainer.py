@@ -113,20 +113,39 @@ def test_video_playback_imports_roms_and_replays_headless(monkeypatch, tmp_path:
 
 def test_live_feed_keeps_the_latest_finished_episodes_and_serves_them_in_chunks():
     feed = LiveFeed()
-    assert feed.latest_episode() == {"episode": None, "summary": {}}
+    generation = feed.latest_episode()["generation"]
+    assert feed.latest_episode() == {"generation": generation, "episode": None, "summary": {}}
     for episode_id in range(1, MAX_COMPLETED_EPISODES + 2):
         for index in range(MAX_FRAMES_PER_REQUEST + 5):
             feed.record(b"jpeg", {"timesteps": index})
         feed.finish_episode(episode_id, 60.0, {"score": 1.0, "won": False, "new_best": False}, {})
 
     newest = MAX_COMPLETED_EPISODES + 1
-    rest = feed.episode_frames(newest, MAX_FRAMES_PER_REQUEST)
+    rest = feed.episode_frames(generation, newest, MAX_FRAMES_PER_REQUEST)
 
-    assert len(feed.episode_frames(newest, 0)) == MAX_FRAMES_PER_REQUEST
+    assert len(feed.episode_frames(generation, newest, 0)) == MAX_FRAMES_PER_REQUEST
     assert [frame["status"]["timesteps"] for frame in rest] == list(
         range(MAX_FRAMES_PER_REQUEST, MAX_FRAMES_PER_REQUEST + 5)
     )
     assert rest[0]["image"] == "anBlZw=="
     assert feed.latest_episode()["episode"]["id"] == newest
     with pytest.raises(KeyError):
-        feed.episode_frames(1, 0)
+        feed.episode_frames(generation, 1, 0)
+
+
+def test_clearing_the_live_feed_starts_a_new_generation_without_old_frames():
+    feed = LiveFeed()
+    feed.record(b"jpeg", {"timesteps": 1})
+    feed.finish_episode(1, 60.0, {"score": 1.0, "won": False, "new_best": False}, {})
+    feed.record(b"half", {"timesteps": 2})
+    old = feed.latest_episode()["generation"]
+
+    feed.clear()
+    feed.record(b"jpeg", {"timesteps": 3})
+    feed.finish_episode(1, 60.0, {"score": 2.0, "won": False, "new_best": False}, {})
+
+    latest = feed.latest_episode()
+    assert latest["generation"] != old
+    assert [frame["status"]["timesteps"] for frame in feed.episode_frames(latest["generation"], 1, 0)] == [3]
+    with pytest.raises(KeyError):
+        feed.episode_frames(old, 1, 0)

@@ -2,6 +2,7 @@ import base64
 import threading
 from collections import deque
 from typing import Any
+from uuid import uuid4
 
 MAX_COMPLETED_EPISODES = 2
 MAX_FRAMES_PER_REQUEST = 120
@@ -10,6 +11,14 @@ MAX_FRAMES_PER_REQUEST = 120
 class LiveFeed:
     def __init__(self) -> None:
         self._lock = threading.Lock()
+        self._start_generation()
+
+    def clear(self) -> None:
+        with self._lock:
+            self._start_generation()
+
+    def _start_generation(self) -> None:
+        self._generation = uuid4().hex
         self._recording: list[dict[str, Any]] = []
         self._episodes: deque[dict[str, Any]] = deque(maxlen=MAX_COMPLETED_EPISODES)
         self._summary: dict[str, Any] = {}
@@ -42,7 +51,7 @@ class LiveFeed:
     def latest_episode(self) -> dict[str, Any]:
         with self._lock:
             if not self._episodes:
-                return {"episode": None, "summary": dict(self._summary)}
+                return {"generation": self._generation, "episode": None, "summary": dict(self._summary)}
             latest = self._episodes[-1]
             episode = {
                 "id": latest["id"],
@@ -50,10 +59,12 @@ class LiveFeed:
                 "frame_count": len(latest["frames"]),
                 "result": latest["result"],
             }
-            return {"episode": episode, "summary": dict(self._summary)}
+            return {"generation": self._generation, "episode": episode, "summary": dict(self._summary)}
 
-    def episode_frames(self, episode_id: int, start: int) -> list[dict[str, Any]]:
+    def episode_frames(self, generation: str, episode_id: int, start: int) -> list[dict[str, Any]]:
         with self._lock:
+            if generation != self._generation:
+                raise KeyError(generation)
             for episode in self._episodes:
                 if episode["id"] == episode_id:
                     return episode["frames"][start : start + MAX_FRAMES_PER_REQUEST]

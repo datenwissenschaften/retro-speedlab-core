@@ -187,8 +187,10 @@ def test_live_endpoints_serve_the_latest_finished_episode_in_chunks(monkeypatch)
 
     with _running_server(monkeypatch) as server:
         latest = json.loads(_get(server, "/api/live/episode").body)
-        frames = json.loads(_get(server, "/api/live/frames?episode=7&start=1").body)
-        missing = _get(server, "/api/live/frames?episode=99&start=0")
+        generation = latest["generation"]
+        frames = json.loads(_get(server, f"/api/live/frames?generation={generation}&episode=7&start=1").body)
+        missing = _get(server, f"/api/live/frames?generation={generation}&episode=99&start=0")
+        outdated = _get(server, "/api/live/frames?generation=old&episode=7&start=0")
 
     assert latest["episode"] == {
         "id": 7,
@@ -198,6 +200,7 @@ def test_live_endpoints_serve_the_latest_finished_episode_in_chunks(monkeypatch)
     }
     assert [frame["status"]["timesteps"] for frame in frames["frames"]] == [2]
     assert missing.status == 404
+    assert outdated.status == 404
 
 
 def test_snapshot_endpoint_merges_control_and_server_metadata(monkeypatch):

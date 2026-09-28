@@ -134,7 +134,8 @@ def test_live_stream_hook_records_every_frame_of_an_episode_with_its_result(monk
     hook.on_step(_transition())
     hook.on_episode_end(_episode("run.bk2", 4.0, True, True))
 
-    first, second = (feed.episode_frames(episode_id, 0) for episode_id in (42, 43))
+    generation = feed.latest_episode()["generation"]
+    first, second = (feed.episode_frames(generation, episode_id, 0) for episode_id in (42, 43))
     status = first[0]["status"]
     assert (len(first), len(second)) == (2, 2)
     assert (status["action"], status["probabilities"]["right"]) == ("right", 0.7)
