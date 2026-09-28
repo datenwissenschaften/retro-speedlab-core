@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ProgressPath from './ProgressPath.vue'
+import { createObsControl } from './obsControl.js'
 import { createReplayPlayer } from './replayPlayer.js'
 import SpotlightPanel from './SpotlightPanel.vue'
 import StoryTicker from './StoryTicker.vue'
@@ -102,6 +103,7 @@ const player = createReplayPlayer({
   onSummary: () => {},
   onConnection: online => { connected.value = online },
 })
+const obsControl = createObsControl()
 const loadSnapshot = async () => {
   try {
     const response = await fetch('/api/snapshot', { cache: 'no-store' })
@@ -116,12 +118,12 @@ const stageStyle = computed(() => ({
 }))
 
 onMounted(() => {
-  fit(); loadSnapshot(); player.start()
+  fit(); loadSnapshot(); player.start(); obsControl.start()
   window.addEventListener('resize', fit)
   snapshotTimer = window.setInterval(loadSnapshot, SNAPSHOT_INTERVAL_MS)
 })
 onBeforeUnmount(() => {
-  player.stop()
+  player.stop(); obsControl.stop()
   window.removeEventListener('resize', fit)
   window.clearInterval(snapshotTimer); window.clearTimeout(toastTimer); window.clearTimeout(reloadTimer)
 })
