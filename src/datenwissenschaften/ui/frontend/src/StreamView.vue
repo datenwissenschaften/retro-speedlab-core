@@ -1,12 +1,17 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import ProgressPath from './ProgressPath.vue'
 import { createReplayPlayer } from './replayPlayer.js'
+import SpotlightPanel from './SpotlightPanel.vue'
+import StoryTicker from './StoryTicker.vue'
 import './stream.css'
 
 const STAGE_WIDTH = 1280
 const STAGE_HEIGHT = 720
 const SNAPSHOT_INTERVAL_MS = 1500
-const TOAST_MS = 3200
+const TOAST_MS = 4500
+const TICKER_SIZE = 3
+const TICKER_MS = 7000
 const SITE_URL = 'https://www.retrospeedlab.com'
 const SITE_LABEL = 'www.retrospeedlab.com'
 const RELOAD_DEADLINE_MS = 90000
@@ -21,7 +26,9 @@ const connected = ref(false)
 const scale = ref(1)
 const toast = ref(null)
 const changedFields = ref(new Set())
-const announced = new Set()
+const tickerEvents = ref([])
+let lastStep = null
+let eventKey = 0
 let snapshotTimer
 let toastTimer
 let reloadTimer
@@ -45,6 +52,18 @@ const announce = (title, detail) => {
   toastTimer = window.setTimeout(() => { toast.value = null }, TOAST_MS)
 }
 
+const tell = item => {
+  const entry = { ...item, key: eventKey += 1 }
+  tickerEvents.value = [...tickerEvents.value, entry].slice(-TICKER_SIZE)
+  window.setTimeout(() => { tickerEvents.value = tickerEvents.value.filter(other => other.key !== entry.key) }, TICKER_MS)
+  if (item.kind === 'milestone') announce(item.text, item.detail)
+}
+const tellStep = status => {
+  if (status.step === lastStep) return
+  lastStep = status.step
+  status.events.forEach(tell)
+}
+
 const drawFrame = frame => {
   const canvas = screen.value
   if (canvas.width !== frame.bitmap.width) {
@@ -54,6 +73,7 @@ const drawFrame = frame => {
   canvas.getContext('2d').drawImage(frame.bitmap, 0, 0)
   live.value = frame.status
   replayProgress.value = frame.progress
+  frame.passed.forEach(tellStep)
 }
 const reloadIfPending = () => { if (reloadPending) window.location.reload() }
 const player = createReplayPlayer({
@@ -66,13 +86,7 @@ const player = createReplayPlayer({
     waiting.value = true
     reloadIfPending()
   },
-  onEpisodeEnd: episode => {
-    reloadIfPending()
-    if (announced.has(episode.id)) return
-    announced.add(episode.id)
-    if (episode.result.won) announce('LEVEL CLEARED', `Episode #${episode.id}`)
-    else if (episode.result.new_best) announce('NEW HIGH SCORE', fmt(episode.result.score, 1))
-  },
+  onEpisodeEnd: reloadIfPending,
   onSummary: () => {},
   onConnection: online => { connected.value = online },
 })
@@ -85,6 +99,9 @@ const loadSnapshot = async () => {
   }
 }
 const fit = () => { scale.value = Math.min(window.innerWidth / STAGE_WIDTH, window.innerHeight / STAGE_HEIGHT) }
+const stageStyle = computed(() => ({
+  transform: `translate(${(window.innerWidth - STAGE_WIDTH * scale.value) / 2}px, ${(window.innerHeight - STAGE_HEIGHT * scale.value) / 2}px) scale(${scale.value})`,
+}))
 
 onMounted(() => {
   fit(); loadSnapshot(); player.start()
@@ -100,7 +117,9 @@ onBeforeUnmount(() => {
 const release = computed(() => snapshot.value.server?.release || null)
 const run = computed(() => snapshot.value.metadata?.run || {})
 const summary = computed(() => snapshot.value.summary || {})
-const trainingSteps = computed(() => snapshot.value.metadata?.model?.laya?.num_timesteps ?? null)
+const story = computed(() => snapshot.value.metadata?.story || { phases: [], map: { cell: 1, visits: [], ends: [] } })
+const phase = computed(() => live.value.training_state || story.value.phases[0]?.name || '')
+const areasReached = computed(() => story.value.phases.filter(item => item.reached).length)
 const probabilities = computed(() => Object.entries(live.value.probabilities || {}))
 const confidence = computed(() => Math.max(0, ...probabilities.value.map(([, p]) => p)))
 const isSighting = value => Boolean(value) && typeof value === 'object' && 'visible' in value
@@ -128,63 +147,59 @@ watch(() => live.value.ram, (current, previous) => {
 
 <template>
   <div class="stream-view">
-    <div class="stream-stage" :style="{ transform: `scale(${scale})` }">
-      <canvas ref="screen" class="stream-video" aria-label="Replayed gameplay"></canvas>
-      <Transition name="fade">
-        <div v-if="waiting" class="stream-video stream-waiting">
-          <span class="stream-waiting-kicker">Next replay loading</span>
-          <strong class="stream-waiting-title">Laya trains<span class="stream-waiting-dots"><i>.</i><i>.</i><i>.</i></span></strong>
-          <span class="stream-waiting-copy">The next episode appears here as soon as Laya finishes playing it.</span>
-          <dl class="stream-waiting-stats">
-            <div><dt>Episodes trained</dt><dd>{{ fmt(summary.episodes) }}</dd></div>
-            <div><dt>Best score</dt><dd>{{ fmt(summary.best_fitness, 1) }}</dd></div>
-            <div><dt>Training steps</dt><dd>{{ fmt(trainingSteps) }}</dd></div>
-          </dl>
-        </div>
-      </Transition>
-
+    <div class="stream-stage" :style="stageStyle">
       <div class="stream-left-rail">
         <aside class="run-info-panel">
           <div class="run-info-brand">
             <img class="run-info-logo" src="/logo.png" alt="Retro Speedlab" />
-            <span class="run-info-kicker">{{ connected ? 'Laya live' : 'Offline' }}</span>
+            <span class="run-info-kicker">{{ connected ? 'Live' : 'Offline' }}</span>
           </div>
           <div class="run-info-medal">
             <span class="run-info-medal-icon">🧠</span>
             <span>
-              <strong class="run-info-medal-title">Episode {{ replayEpisode ? `#${replayEpisode.id}` : '—' }}</strong>
+              <strong class="run-info-medal-title">Attempt {{ replayEpisode ? `#${replayEpisode.id}` : '—' }}</strong>
               <span class="replay-track"><span :style="{ width: percent(replayProgress) }"></span></span>
             </span>
           </div>
           <dl class="run-info-grid">
             <div class="run-info-row"><dt>Game</dt><dd>{{ run.game || 'Waiting' }}</dd></div>
             <div class="run-info-row"><dt>Level</dt><dd>{{ run.savestate || '—' }}</dd></div>
-            <div class="run-info-row"><dt>Phase</dt><dd>{{ live.training_state || '—' }}</dd></div>
-            <div class="run-info-row"><dt>Steps</dt><dd>{{ fmt(live.timesteps) }}</dd></div>
-            <div class="run-info-row"><dt>Updates</dt><dd>{{ fmt(live.updates) }}</dd></div>
             <div class="run-info-row"><dt>Model</dt><dd>Laya {{ release || '—' }}</dd></div>
           </dl>
         </aside>
 
         <section class="sight-panel">
-          <span class="sight-title">What Laya sees</span>
+          <span class="sight-title">In sight</span>
           <div v-for="[name, value] in sightings" :key="name" :class="['sighting', { seen: value.visible }]">
             <strong>{{ label(name) }}</strong>
             <span>{{ readable(value) }}</span>
           </div>
-          <span v-if="!sightings.length" class="game-cover-loading">Waiting for the first episode</span>
+          <span v-if="!sightings.length" class="game-cover-loading">Waiting for the first attempt</span>
         </section>
 
-        <a class="site-card" :href="SITE_URL" target="_blank" rel="noopener noreferrer">
-          <span class="sight-title">Train your own runner</span>
-          <strong class="site-url">{{ SITE_LABEL }}</strong>
-        </a>
+        <SpotlightPanel :phase="phase" :map="story.map" />
+      </div>
 
+      <div class="stream-screen">
+        <canvas ref="screen" class="stream-video" aria-label="Replayed gameplay"></canvas>
+        <StoryTicker :events="tickerEvents" />
+        <Transition name="fade">
+          <div v-if="waiting" class="stream-waiting">
+            <span class="stream-waiting-kicker">Next replay loading</span>
+            <strong class="stream-waiting-title">Laya trains<span class="stream-waiting-dots"><i>.</i><i>.</i><i>.</i></span></strong>
+            <span class="stream-waiting-copy">The next attempt appears here as soon as it is finished.</span>
+            <dl class="stream-waiting-stats">
+              <div><dt>Attempts</dt><dd>{{ fmt(summary.episodes) }}</dd></div>
+              <div><dt>Best score</dt><dd>{{ fmt(summary.best_fitness, 1) }}</dd></div>
+              <div><dt>Areas reached</dt><dd>{{ areasReached }} / {{ story.phases.length }}</dd></div>
+            </dl>
+          </div>
+        </Transition>
       </div>
 
       <aside class="stream-ad-panel brain-panel">
-        <strong class="stream-ad-title">Laya's brain</strong>
-        <span class="stream-ad-copy">“{{ live.question || 'Waiting for Laya’s first finished episode…' }}”</span>
+        <strong class="stream-ad-title">Thinking</strong>
+        <span class="stream-ad-copy">“{{ live.question || 'Waiting for the first finished attempt…' }}”</span>
         <ul class="brain-options">
           <li v-for="[name, probability] in probabilities" :key="name" :class="{ chosen: name === live.action }">
             <div class="brain-option-label"><strong>{{ name }}</strong><b>{{ percent(probability) }}</b></div>
@@ -199,11 +214,13 @@ watch(() => live.value.ram, (current, previous) => {
         </dl>
       </aside>
 
-      <div class="stream-support-strip">
-        <article class="stream-support-card"><span class="stream-support-label">Laya presses</span><strong class="stream-support-value">{{ live.action || '—' }}</strong></article>
-        <article class="stream-support-card"><span class="stream-support-label">Episode score</span><strong class="stream-support-value">{{ fmt(live.episode_reward, 1) }}</strong></article>
-        <article class="stream-support-card"><span class="stream-support-label">Best score</span><strong class="stream-support-value">{{ fmt(summary.best_fitness, 1) }}</strong></article>
-        <article class="stream-support-card"><span class="stream-support-label">Episodes trained</span><strong class="stream-support-value">{{ fmt(summary.episodes) }}</strong></article>
+      <div class="stream-bottom">
+        <ProgressPath :phases="story.phases" :current="phase" />
+        <a class="site-card" :href="SITE_URL" target="_blank" rel="noopener noreferrer">
+          <span class="sight-title">Train your own runner</span>
+          <strong class="site-url">{{ SITE_LABEL }}</strong>
+          <span class="site-score">Best score {{ fmt(summary.best_fitness, 1) }} · {{ fmt(summary.episodes) }} attempts</span>
+        </a>
       </div>
 
       <Transition name="toast">

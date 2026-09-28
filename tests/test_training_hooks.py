@@ -9,10 +9,12 @@ import pytest
 from fakes import write_config
 
 from datenwissenschaften.laya.decision import Decision
+from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.training import (
     checkpoint_hook,
     live_stream_hook,
+    story_book,
     system,
     telemetry_hook,
     upload_hook,
@@ -22,6 +24,8 @@ from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
 from datenwissenschaften.training.state_models import StateModels
+from datenwissenschaften.training.story_book import StoryBook
+from datenwissenschaften.training.story_teller import StoryTeller
 from datenwissenschaften.ui.live import LiveFeed
 from datenwissenschaften.vision.detection import Detection
 
@@ -67,7 +71,13 @@ def _episode(bk2_path: str, score: float, won: bool, full_run: bool) -> EpisodeR
 
 
 def _transition() -> Transition:
-    info = {"state": "Survive", "detections": (Detection("door", 0, 0, 2, 2),)}
+    info = {
+        "state": "Survive",
+        "detections": (Detection("door", 0, 0, 2, 2),),
+        "ram": {"lives": 3},
+        "location": (40, 20),
+        "state_transition": None,
+    }
     return Transition(7, OBSERVATION, Decision(1, {"left": 0.3, "right": 0.7}, 0.66), FRAMES, 2.0, False, info)
 
 
@@ -108,13 +118,15 @@ def test_checkpoint_hook_saves_and_publishes_metadata(context: RunContext, monke
     assert published[0][1]["laya"] == {"state": "Survive", "checkpoint": "fake/laya"}
 
 
-def test_live_stream_hook_records_every_frame_of_an_episode_with_its_result(monkeypatch):
+def test_live_stream_hook_records_every_frame_of_an_episode_with_its_result(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(story_book, "publish_metadata", lambda *args, **kwargs: None)
+    teller = StoryTeller(StoryBook(JsonDatabase(tmp_path / "db.json"), "FakeGame-v0", ("Survive", "Boss")))
     feed = LiveFeed()
     best_scores = iter([None, 3.0])
     monkeypatch.setattr(live_stream_hook, "live_feed", feed)
     monkeypatch.setattr(live_stream_hook, "best_fitness", lambda: next(best_scores))
     monkeypatch.setattr(live_stream_hook, "episode_count", lambda: 41)
-    hook = live_stream_hook.LiveStreamHook(50.0)
+    hook = live_stream_hook.LiveStreamHook(50.0, teller)
 
     hook.on_step(_transition())
     hook.on_update()
@@ -127,6 +139,8 @@ def test_live_stream_hook_records_every_frame_of_an_episode_with_its_result(monk
     assert (len(first), len(second)) == (2, 2)
     assert (status["action"], status["probabilities"]["right"]) == ("right", 0.7)
     assert (status["ram"], status["episode_reward"]) == ({"lives": 3}, 2.0)
+    assert first[-1]["status"]["events"][0]["text"] == "Attempt over in Survive"
+    assert second[-1]["status"]["events"][-1]["text"] == "New best score!"
     latest = feed.latest_episode()
     assert latest["episode"]["frame_rate"] == 50.0
     assert latest["episode"]["result"] == {"score": 4.0, "won": True, "new_best": True}

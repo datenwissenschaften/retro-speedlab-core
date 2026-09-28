@@ -47,3 +47,6 @@ class RamInfo:
 
     def describe(self) -> dict[str, Any]:
         return self.to_dict()
+
+    def location(self) -> tuple[int, int] | None:
+        return None

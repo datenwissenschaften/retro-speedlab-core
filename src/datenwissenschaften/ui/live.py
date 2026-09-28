@@ -18,6 +18,12 @@ class LiveFeed:
         with self._lock:
             self._recording.append({"image": base64.b64encode(jpeg).decode("ascii"), "status": status})
 
+    def add_events(self, events: list[dict[str, str]]) -> None:
+        with self._lock:
+            if self._recording:
+                status = self._recording[-1]["status"]
+                status["events"] = [*status["events"], *events]
+
     def finish_episode(
         self, episode_id: int, frame_rate: float, result: dict[str, Any], summary: dict[str, Any]
     ) -> None:

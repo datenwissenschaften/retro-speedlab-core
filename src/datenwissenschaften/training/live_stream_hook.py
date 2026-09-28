@@ -6,6 +6,7 @@ import numpy as np
 
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
+from datenwissenschaften.training.story_teller import StoryTeller
 from datenwissenschaften.ui.live import live_feed
 from datenwissenschaften.ui.telemetry import best_fitness, episode_count
 from datenwissenschaften.vision.overlay import draw_detections
@@ -15,16 +16,21 @@ RECENT_SCORES = 120
 
 
 class LiveStreamHook:
-    def __init__(self, frame_rate: float) -> None:
+    def __init__(self, frame_rate: float, teller: StoryTeller) -> None:
         self.frame_rate = frame_rate
+        self.teller = teller
         self.episode = episode_count() + 1
         self.episode_reward = 0.0
         self.updates = 0
         self.recent_scores: deque[float] = deque(maxlen=RECENT_SCORES)
+        self.step = 0
 
     def on_step(self, transition: Transition) -> None:
         self.episode_reward += transition.reward
+        self.step += 1
         status = {
+            "step": self.step,
+            "events": self.teller.observe(transition, self.episode),
             "timesteps": transition.timesteps,
             "episode": self.episode,
             "episode_reward": self.episode_reward,
@@ -43,6 +49,7 @@ class LiveStreamHook:
         self.recent_scores.append(episode.score)
         previous_best = best_fitness()
         new_best = previous_best is not None and episode.score > previous_best
+        live_feed.add_events(self.teller.finish(episode, new_best))
         result = {"score": episode.score, "won": episode.won, "new_best": new_best}
         live_feed.finish_episode(self.episode, self.frame_rate, result, {"recent_scores": list(self.recent_scores)})
         self.episode += 1

@@ -6,6 +6,7 @@ from loguru import logger
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.training.context import RunContext
+from datenwissenschaften.training.story_book import story_key
 from datenwissenschaften.ui.control import ModelResetRequest, perform_model_reset
 
 PACKAGE_NAME = "datenwissenschaften"
@@ -57,8 +58,12 @@ class TrainingIdentity:
             game=self.context.game,
             model_dir=self.context.model_dir,
             artifact_dirs=(paths.models_dir, paths.record_dir, paths.cache_dir),
-            on_reset=env.reset_training_memory,
+            on_reset=lambda: self._forget(env),
         )
+
+    def _forget(self, env: StateMachineGymWrapper) -> None:
+        env.reset_training_memory()
+        self.database.delete(story_key(self.context.config.training.game_identity))
 
     @staticmethod
     def _release(engine: str | None) -> tuple[str, ...] | None:

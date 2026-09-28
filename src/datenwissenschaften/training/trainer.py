@@ -17,6 +17,8 @@ from datenwissenschaften.training.identity import TrainingIdentity
 from datenwissenschaften.training.live_stream_hook import LiveStreamHook
 from datenwissenschaften.training.session import TrainingSession
 from datenwissenschaften.training.state_models import StateModels
+from datenwissenschaften.training.story_book import StoryBook
+from datenwissenschaften.training.story_teller import StoryTeller
 from datenwissenschaften.training.telemetry_hook import TelemetryHook
 from datenwissenschaften.training.upload_hook import UploadHook
 from datenwissenschaften.training.video_hook import BestVideoHook
@@ -39,15 +41,20 @@ class LayaTrainer:
         identity.require_compatible(env)
         self._start_ui(identity, env, database)
         while True:
-            request = self._train_until_reset(env)
+            request = self._train_until_reset(env, database)
             torch.cuda.empty_cache()
             perform_model_reset(request)
 
-    def _train_until_reset(self, env: StateMachineGymWrapper) -> ModelResetRequest:
+    def _train_until_reset(self, env: StateMachineGymWrapper, database: JsonDatabase) -> ModelResetRequest:
         models = self._models()
         self._publish_run()
         publish_metadata("model", model_metadata(models), replace=True)
-        return TrainingSession(env, models, self._hooks(env, models)).run()
+        story = StoryBook(database, self.config.training.game_identity, self._phases())
+        return TrainingSession(env, models, self._hooks(env, models, StoryTeller(story))).run()
+
+    def _phases(self) -> tuple[str, ...]:
+        classes = (self.wrapper_cls.start_state_cls, *self.wrapper_cls.state_classes)
+        return tuple(dict.fromkeys(state_cls.__name__ for state_cls in classes))
 
     def _models(self) -> StateModels:
         network = LayaNetwork(
@@ -57,9 +64,9 @@ class LayaTrainer:
         agent = LayaAgent(network, tuple(state_cls.description for state_cls in state_classes))
         return StateModels(agent, self.context, tuple(state_cls.__name__ for state_cls in state_classes))
 
-    def _hooks(self, env: StateMachineGymWrapper, models: StateModels) -> list[TrainingHook]:
+    def _hooks(self, env: StateMachineGymWrapper, models: StateModels, teller: StoryTeller) -> list[TrainingHook]:
         return [
-            LiveStreamHook(env.unwrapped.em.get_screen_rate()),
+            LiveStreamHook(env.unwrapped.em.get_screen_rate(), teller),
             TelemetryHook(self.context),
             CheckpointHook(models),
             BestVideoHook(self.context),

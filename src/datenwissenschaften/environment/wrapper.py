@@ -93,6 +93,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
             "won": won,
             "state_transition": transition,
             "ram": ram.describe(),
+            "location": ram.location(),
             **self._episode_info,
         }
         return self._observation(ram), reward, terminated, truncated, info
