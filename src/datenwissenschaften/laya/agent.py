@@ -40,16 +40,33 @@ class LayaAgent:
 
     def learn(self, rollout: Rollout) -> None:
         self.last_update = self.learner.update(rollout)
+        self.num_timesteps += len(rollout)
+
+    def restart(self) -> None:
+        self.network.restore_pretrained()
+        self.learner = GroupRelativeLearner(self.network)
+        self.num_timesteps = 0
+        self.last_update = {}
 
     def save(self, path: Path) -> None:
         temporary = path.with_suffix(".tmp")
-        torch.save({"network": self.network.state_dict(), "num_timesteps": self.num_timesteps}, temporary)
+        torch.save(
+            {
+                "network": self.network.state_dict(),
+                "learner": self.learner.state_dict(),
+                "num_timesteps": self.num_timesteps,
+                "last_update": self.last_update,
+            },
+            temporary,
+        )
         temporary.replace(path)
 
     def load(self, path: Path) -> None:
-        saved = torch.load(path, map_location=self.network.device)
+        saved = torch.load(path, map_location="cpu")
         self.network.load_state_dict(saved["network"])
+        self.learner.load_state_dict(saved["learner"])
         self.num_timesteps = int(saved["num_timesteps"])
+        self.last_update = saved["last_update"]
 
     def metadata(self) -> dict[str, Any]:
         return {

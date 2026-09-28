@@ -16,20 +16,22 @@ provides game packages and runnable entry points.
 1. **The game speaks text.** A game package maps RAM addresses to a `RamInfo`
    and returns a readable `describe()` dict, for example
    `{"score": 120, "lives": 3, "ship_position_percent_from_left": 40}`.
-2. **Every state asks a question.** Each `State` in the state machine has a
-   `description`, which is the question Laya answers in that state. A state
-   transition changes the question.
+2. **Every state has its own Laya.** Each `State` in the state machine has a
+   `description`, which is the question its Laya model answers, and its own
+   checkpoint under `models/<game>/<savestate>/<State>/laya.pt`. A state
+   transition ends that model's trajectory and swaps the next state's model
+   into the GPU; a state without a checkpoint starts from the pretrained Laya.
 3. **Every action has a meaning.** `action_table` has the shape
    `(actions, frames, buttons)`: each action is the button sequence played for
    one decision, so a game can tap a button instead of holding it.
    `action_descriptions` name each action, and Laya scores each description.
 4. **Laya decides.** One forward pass returns a probability per action; the
    agent samples from it.
-5. **Laya learns.** Every 64 decisions the discounted rewards-to-go are
-   normalized across the group, and group-relative policy gradients (Laya's own
-   RLCD recipe) update the encoder and the decision head. A KL penalty keeps
-   every update close to the policy that played, so Laya cannot collapse onto
-   one action. There is no critic.
+5. **Laya learns.** After 64 decisions in a state, that state's discounted
+   rewards-to-go are normalized across the group, and group-relative policy
+   gradients (Laya's own RLCD recipe) update its encoder and decision head. A
+   measured-KL trust region scales the learning rate so every update stays
+   close to the policy that played. There is no critic.
    bf16 autocast, gradient checkpointing, and 8-bit AdamW keep the full model
    trainable on a 6 GB GPU.
 
@@ -119,7 +121,8 @@ npm run build
 - Training uses one emulator; each update learns from 64 decisions.
 - Laya only knows what the game package describes. Unmapped RAM, such as enemy
   positions, is invisible to it.
-- A full checkpoint stores all Laya weights (about 1.7 GB).
+- A state checkpoint stores all Laya weights plus the optimizer (about 2.4 GB),
+  and swapping states reloads it (a few seconds).
 - Binding the dashboard to `0.0.0.0` exposes it without authentication.
 
 ## License

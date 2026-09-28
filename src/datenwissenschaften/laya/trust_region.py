@@ -23,6 +23,13 @@ class TrustRegion:
         self._adapt_learning_rate(kl)
         self._adapt_entropy_coefficient(entropy, action_count)
 
+    def state_dict(self) -> dict[str, float]:
+        return {"learning_rate_scale": self.learning_rate_scale, "entropy_coefficient": self.entropy_coefficient}
+
+    def load_state_dict(self, state: dict[str, float]) -> None:
+        self.learning_rate_scale = state["learning_rate_scale"]
+        self.entropy_coefficient = state["entropy_coefficient"]
+
     def _adapt_learning_rate(self, kl: float) -> None:
         if kl > TARGET_KL * KL_TOLERANCE:
             self.learning_rate_scale *= max(STRONGEST_DECREASE, min(LEARNING_RATE_DECREASE, TARGET_KL / kl))

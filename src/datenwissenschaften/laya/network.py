@@ -18,6 +18,9 @@ class LayaNetwork(nn.Module):
         self.to(device)
         self.dtype = autocast_dtype(self.device)
 
+    def restore_pretrained(self) -> None:
+        self.decision.load_state_dict(laya.load(self.checkpoint, device="cpu").model.state_dict())
+
     @property
     def device(self) -> torch.device:
         return next(self.parameters()).device

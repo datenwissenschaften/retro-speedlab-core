@@ -30,6 +30,5 @@ class RunContext:
     def model_dir(self) -> Path:
         return self.config.paths.models_dir / self.config.training.game_identity / self.savestate
 
-    @property
-    def model_path(self) -> Path:
-        return self.model_dir / MODEL_FILENAME
+    def model_path(self, state_name: str) -> Path:
+        return self.model_dir / state_name / MODEL_FILENAME

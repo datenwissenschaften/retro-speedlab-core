@@ -16,6 +16,8 @@ VOCABULARY = 64
 HIDDEN = 8
 ACTIONS = {"left": "move left", "right": "move right"}
 
+PRETRAINED_SEED = 7
+
 
 class FakeTokenizer:
     mask_token = "[MASK]"
@@ -57,6 +59,7 @@ class FakeDecision(nn.Module):
 
 
 def fake_laya_load(checkpoint: str, device: str) -> SimpleNamespace:
+    torch.manual_seed(PRETRAINED_SEED)
     return SimpleNamespace(tok=FakeTokenizer(), cfg={"max_len": 128, "head_max_len": 48}, model=FakeDecision())
 
 

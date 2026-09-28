@@ -67,6 +67,7 @@ def test_agent_learning_changes_every_trainable_part(network: LayaNetwork):
 
     agent.learn(rollout)
 
+    assert agent.num_timesteps == len(rollout)
     after = list(network.parameters())
     assert any(not torch.equal(old, new) for old, new in zip(before, after, strict=True))
     assert set(agent.last_update) == {"policy_loss", "entropy", "kl", "entropy_coefficient", "learning_rate_scale"}
@@ -77,6 +78,8 @@ def test_agent_learning_changes_every_trainable_part(network: LayaNetwork):
 def test_agent_checkpoint_round_trip(network: LayaNetwork, monkeypatch, tmp_path: Path):
     agent = LayaAgent(network, (QUESTION,))
     agent.num_timesteps = 42
+    agent.learner.trust_region.entropy_coefficient = 0.3
+    agent.last_update = {"kl": 0.01}
     path = tmp_path / "laya.pt"
     agent.save(path)
     restored = LayaAgent(LayaNetwork("fake/laya", ACTIONS, "cpu"), (QUESTION,))
@@ -84,6 +87,8 @@ def test_agent_checkpoint_round_trip(network: LayaNetwork, monkeypatch, tmp_path
     restored.load(path)
 
     assert restored.num_timesteps == 42
+    assert restored.learner.trust_region.entropy_coefficient == 0.3
+    assert restored.last_update == {"kl": 0.01}
     assert restored.metadata()["actions"] == ACTIONS
     for original, loaded in zip(network.parameters(), restored.network.parameters(), strict=True):
         assert torch.equal(original, loaded)
@@ -132,3 +137,17 @@ def test_float16_learning_scales_gradients_and_stays_finite(monkeypatch):
     assert agent.metadata()["precision"] == "float16"
     assert all(torch.isfinite(parameter).all() for parameter in network.parameters())
     assert any(not torch.equal(old, new) for old, new in zip(before, network.parameters(), strict=True))
+
+
+def test_agent_restart_returns_to_the_pretrained_laya(network: LayaNetwork):
+    pretrained = [parameter.detach().clone() for parameter in network.parameters()]
+    agent = LayaAgent(network, (QUESTION,))
+    with torch.no_grad():
+        for parameter in network.parameters():
+            parameter.add_(1.0)
+    agent.num_timesteps, agent.last_update = 99, {"kl": 1.0}
+
+    agent.restart()
+
+    assert (agent.num_timesteps, agent.last_update) == (0, {})
+    assert all(torch.equal(old, new) for old, new in zip(pretrained, network.parameters(), strict=True))

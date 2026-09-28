@@ -62,7 +62,7 @@ def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_pa
     )
 
     def run(session):
-        agents.append(session.agent)
+        agents.append(session.models.agent)
         return "reset"
 
     def stop(request):
@@ -71,8 +71,9 @@ def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_pa
     monkeypatch.setattr(trainer_module.TrainingSession, "run", run)
     monkeypatch.setattr(trainer_module, "perform_model_reset", stop)
     trainer = trainer_module.LayaTrainer(FakeWrapper, config_path)
-    trainer.context.model_dir.mkdir(parents=True)
-    trainer._agent().save(trainer.context.model_path)
+    models = trainer._models()
+    models.activate("Survive")
+    models.save()
 
     with pytest.raises(StopTraining):
         trainer.train()

@@ -21,6 +21,7 @@ from datenwissenschaften.training import (
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
+from datenwissenschaften.training.state_models import StateModels
 from datenwissenschaften.ui.live import LiveFeed
 from datenwissenschaften.vision.detection import Detection
 
@@ -70,7 +71,10 @@ def _transition() -> Transition:
 
 
 def test_context_places_the_model_per_game_and_savestate(context: RunContext):
-    assert context.model_path == context.config.paths.models_dir / "FakeGame-v0" / "Level1" / "laya.pt"
+    assert (
+        context.model_path("Survive")
+        == context.config.paths.models_dir / "FakeGame-v0" / "Level1" / "Survive" / "laya.pt"
+    )
     assert context.record_dir == context.config.paths.record_dir / "FakeGame-v0" / "Level1"
 
 
@@ -91,14 +95,16 @@ def test_telemetry_hook_publishes_finished_episodes(context: RunContext, monkeyp
 def test_checkpoint_hook_saves_and_publishes_metadata(context: RunContext, monkeypatch):
     published = []
     monkeypatch.setattr(checkpoint_hook, "publish_metadata", lambda *args, **kwargs: published.append(args))
-    hook = checkpoint_hook.CheckpointHook(context, FakeAgent())
+    models = StateModels(FakeAgent(), context, ("Survive",))
+    models.activate("Survive")
+    hook = checkpoint_hook.CheckpointHook(models)
 
     hook.on_step(_transition())
     hook.on_episode_end(_episode("run.bk2", 1.0, False, True))
     hook.on_update()
 
-    assert context.model_path.read_bytes() == b"weights"
-    assert published[0][1]["laya"] == {"checkpoint": "fake/laya"}
+    assert context.model_path("Survive").read_bytes() == b"weights"
+    assert published[0][1]["laya"] == {"state": "Survive", "checkpoint": "fake/laya"}
 
 
 def test_live_stream_hook_records_every_frame_of_an_episode_with_its_result(monkeypatch):

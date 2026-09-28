@@ -16,6 +16,7 @@ from datenwissenschaften.training.hooks import TrainingHook
 from datenwissenschaften.training.identity import TrainingIdentity
 from datenwissenschaften.training.live_stream_hook import LiveStreamHook
 from datenwissenschaften.training.session import TrainingSession
+from datenwissenschaften.training.state_models import StateModels
 from datenwissenschaften.training.telemetry_hook import TelemetryHook
 from datenwissenschaften.training.upload_hook import UploadHook
 from datenwissenschaften.training.video_hook import BestVideoHook
@@ -43,28 +44,26 @@ class LayaTrainer:
             perform_model_reset(request)
 
     def _train_until_reset(self, env: StateMachineGymWrapper) -> ModelResetRequest:
-        agent = self._agent()
+        models = self._models()
         self._publish_run()
-        publish_metadata("model", model_metadata(agent), replace=True)
-        return TrainingSession(env, agent, self._hooks(env, agent)).run()
+        publish_metadata("model", model_metadata(models), replace=True)
+        return TrainingSession(env, models, self._hooks(env, models)).run()
 
-    def _agent(self) -> LayaAgent:
+    def _models(self) -> StateModels:
         network = LayaNetwork(
             self.config.laya.checkpoint, self.wrapper_cls.action_descriptions, configure_accelerator()
         )
         state_classes = (self.wrapper_cls.start_state_cls, *self.wrapper_cls.state_classes)
         agent = LayaAgent(network, tuple(state_cls.description for state_cls in state_classes))
-        if self.context.model_path.is_file():
-            agent.load(self.context.model_path)
-        return agent
+        return StateModels(agent, self.context, tuple(state_cls.__name__ for state_cls in state_classes))
 
-    def _hooks(self, env: StateMachineGymWrapper, agent: LayaAgent) -> list[TrainingHook]:
+    def _hooks(self, env: StateMachineGymWrapper, models: StateModels) -> list[TrainingHook]:
         return [
             LiveStreamHook(env.unwrapped.em.get_screen_rate()),
             TelemetryHook(self.context),
-            CheckpointHook(self.context, agent),
+            CheckpointHook(models),
             BestVideoHook(self.context),
-            UploadHook(self.context, agent),
+            UploadHook(self.context, models.agent),
         ]
 
     def _start_ui(self, identity: TrainingIdentity, env: StateMachineGymWrapper, database: JsonDatabase) -> None:

@@ -1,12 +1,15 @@
 from pathlib import Path
 
-from fakes import fake_environment
+from fakes import fake_environment, write_config
 
 from datenwissenschaften.laya.decision import Decision
+from datenwissenschaften.settings import load_config
 from datenwissenschaften.training import session as session_module
+from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
 from datenwissenschaften.training.session import ROLLOUT_STEPS, TrainingSession
+from datenwissenschaften.training.state_models import StateModels
 
 
 class RecordingAgent:
@@ -19,6 +22,7 @@ class RecordingAgent:
 
     def learn(self, rollout) -> None:
         self.rollouts.append(len(rollout))
+        self.num_timesteps += len(rollout)
 
 
 class RecordingHook:
@@ -42,11 +46,13 @@ def test_session_plays_learns_and_stops_on_a_reset_request(tmp_path: Path, monke
     monkeypatch.setattr(session_module, "consume_model_reset", lambda: next(requests))
     env = fake_environment(tmp_path, [(3, 0), (3, 1), (0, 2)])
     agent, hook = RecordingAgent(), RecordingHook()
+    models = StateModels(agent, RunContext(load_config(write_config(tmp_path))), ("Survive", "Boss"))
 
-    result = TrainingSession(env, agent, [hook]).run()
+    result = TrainingSession(env, models, [hook]).run()
 
     assert result == "reset"
-    assert agent.num_timesteps == ROLLOUT_STEPS + 1
+    assert agent.num_timesteps == ROLLOUT_STEPS
+    assert hook.steps[-1].timesteps == ROLLOUT_STEPS + 1
     assert agent.rollouts == [ROLLOUT_STEPS]
     assert hook.updates == 1
     assert len(hook.steps) == ROLLOUT_STEPS + 1

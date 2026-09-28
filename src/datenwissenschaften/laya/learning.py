@@ -1,3 +1,5 @@
+from typing import Any
+
 import bitsandbytes as bnb
 import torch
 
@@ -43,6 +45,18 @@ class GroupRelativeLearner:
             "entropy_coefficient": self.trust_region.entropy_coefficient,
             "learning_rate_scale": self.trust_region.learning_rate_scale,
         }
+
+    def state_dict(self) -> dict[str, Any]:
+        return {
+            "optimizer": self.optimizer.state_dict(),
+            "trust_region": self.trust_region.state_dict(),
+            "scaler": self.scaler.state_dict(),
+        }
+
+    def load_state_dict(self, state: dict[str, Any]) -> None:
+        self.optimizer.load_state_dict(state["optimizer"])
+        self.trust_region.load_state_dict(state["trust_region"])
+        self.scaler.load_state_dict(state["scaler"])
 
     def _step(self, rollout: Rollout, previous: torch.Tensor) -> tuple[float, float]:
         actions = torch.as_tensor(rollout.actions, device=self.network.device)
