@@ -1,6 +1,7 @@
 import pytest
 
 from datenwissenschaften.laya.trust_region import (
+    MAX_LEARNING_RATE_SCALE,
     MIN_LEARNING_RATE_SCALE,
     STRONGEST_INCREASE,
     TARGET_KL,
@@ -48,3 +49,14 @@ def test_learning_rate_grows_toward_the_target_in_proportion_to_the_shortfall():
 
     assert timid.learning_rate_scale == pytest.approx(2.0)
     assert frozen.learning_rate_scale == STRONGEST_INCREASE
+
+
+def test_a_saturated_policy_cannot_push_the_learning_rate_past_the_ceiling():
+    saturated, restored = TrustRegion(), TrustRegion()
+
+    for _ in range(100):
+        saturated.adapt(0.0)
+    restored.load_state_dict({"learning_rate_scale": 350_440.0})
+
+    assert saturated.learning_rate_scale == MAX_LEARNING_RATE_SCALE
+    assert restored.learning_rate_scale == MAX_LEARNING_RATE_SCALE

@@ -1,8 +1,10 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
 from datenwissenschaften.ram import RamInfo
+from datenwissenschaften.states.landmarks import Landmarks
 from datenwissenschaften.states.state import State
 
 FRAME = np.zeros((4, 4, 3), np.uint8)
@@ -30,8 +32,8 @@ class _Counting(State):
         return self.ram.value > 1
 
 
-def test_default_state_is_neutral():
-    state = _Idle()
+def test_default_state_is_neutral(tmp_path: Path):
+    state = _Idle(Landmarks(tmp_path / "landmarks.json"))
     state.reset(_FakeRam(), FRAME)
 
     assert state.step(_FakeRam(), FRAME) == (0.0, False, False, None)
@@ -40,8 +42,8 @@ def test_default_state_is_neutral():
     assert state.detections() == ()
 
 
-def test_state_hooks_see_the_latest_ram():
-    state = _Counting()
+def test_state_hooks_see_the_latest_ram(tmp_path: Path):
+    state = _Counting(Landmarks(tmp_path / "landmarks.json"))
     state.reset(_FakeRam(), FRAME)
 
     assert state.resets == 1

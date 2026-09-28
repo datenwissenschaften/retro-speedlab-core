@@ -8,7 +8,7 @@ from fakes import ACTIONS, FakeTokenizer, fake_laya_load
 
 from datenwissenschaften.laya import learning as learning_module
 from datenwissenschaften.laya import network as network_module
-from datenwissenschaften.laya.agent import EXPLORATION_DECISIONS, FINAL_EXPLORATION, INITIAL_EXPLORATION, LayaAgent
+from datenwissenschaften.laya.agent import LayaAgent
 from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.laya.learning import MAX_BACKTRACKS
 from datenwissenschaften.laya.network import LayaNetwork
@@ -19,6 +19,7 @@ from datenwissenschaften.laya.weight_snapshot import WeightSnapshot
 
 QUESTION = "Which move survives?"
 VISIBLE_LEARNING_RATE = 1e-3
+EXPLORATION = 0.2
 OBSERVATION = {"state": json.dumps({"lives": 3, "score": 1}), "question": QUESTION}
 
 
@@ -58,15 +59,13 @@ def test_question_rejects_prompts_that_hide_options():
 def test_agent_decision_carries_every_action_probability(network: LayaNetwork):
     agent = LayaAgent(network, (QUESTION,))
 
-    decision = agent.act(OBSERVATION)
+    decision = agent.act(OBSERVATION, EXPLORATION)
 
     assert decision.action in range(len(ACTIONS))
     assert list(decision.probabilities) == list(ACTIONS)
     assert sum(decision.probabilities.values()) == pytest.approx(1.0)
     chosen = list(decision.probabilities.values())[decision.action]
-    assert decision.behavior_probability == pytest.approx(
-        (1 - INITIAL_EXPLORATION) * chosen + INITIAL_EXPLORATION / len(ACTIONS)
-    )
+    assert decision.behavior_probability == pytest.approx((1 - EXPLORATION) * chosen + EXPLORATION / len(ACTIONS))
 
 
 def test_options_appear_in_a_stable_order_per_state_that_varies_across_states():
@@ -145,19 +144,6 @@ def test_rollout_advantages_are_normalized_and_cut_at_episode_ends():
     assert len(rollout) == 3
     assert advantages.mean().item() == pytest.approx(0.0, abs=1e-6)
     assert advantages[0] > advantages[1] == advantages[2]
-
-
-def test_exploration_fades_as_laya_gains_experience(network: LayaNetwork):
-    agent = LayaAgent(network, (QUESTION,))
-    start = agent.exploration
-    agent.num_timesteps = EXPLORATION_DECISIONS // 2
-    halfway = agent.exploration
-    agent.num_timesteps = EXPLORATION_DECISIONS * 3
-
-    assert start == INITIAL_EXPLORATION
-    assert FINAL_EXPLORATION < halfway < INITIAL_EXPLORATION
-    assert agent.exploration == pytest.approx(FINAL_EXPLORATION)
-    assert agent.metadata()["exploration"] == FINAL_EXPLORATION
 
 
 def test_float16_learning_scales_gradients_and_stays_finite(monkeypatch):

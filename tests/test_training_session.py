@@ -8,7 +8,12 @@ from datenwissenschaften.training import session as session_module
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
-from datenwissenschaften.training.session import ROLLOUT_STEPS, TrainingSession
+from datenwissenschaften.training.session import (
+    EXPLORATION_ONCE_MASTERED,
+    EXPLORATION_WHILE_LEARNING,
+    ROLLOUT_STEPS,
+    TrainingSession,
+)
 from datenwissenschaften.training.state_models import StateModels
 
 
@@ -16,8 +21,10 @@ class RecordingAgent:
     def __init__(self) -> None:
         self.num_timesteps = 0
         self.rollouts: list[int] = []
+        self.explorations: list[float] = []
 
-    def act(self, observation: dict[str, str]) -> Decision:
+    def act(self, observation: dict[str, str], exploration: float) -> Decision:
+        self.explorations.append(exploration)
         return Decision(1, {"left": 0.2, "right": 0.8}, 0.74)
 
     def learn(self, rollout) -> None:
@@ -62,3 +69,16 @@ def test_session_plays_learns_and_stops_on_a_reset_request(tmp_path: Path, monke
     assert (first.episode_index, first.step_count, first.score, first.final_state) == (0, 2, 3.0, "Survive")
     assert first.duration_seconds >= 0.0
     assert hook.episodes[1].episode_index == 1
+    assert set(agent.explorations) == {EXPLORATION_WHILE_LEARNING}
+
+
+def test_mastered_states_explore_less(tmp_path: Path):
+    env = fake_environment(tmp_path, [(3, 0)])
+    models = StateModels(RecordingAgent(), RunContext(load_config(write_config(tmp_path))), ("Survive", "Boss"))
+    for _ in range(env.curriculum.curriculum.WIN_TARGET):
+        env.curriculum.curriculum.record_success("Survive", 1)
+
+    session = TrainingSession(env, models, [])
+
+    assert session._exploration("Survive") == EXPLORATION_ONCE_MASTERED
+    assert session._exploration("Boss") == EXPLORATION_WHILE_LEARNING

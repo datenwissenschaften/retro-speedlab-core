@@ -44,7 +44,7 @@ const readable = value => {
   if (Array.isArray(value)) return value.join(' · ')
   if (value && typeof value === 'object') {
     if (value.visible) return [value.direction, value.distance == null ? null : `${value.distance}px`].filter(Boolean).join(' · ')
-    return value.last_seen ? `last seen ${value.last_seen}` : 'not visible'
+    return value.remembered ? `remembered · ${value.move}` : 'not visible'
   }
   return String(value)
 }

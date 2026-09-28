@@ -10,10 +10,6 @@ from datenwissenschaften.laya.rollout import Rollout
 
 Observation = dict[str, str]
 
-INITIAL_EXPLORATION = 0.2
-FINAL_EXPLORATION = 0.05
-EXPLORATION_DECISIONS = 50_000
-
 
 class LayaAgent:
     def __init__(self, network: LayaNetwork, questions: tuple[str, ...]) -> None:
@@ -25,15 +21,10 @@ class LayaAgent:
         self.last_update: dict[str, float] = {}
         network.eval()
 
-    @property
-    def exploration(self) -> float:
-        progress = min(1.0, self.num_timesteps / EXPLORATION_DECISIONS)
-        return INITIAL_EXPLORATION + (FINAL_EXPLORATION - INITIAL_EXPLORATION) * progress
-
     @torch.no_grad()
-    def act(self, observation: Observation) -> Decision:
+    def act(self, observation: Observation, exploration: float) -> Decision:
         probabilities = torch.softmax(self.network([observation["state"]], [observation["question"]])[0], -1)
-        behavior = (1 - self.exploration) * probabilities + self.exploration / len(probabilities)
+        behavior = (1 - exploration) * probabilities + exploration / len(probabilities)
         action = int(torch.distributions.Categorical(probs=behavior).sample())
         options = dict(zip(self.network.question.options, probabilities.tolist(), strict=True))
         return Decision(action, options, float(behavior[action]))
@@ -75,7 +66,6 @@ class LayaAgent:
             "device": str(self.network.device),
             "parameters": sum(parameter.numel() for parameter in self.network.parameters()),
             "num_timesteps": self.num_timesteps,
-            "exploration": round(self.exploration, 3),
             "precision": str(self.network.dtype).removeprefix("torch."),
             "minibatch_size": self.learner.minibatch_size,
             **self.last_update,

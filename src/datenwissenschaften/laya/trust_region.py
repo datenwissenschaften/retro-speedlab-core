@@ -7,7 +7,7 @@ STRONGEST_DECREASE = 0.1
 STRONGEST_INCREASE = 10.0
 KL_FLOOR = 1e-12
 MIN_LEARNING_RATE_SCALE = 1e-2
-MAX_LEARNING_RATE_SCALE = 1e6
+MAX_LEARNING_RATE_SCALE = 1e3
 
 
 class TrustRegion:
@@ -18,7 +18,7 @@ class TrustRegion:
         return {"learning_rate_scale": self.learning_rate_scale}
 
     def load_state_dict(self, state: dict[str, float]) -> None:
-        self.learning_rate_scale = state["learning_rate_scale"]
+        self.learning_rate_scale = self._bounded(state["learning_rate_scale"])
 
     def accepts(self, kl: float) -> bool:
         return kl <= TARGET_KL * KL_TOLERANCE
@@ -31,4 +31,8 @@ class TrustRegion:
             self.learning_rate_scale *= max(STRONGEST_DECREASE, min(LEARNING_RATE_DECREASE, TARGET_KL / kl))
         elif kl < TARGET_KL / KL_TOLERANCE:
             self.learning_rate_scale *= min(STRONGEST_INCREASE, math.sqrt(TARGET_KL / max(kl, KL_FLOOR)))
-        self.learning_rate_scale = min(MAX_LEARNING_RATE_SCALE, max(MIN_LEARNING_RATE_SCALE, self.learning_rate_scale))
+        self.learning_rate_scale = self._bounded(self.learning_rate_scale)
+
+    @staticmethod
+    def _bounded(scale: float) -> float:
+        return min(MAX_LEARNING_RATE_SCALE, max(MIN_LEARNING_RATE_SCALE, scale))

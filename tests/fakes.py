@@ -10,6 +10,7 @@ from torch import nn
 from datenwissenschaften.environment.curriculum_run import CurriculumRun
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.ram import RamInfo, ram
+from datenwissenschaften.states.landmarks import Landmarks
 from datenwissenschaften.states.state import State
 
 VOCABULARY = 64
@@ -137,7 +138,7 @@ class FakeWrapper(StateMachineGymWrapper[FakeRam]):
 def fake_environment(tmp_path: Path, script: list[tuple[int, int]]) -> FakeWrapper:
     emulator = FakeEmulator(tmp_path / "recordings", script)
     curriculum = CurriculumRun(tmp_path / "curriculum", ("Survive", "Boss"))
-    return FakeWrapper(emulator, curriculum, "Level1")
+    return FakeWrapper(emulator, curriculum, Landmarks(tmp_path / "landmarks.json"), "Level1")
 
 
 def write_config(tmp_path: Path) -> Path:

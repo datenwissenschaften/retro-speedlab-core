@@ -3,17 +3,19 @@ from typing import Generic, TypeVar
 import numpy as np
 
 from datenwissenschaften.ram import RamInfo
+from datenwissenschaften.states.landmarks import Landmarks
 from datenwissenschaften.states.state import State
 
 T = TypeVar("T", bound=RamInfo)
 
 
 class StateMachine(Generic[T]):
-    def __init__(self, start_state: State[T]) -> None:
-        self.start_state = start_state
-        self.current_state = start_state
+    def __init__(self, start_state_cls: type[State[T]], landmarks: Landmarks) -> None:
+        self.landmarks = landmarks
+        self.start_state = start_state_cls(landmarks)
+        self.current_state = self.start_state
         self.last_transition: tuple[str, str] | None = None
-        self.states_by_type: dict[type[State[T]], State[T]] = {type(start_state): start_state}
+        self.states_by_type: dict[type[State[T]], State[T]] = {start_state_cls: self.start_state}
 
     @property
     def state_name(self) -> str:
@@ -40,5 +42,5 @@ class StateMachine(Generic[T]):
 
     def _state(self, state_cls: type[State[T]]) -> State[T]:
         if state_cls not in self.states_by_type:
-            self.states_by_type[state_cls] = state_cls()
+            self.states_by_type[state_cls] = state_cls(self.landmarks)
         return self.states_by_type[state_cls]

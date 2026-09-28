@@ -4,6 +4,7 @@ from typing import Any, Generic, TypeVar
 import numpy as np
 
 from datenwissenschaften.ram import RamInfo
+from datenwissenschaften.states.landmarks import Landmarks
 from datenwissenschaften.vision.detection import Detection
 
 T = TypeVar("T", bound=RamInfo)
@@ -14,6 +15,9 @@ class State(ABC, Generic[T]):
 
     ram: T
     frame: np.ndarray
+
+    def __init__(self, landmarks: Landmarks) -> None:
+        self.landmarks = landmarks
 
     def reset(self, ram: T, frame: np.ndarray) -> None:
         self.ram = ram

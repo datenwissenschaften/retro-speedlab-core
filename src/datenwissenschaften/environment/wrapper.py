@@ -8,6 +8,7 @@ import numpy as np
 from datenwissenschaften.environment.curriculum_run import CurriculumRun
 from datenwissenschaften.environment.recording import active_movie_path, ensure_movie_directory, restore_emulator_state
 from datenwissenschaften.ram import RamInfo
+from datenwissenschaften.states.landmarks import Landmarks
 from datenwissenschaften.states.machine import StateMachine
 from datenwissenschaften.states.state import State
 
@@ -27,7 +28,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
     action_table: np.ndarray
     action_descriptions: dict[str, str]
 
-    def __init__(self, env: gym.Env, curriculum: CurriculumRun, initial_savestate: str) -> None:
+    def __init__(self, env: gym.Env, curriculum: CurriculumRun, landmarks: Landmarks, initial_savestate: str) -> None:
         super().__init__(env)
         if self.action_table.ndim != ACTION_TABLE_DIMENSIONS:
             raise ValueError("action_table must have the shape (actions, frames, buttons).")
@@ -35,7 +36,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
             raise ValueError("Every action_table row needs exactly one action description.")
         self.action_space = gym.spaces.Discrete(len(self.action_table))
         self.observation_space = gym.spaces.Dict({"state": TEXT_SPACE, "question": TEXT_SPACE})
-        self.state_machine = StateMachine[T](self.start_state_cls())
+        self.state_machine = StateMachine[T](self.start_state_cls, landmarks)
         self.curriculum = curriculum
         self.initial_savestate = initial_savestate
         self._episode_info: dict[str, Any] = {}
@@ -103,6 +104,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
 
     def reset_training_memory(self) -> None:
         self.curriculum.reset_memory()
+        self.state_machine.landmarks.forget()
 
     def _observation(self, ram: T) -> Observation:
         state = {**ram.describe(), **self.state_machine.current_state.describe()}

@@ -7,6 +7,8 @@ from datenwissenschaften.training.state_models import StateModels
 from datenwissenschaften.ui.control import ModelResetRequest, consume_model_reset
 
 ROLLOUT_STEPS = 64
+EXPLORATION_WHILE_LEARNING = 0.2
+EXPLORATION_ONCE_MASTERED = 0.05
 
 
 class TrainingSession:
@@ -22,7 +24,7 @@ class TrainingSession:
         while (request := consume_model_reset()) is None:
             state_name = info["state"]
             self.models.activate(state_name)
-            decision = self.models.agent.act(observation)
+            decision = self.models.agent.act(observation, self._exploration(state_name))
             next_observation, reward, terminated, truncated, info = self.env.step(decision.action)
             done = terminated or truncated
             segment_ends = done or info["state"] != state_name
@@ -46,3 +48,7 @@ class TrainingSession:
                 for hook in self.hooks:
                     hook.on_update()
         return request
+
+    def _exploration(self, state_name: str) -> float:
+        mastered = self.env.curriculum.curriculum.is_mastered(state_name)
+        return EXPLORATION_ONCE_MASTERED if mastered else EXPLORATION_WHILE_LEARNING

@@ -1,8 +1,10 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
 from datenwissenschaften.ram import RamInfo
+from datenwissenschaften.states.landmarks import Landmarks
 from datenwissenschaften.states.machine import StateMachine
 from datenwissenschaften.states.state import State
 
@@ -29,9 +31,9 @@ class _StateA(State):
         return _StateB if self.should_transition else None
 
 
-def test_reset_without_a_state_type_returns_to_the_start_state():
-    machine = StateMachine(_StateA())
-    machine.current_state = _StateB()
+def test_reset_without_a_state_type_returns_to_the_start_state(tmp_path: Path):
+    machine = StateMachine(_StateA, Landmarks(tmp_path / "landmarks.json"))
+    machine.current_state = _StateB(machine.landmarks)
 
     machine.reset(_FakeRam(), FRAME, None)
 
@@ -39,8 +41,8 @@ def test_reset_without_a_state_type_returns_to_the_start_state():
     assert machine.last_transition is None
 
 
-def test_reset_with_a_state_type_starts_in_that_state():
-    machine = StateMachine(_StateA())
+def test_reset_with_a_state_type_starts_in_that_state(tmp_path: Path):
+    machine = StateMachine(_StateA, Landmarks(tmp_path / "landmarks.json"))
 
     machine.reset(_FakeRam(), FRAME, _StateB)
 
@@ -48,8 +50,8 @@ def test_reset_with_a_state_type_starts_in_that_state():
     assert machine.question == "Finish the level."
 
 
-def test_step_without_transition_keeps_the_state():
-    machine = StateMachine(_StateA())
+def test_step_without_transition_keeps_the_state(tmp_path: Path):
+    machine = StateMachine(_StateA, Landmarks(tmp_path / "landmarks.json"))
     machine.reset(_FakeRam(), FRAME, None)
 
     reward, terminated, truncated = machine.step(_FakeRam(), FRAME)
@@ -58,8 +60,8 @@ def test_step_without_transition_keeps_the_state():
     assert machine.last_transition is None
 
 
-def test_transition_switches_state_question_and_records_it():
-    machine = StateMachine(_StateA())
+def test_transition_switches_state_question_and_records_it(tmp_path: Path):
+    machine = StateMachine(_StateA, Landmarks(tmp_path / "landmarks.json"))
     machine.reset(_FakeRam(), FRAME, None)
     machine.current_state.should_transition = True
 
@@ -69,8 +71,8 @@ def test_transition_switches_state_question_and_records_it():
     assert machine.question == "Finish the level."
 
 
-def test_states_are_reused_across_transitions():
-    machine = StateMachine(_StateA())
+def test_states_are_reused_across_transitions(tmp_path: Path):
+    machine = StateMachine(_StateA, Landmarks(tmp_path / "landmarks.json"))
     machine.reset(_FakeRam(), FRAME, _StateB)
     first = machine.current_state
 

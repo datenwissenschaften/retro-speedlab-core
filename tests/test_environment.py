@@ -11,6 +11,7 @@ from datenwissenschaften.environment import factory
 from datenwissenschaften.environment.curriculum_run import CurriculumRun
 from datenwissenschaften.environment.recording import active_movie_path
 from datenwissenschaften.settings import load_config
+from datenwissenschaften.states.landmarks import Landmarks
 
 
 def test_reset_describes_the_ram_and_asks_the_start_question(tmp_path: Path):
@@ -109,7 +110,12 @@ def test_every_action_needs_a_description(tmp_path: Path):
         action_descriptions = {"left": "move left"}
 
     with pytest.raises(ValueError, match="description"):
-        Undescribed(FakeEmulator(tmp_path, [(3, 0)]), CurriculumRun(tmp_path, ("Survive",)), "Level1")
+        Undescribed(
+            FakeEmulator(tmp_path, [(3, 0)]),
+            CurriculumRun(tmp_path, ("Survive",)),
+            Landmarks(tmp_path / "landmarks.json"),
+            "Level1",
+        )
 
 
 def test_actions_must_be_button_sequences(tmp_path: Path):
@@ -117,16 +123,23 @@ def test_actions_must_be_button_sequences(tmp_path: Path):
         action_table = np.array([[1, 0], [0, 1]], dtype=np.int8)
 
     with pytest.raises(ValueError, match="frames"):
-        Flat(FakeEmulator(tmp_path, [(3, 0)]), CurriculumRun(tmp_path, ("Survive",)), "Level1")
+        Flat(
+            FakeEmulator(tmp_path, [(3, 0)]),
+            CurriculumRun(tmp_path, ("Survive",)),
+            Landmarks(tmp_path / "landmarks.json"),
+            "Level1",
+        )
 
 
-def test_training_memory_reset_rebuilds_the_curriculum(tmp_path: Path):
+def test_training_memory_reset_rebuilds_the_curriculum_and_forgets_landmarks(tmp_path: Path):
     env = fake_environment(tmp_path, [(3, 0)])
     previous = env.curriculum.curriculum
+    env.state_machine.landmarks.remember("door", (3, 4))
 
     env.reset_training_memory()
 
     assert env.curriculum.curriculum is not previous
+    assert env.state_machine.landmarks.recall("door") is None
 
 
 def test_recording_is_mandatory(tmp_path: Path):
@@ -169,7 +182,12 @@ def test_what_a_state_sees_becomes_part_of_layas_text(tmp_path: Path):
         start_state_cls = Seeing
         state_classes = (Seeing, fakes.Boss)
 
-    env = SeeingWrapper(FakeEmulator(tmp_path, [(3, 0), (3, 1)]), CurriculumRun(tmp_path, ("Seeing", "Boss")), "Level1")
+    env = SeeingWrapper(
+        FakeEmulator(tmp_path, [(3, 0), (3, 1)]),
+        CurriculumRun(tmp_path, ("Seeing", "Boss")),
+        Landmarks(tmp_path / "landmarks.json"),
+        "Level1",
+    )
 
     observation, info = env.reset()
     _, _, _, _, step_info = env.step(0)
