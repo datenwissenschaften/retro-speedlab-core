@@ -12,6 +12,8 @@ PACKAGE_NAME = "datenwissenschaften"
 DEVELOPMENT_VERSION = "DEVELOPMENT"
 VERSION_KEY = "engine-version"
 FINGERPRINT_KEY = "database-fingerprint"
+MODEL_LAYOUT_KEY = "model-layout"
+MODEL_LAYOUT = "laya-per-state"
 MAJOR_MINOR = re.compile(r"^v?(\d+)\.(\d+)")
 
 
@@ -29,17 +31,22 @@ class TrainingIdentity:
         identity = context.config.training.game_identity
         self.version_key = f"{VERSION_KEY}:{identity}"
         self.fingerprint_key = f"{FINGERPRINT_KEY}:{identity}"
+        self.model_layout_key = f"{MODEL_LAYOUT_KEY}:{identity}"
 
     def require_compatible(self, env: StateMachineGymWrapper) -> None:
         current_version = engine_version()
         previous_version = self._stored(self.version_key)
-        previous_fingerprint = self._stored(self.fingerprint_key)
         fingerprint = self.context.config.training.fingerprint
-        if self._release(previous_version) != self._release(current_version) or previous_fingerprint != fingerprint:
+        if (
+            self._release(previous_version) != self._release(current_version)
+            or self._stored(self.fingerprint_key) != fingerprint
+            or self._stored(self.model_layout_key) != MODEL_LAYOUT
+        ):
             logger.warning(f"Training identity changed for {self.context.game}; starting fresh.")
             perform_model_reset(self.reset_request(env))
         self.database.set(self.version_key, current_version)
         self.database.set(self.fingerprint_key, fingerprint)
+        self.database.set(self.model_layout_key, MODEL_LAYOUT)
 
     def _stored(self, key: str) -> str | None:
         return self.database.get(key) if self.database.contains(key) else None

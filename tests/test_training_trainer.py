@@ -11,7 +11,7 @@ from datenwissenschaften.training import identity as identity_module
 from datenwissenschaften.training import trainer as trainer_module
 from datenwissenschaften.training import video_playback
 from datenwissenschaften.training.context import RunContext
-from datenwissenschaften.training.identity import TrainingIdentity, engine_version
+from datenwissenschaften.training.identity import MODEL_LAYOUT, TrainingIdentity, engine_version
 from datenwissenschaften.ui.live import MAX_COMPLETED_EPISODES, MAX_FRAMES_PER_REQUEST, LiveFeed
 
 
@@ -39,10 +39,25 @@ def test_identity_keeps_training_for_the_same_release(tmp_path: Path, monkeypatc
     database = JsonDatabase(tmp_path / "database.json")
     database.set("engine-version:FakeGame-v0", "2.10.1")
     database.set("database-fingerprint:FakeGame-v0", None)
+    database.set("model-layout:FakeGame-v0", MODEL_LAYOUT)
 
     TrainingIdentity(context, database).require_compatible(fake_environment(tmp_path, [(3, 0)]))
 
     assert database.get("engine-version:FakeGame-v0") == "2.10.99"
+
+
+def test_identity_resets_training_when_the_model_layout_changes(tmp_path: Path, monkeypatch):
+    resets = []
+    monkeypatch.setattr(identity_module, "perform_model_reset", resets.append)
+    context = RunContext(load_config(write_config(tmp_path)))
+    database = JsonDatabase(tmp_path / "database.json")
+    database.set("engine-version:FakeGame-v0", engine_version())
+    database.set("database-fingerprint:FakeGame-v0", None)
+
+    TrainingIdentity(context, database).require_compatible(fake_environment(tmp_path, [(3, 0)]))
+
+    assert resets[0].game == "FakeGame-v0"
+    assert database.get("model-layout:FakeGame-v0") == MODEL_LAYOUT
 
 
 def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_path: Path, monkeypatch):
