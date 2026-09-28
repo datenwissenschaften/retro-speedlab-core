@@ -56,6 +56,10 @@ def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_pa
     monkeypatch.setattr(identity_module, "perform_model_reset", lambda request: None)
     monkeypatch.setattr(trainer_module, "configure_history", lambda *args, **kwargs: ui.append("history"))
     monkeypatch.setattr(trainer_module, "start_ui", lambda settings, root: ui.append(root))
+    published = {}
+    monkeypatch.setattr(
+        trainer_module, "publish_metadata", lambda section, values, **kwargs: published.update({section: values})
+    )
 
     def run(session):
         agents.append(session.agent)
@@ -75,6 +79,8 @@ def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_pa
 
     assert agents[0].network.checkpoint == "fake/laya"
     assert ui == ["history", trainer.context.record_root]
+    assert published["run"]["game"] == "FakeGame-v0"
+    assert published["environment"]["states"] == ["Survive", "Boss"]
 
 
 def test_video_playback_imports_roms_and_replays_headless(monkeypatch, tmp_path: Path):

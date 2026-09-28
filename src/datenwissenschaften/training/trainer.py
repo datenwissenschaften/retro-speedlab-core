@@ -44,6 +44,7 @@ class LayaTrainer:
 
     def _train_until_reset(self, env: StateMachineGymWrapper) -> ModelResetRequest:
         agent = self._agent()
+        self._publish_run()
         publish_metadata("model", model_metadata(agent), replace=True)
         return TrainingSession(env, agent, self._hooks(env, agent)).run()
 
@@ -80,6 +81,8 @@ class LayaTrainer:
             on_reset=reset.on_reset,
         )
         start_ui(ui, self.context.record_root)
+
+    def _publish_run(self) -> None:
         publish_metadata(
             "run",
             {"game": self.context.game, "savestate": self.context.savestate, "savestates": [self.context.savestate]},
