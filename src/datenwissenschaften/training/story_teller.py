@@ -29,14 +29,13 @@ class StoryTeller:
         events = self._fact_events(info["ram"])
         if info["location"] is not None:
             self.location = tuple(info["location"])
-            self.book.visit(self.location)
         if info["state_transition"] is not None:
             events.append(self._transition_event(*info["state_transition"], attempt))
         return events
 
-    def finish(self, episode: EpisodeRecord, new_best: bool) -> list[Event]:
+    def finish(self, episode: EpisodeRecord, new_best: bool, last_image: str) -> list[Event]:
         succeeded = episode.curriculum_succeeded or episode.won
-        failures_today = self.book.finish(episode.curriculum_state, succeeded, self.location)
+        failures_today = self.book.finish(episode.curriculum_state, succeeded, self.location, last_image)
         self.book.save()
         self.facts, self.location = None, None
         events = []

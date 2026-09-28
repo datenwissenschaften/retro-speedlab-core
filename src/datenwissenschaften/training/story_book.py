@@ -1,4 +1,5 @@
 import re
+from collections import Counter
 from datetime import date
 from typing import Any
 
@@ -6,8 +7,10 @@ from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.ui.telemetry import publish_metadata
 
 STORY_KEY = "story"
-SKILL_WINDOW = 20
-MAP_CELL = 16
+DANGER_WINDOW = 100
+DANGER_CELL = 32
+DANGER_SPOTS = 3
+KEPT_IMAGES = 2 * DANGER_SPOTS
 WORD_BOUNDARY = re.compile(r"(?<=[a-z])(?=[A-Z])|_")
 
 
@@ -22,11 +25,10 @@ def label(name: str) -> str:
 def empty_story() -> dict[str, Any]:
     return {
         "reached": {},
-        "outcomes": {},
         "day": date.today().isoformat(),
         "failures_today": {},
-        "visits": {},
-        "ends": {},
+        "failures": [],
+        "images": {},
     }
 
 
@@ -44,17 +46,10 @@ class StoryBook:
     def reach(self, phase: str, attempt: int) -> None:
         self.data["reached"][phase] = attempt
 
-    def visit(self, location: tuple[int, int]) -> None:
-        self._count("visits", location)
-
-    def finish(self, phase: str, succeeded: bool, location: tuple[int, int] | None) -> int:
-        outcomes = self.data["outcomes"].setdefault(phase, [])
-        outcomes.append(succeeded)
-        del outcomes[:-SKILL_WINDOW]
+    def finish(self, phase: str, succeeded: bool, location: tuple[int, int] | None, image: str) -> int:
         if succeeded:
             return 0
-        if location is not None:
-            self._count("ends", location)
+        self._remember_danger(phase, location, image)
         today = date.today().isoformat()
         if self.data["day"] != today:
             self.data["day"], self.data["failures_today"] = today, {}
@@ -70,26 +65,37 @@ class StoryBook:
     def view(self) -> dict[str, Any]:
         return {
             "phases": [self._phase_view(phase) for phase in self.phases],
-            "map": {"cell": MAP_CELL, "visits": self._cells("visits"), "ends": self._cells("ends")},
+            "danger": [
+                {
+                    "phase": label(self.data["images"][spot]["phase"]),
+                    "count": count,
+                    "image": self.data["images"][spot]["image"],
+                }
+                for spot, count in self._ranked_spots()[:DANGER_SPOTS]
+            ],
         }
 
     def _phase_view(self, phase: str) -> dict[str, Any]:
-        outcomes = self.data["outcomes"][phase] if phase in self.data["outcomes"] else []
         return {
             "name": phase,
             "label": label(phase),
             "reached": self.has_reached(phase),
             "first_attempt": self.data["reached"][phase] if self.has_reached(phase) else None,
-            "skill": sum(outcomes) / len(outcomes) if outcomes else None,
         }
 
-    def _count(self, kind: str, location: tuple[int, int]) -> None:
-        self._increment(self.data[kind], f"{location[0] // MAP_CELL},{location[1] // MAP_CELL}")
+    def _remember_danger(self, phase: str, location: tuple[int, int] | None, image: str) -> None:
+        spot = phase if location is None else f"{phase}@{location[0] // DANGER_CELL},{location[1] // DANGER_CELL}"
+        self.data["failures"].append(spot)
+        del self.data["failures"][:-DANGER_WINDOW]
+        self.data["images"][spot] = {"phase": phase, "image": image}
+        kept = {kept_spot for kept_spot, _ in self._ranked_spots()[:KEPT_IMAGES]} | {spot}
+        self.data["images"] = {key: value for key, value in self.data["images"].items() if key in kept}
+
+    def _ranked_spots(self) -> list[tuple[str, int]]:
+        counts = Counter(spot for spot in self.data["failures"] if spot in self.data["images"])
+        return counts.most_common()
 
     @staticmethod
     def _increment(counts: dict[str, int], key: str) -> int:
         counts[key] = (counts[key] if key in counts else 0) + 1
         return counts[key]
-
-    def _cells(self, kind: str) -> list[list[int]]:
-        return [[*map(int, cell.split(",")), count] for cell, count in self.data[kind].items()]

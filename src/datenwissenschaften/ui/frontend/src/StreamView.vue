@@ -117,7 +117,8 @@ onBeforeUnmount(() => {
 const release = computed(() => snapshot.value.server?.release || null)
 const run = computed(() => snapshot.value.metadata?.run || {})
 const summary = computed(() => snapshot.value.summary || {})
-const story = computed(() => snapshot.value.metadata?.story || { phases: [], map: { cell: 1, visits: [], ends: [] } })
+const story = computed(() => snapshot.value.metadata?.story || { phases: [], danger: [] })
+const curriculum = computed(() => snapshot.value.metadata?.savestate_curriculum || {})
 const phase = computed(() => live.value.training_state || story.value.phases[0]?.name || '')
 const areasReached = computed(() => story.value.phases.filter(item => item.reached).length)
 const probabilities = computed(() => Object.entries(live.value.probabilities || {}))
@@ -177,7 +178,7 @@ watch(() => live.value.ram, (current, previous) => {
           <span v-if="!sightings.length" class="game-cover-loading">Waiting for the first attempt</span>
         </section>
 
-        <SpotlightPanel :phase="phase" :map="story.map" />
+        <SpotlightPanel :phase="phase" :danger="story.danger" />
       </div>
 
       <div class="stream-screen">
@@ -215,7 +216,7 @@ watch(() => live.value.ram, (current, previous) => {
       </aside>
 
       <div class="stream-bottom">
-        <ProgressPath :phases="story.phases" :current="phase" />
+        <ProgressPath :phases="story.phases" :current="phase" :curriculum="curriculum" />
         <a class="site-card" :href="SITE_URL" target="_blank" rel="noopener noreferrer">
           <span class="sight-title">Train your own runner</span>
           <strong class="site-url">{{ SITE_LABEL }}</strong>

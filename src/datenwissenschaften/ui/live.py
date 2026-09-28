@@ -18,6 +18,12 @@ class LiveFeed:
         with self._lock:
             self._recording.append({"image": base64.b64encode(jpeg).decode("ascii"), "status": status})
 
+    def last_image(self) -> str:
+        with self._lock:
+            if not self._recording:
+                raise RuntimeError("No frame has been recorded for this episode.")
+            return self._recording[-1]["image"]
+
     def add_events(self, events: list[dict[str, str]]) -> None:
         with self._lock:
             if self._recording:

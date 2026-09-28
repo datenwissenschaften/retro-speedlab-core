@@ -8,7 +8,7 @@ from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.training import story_book
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
-from datenwissenschaften.training.story_book import MAP_CELL, StoryBook, label, story_key
+from datenwissenschaften.training.story_book import DANGER_CELL, StoryBook, label, story_key
 from datenwissenschaften.training.story_teller import QUIET_STEPS, StoryTeller
 
 PHASES = ("FindDoor", "OpenDoor")
@@ -69,14 +69,14 @@ def test_only_quiet_facts_become_events(tmp_path: Path, published):
     assert teller.observe(_transition({"weight": 2, "time": 87, "door": True}, (0, 0), "FindDoor", None), 1)
 
 
-def test_failures_are_counted_mapped_and_persisted(tmp_path: Path, published):
+def test_failures_are_counted_and_persisted(tmp_path: Path, published):
     database = JsonDatabase(tmp_path / "db.json")
     teller = StoryTeller(StoryBook(database, "Game", PHASES))
     teller.observe(_transition({}, (40, 20), "FindDoor", None), 1)
 
-    first = teller.finish(_episode("FindDoor", False), False)
+    first = teller.finish(_episode("FindDoor", False), False, "jpeg-1")
     teller.observe(_transition({}, (40, 20), "FindDoor", None), 2)
-    second = teller.finish(_episode("FindDoor", True), True)
+    second = teller.finish(_episode("FindDoor", True), True, "jpeg-2")
 
     view = StoryBook(database, "Game", PHASES).view()
     assert first == [{"kind": "bad", "text": "Attempt over in Find Door", "detail": "#1 today"}]
@@ -86,10 +86,24 @@ def test_failures_are_counted_mapped_and_persisted(tmp_path: Path, published):
         "label": "Find Door",
         "reached": True,
         "first_attempt": 1,
-        "skill": 0.5,
     }
     assert view["phases"][1]["reached"] is False
-    assert view["map"]["ends"] == [[40 // MAP_CELL, 20 // MAP_CELL, 1]]
-    assert view["map"]["visits"] == [[40 // MAP_CELL, 20 // MAP_CELL, 2]]
+    assert view["danger"] == [{"phase": "Find Door", "count": 1, "image": "jpeg-1"}]
     assert published[-1] == view
     assert database.contains(story_key("Game"))
+
+
+def test_danger_spots_rank_places_by_recent_failures_with_their_latest_picture(tmp_path: Path, published):
+    book = StoryBook(JsonDatabase(tmp_path / "db.json"), "Game", PHASES)
+    near, far = (10, 10), (10 + 4 * DANGER_CELL, 10)
+
+    for index in range(3):
+        book.finish("FindDoor", False, near, f"near-{index}")
+    book.finish("FindDoor", False, far, "far")
+    book.finish("OpenDoor", False, None, "door")
+
+    assert [(spot["count"], spot["image"]) for spot in book.view()["danger"]] == [
+        (3, "near-2"),
+        (1, "far"),
+        (1, "door"),
+    ]
