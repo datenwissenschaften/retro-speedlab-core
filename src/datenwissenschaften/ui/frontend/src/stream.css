@@ -186,6 +186,7 @@
 }
 .stream-bottom .site-card { flex: 0 0 300px; align-content: center; }
 .site-score { color: var(--text-muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.site-clock { color: var(--secondary); font-size: 0.72rem; font-variant-numeric: tabular-nums; font-weight: 700; letter-spacing: 0.08em; }
 
 .path-panel,
 .spotlight-panel {

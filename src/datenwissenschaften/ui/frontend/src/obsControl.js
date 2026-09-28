@@ -1,11 +1,11 @@
-const RESTART_TIME_ZONE = 'Europe/Berlin'
+export const STREAM_TIME_ZONE = 'Europe/Berlin'
 const RESTART_HOUR = 4
 const RESTART_MINUTE = 0
 const CHECK_INTERVAL_MS = 20000
 const FULL_CONTROL_LEVEL = 5
 
 const clock = new Intl.DateTimeFormat('en-CA', {
-  timeZone: RESTART_TIME_ZONE,
+  timeZone: STREAM_TIME_ZONE,
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',

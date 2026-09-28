@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ProgressPath from './ProgressPath.vue'
-import { createObsControl } from './obsControl.js'
+import { createObsControl, STREAM_TIME_ZONE } from './obsControl.js'
 import { createReplayPlayer } from './replayPlayer.js'
 import SpotlightPanel from './SpotlightPanel.vue'
 import StoryTicker from './StoryTicker.vue'
@@ -17,6 +17,8 @@ const MAX_TICKER_BACKLOG = 6
 const SITE_URL = 'https://www.retrospeedlab.com'
 const SITE_LABEL = 'www.retrospeedlab.com'
 const RELOAD_DEADLINE_MS = 90000
+const CLOCK_INTERVAL_MS = 1000
+const clock = new Intl.DateTimeFormat('en-GB', { timeZone: STREAM_TIME_ZONE, dateStyle: 'medium', timeStyle: 'medium' })
 
 const live = ref({})
 const screen = ref(null)
@@ -27,12 +29,14 @@ const snapshot = ref({ metadata: {}, summary: {} })
 const connected = ref(false)
 const scale = ref(1)
 const toast = ref(null)
+const now = ref(new Date())
 const changedFields = ref(new Set())
 const tickerEvents = ref([])
 const tickerQueue = []
 let lastStep = null
 let eventKey = 0
 let snapshotTimer
+let clockTimer
 let toastTimer
 let reloadTimer
 let loadedRelease = null
@@ -121,11 +125,12 @@ onMounted(() => {
   fit(); loadSnapshot(); player.start(); obsControl.start()
   window.addEventListener('resize', fit)
   snapshotTimer = window.setInterval(loadSnapshot, SNAPSHOT_INTERVAL_MS)
+  clockTimer = window.setInterval(() => { now.value = new Date() }, CLOCK_INTERVAL_MS)
 })
 onBeforeUnmount(() => {
   player.stop(); obsControl.stop()
   window.removeEventListener('resize', fit)
-  window.clearInterval(snapshotTimer); window.clearTimeout(toastTimer); window.clearTimeout(reloadTimer)
+  window.clearInterval(snapshotTimer); window.clearInterval(clockTimer); window.clearTimeout(toastTimer); window.clearTimeout(reloadTimer)
 })
 
 const release = computed(() => snapshot.value.server?.release || null)
@@ -235,6 +240,7 @@ watch(() => live.value.ram, (current, previous) => {
           <span class="sight-title">Train your own runner</span>
           <strong class="site-url">{{ SITE_LABEL }}</strong>
           <span class="site-score">Best score {{ fmt(summary.best_fitness, 1) }} · {{ fmt(summary.episodes) }} attempts</span>
+          <time class="site-clock">{{ clock.format(now) }}</time>
         </a>
       </div>
 
