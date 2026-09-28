@@ -25,6 +25,7 @@ def _document() -> dict[str, Any]:
             "host": "127.0.0.1",
             "port": 18080,
             "max_episodes": 1000,
+            "release": "local",
         },
         "log_level": "info",
     }

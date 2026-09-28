@@ -198,6 +198,7 @@ class _DashboardHandler(BaseHTTPRequestHandler):
                 "port": settings.port,
                 "bind_address": f"{settings.host}:{settings.port}",
                 "version": DATENWISSENSCHAFTEN_VERSION,
+                "release": settings.release,
             }
             self._send_json(snapshot)
             return

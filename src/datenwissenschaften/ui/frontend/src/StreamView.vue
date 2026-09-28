@@ -9,6 +9,7 @@ const SNAPSHOT_INTERVAL_MS = 1500
 const TOAST_MS = 3200
 const SITE_URL = 'https://www.retrospeedlab.com'
 const SITE_LABEL = 'www.retrospeedlab.com'
+const RELOAD_DEADLINE_MS = 90000
 
 const live = ref({})
 const screen = ref(null)
@@ -23,6 +24,9 @@ const changedFields = ref(new Set())
 const announced = new Set()
 let snapshotTimer
 let toastTimer
+let reloadTimer
+let loadedRelease = null
+let reloadPending = false
 
 const fmt = (value, digits = 0) => value == null ? '—' : Intl.NumberFormat('en', { maximumFractionDigits: digits }).format(value)
 const percent = value => `${Math.round(value * 100)}%`
@@ -51,14 +55,19 @@ const drawFrame = frame => {
   live.value = frame.status
   replayProgress.value = frame.progress
 }
+const reloadIfPending = () => { if (reloadPending) window.location.reload() }
 const player = createReplayPlayer({
   onFrame: drawFrame,
   onEpisode: episode => {
     replayEpisode.value = episode
     waiting.value = false
   },
-  onWaiting: () => { waiting.value = true },
+  onWaiting: () => {
+    waiting.value = true
+    reloadIfPending()
+  },
   onEpisodeEnd: episode => {
+    reloadIfPending()
     if (announced.has(episode.id)) return
     announced.add(episode.id)
     if (episode.result.won) announce('LEVEL CLEARED', `Episode #${episode.id}`)
@@ -85,9 +94,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   player.stop()
   window.removeEventListener('resize', fit)
-  window.clearInterval(snapshotTimer); window.clearTimeout(toastTimer)
+  window.clearInterval(snapshotTimer); window.clearTimeout(toastTimer); window.clearTimeout(reloadTimer)
 })
 
+const release = computed(() => snapshot.value.server?.release || null)
 const run = computed(() => snapshot.value.metadata?.run || {})
 const summary = computed(() => snapshot.value.summary || {})
 const trainingSteps = computed(() => snapshot.value.metadata?.model?.laya?.num_timesteps ?? null)
@@ -97,6 +107,18 @@ const isSighting = value => Boolean(value) && typeof value === 'object' && 'visi
 const sightings = computed(() => Object.entries(live.value.ram || {}).filter(([, value]) => isSighting(value)))
 const ramState = computed(() => Object.entries(live.value.ram || {})
   .filter(([name, value]) => !isSighting(value) && name !== 'snake_visible'))
+
+watch(release, current => {
+  if (!current) return
+  if (loadedRelease === null) {
+    loadedRelease = current
+    return
+  }
+  if (current === loadedRelease || reloadPending) return
+  reloadPending = true
+  if (waiting.value) window.location.reload()
+  reloadTimer = window.setTimeout(() => window.location.reload(), RELOAD_DEADLINE_MS)
+})
 
 watch(() => live.value.ram, (current, previous) => {
   if (!current || !previous) return
@@ -140,6 +162,7 @@ watch(() => live.value.ram, (current, previous) => {
             <div class="run-info-row"><dt>Phase</dt><dd>{{ live.training_state || '—' }}</dd></div>
             <div class="run-info-row"><dt>Steps</dt><dd>{{ fmt(live.timesteps) }}</dd></div>
             <div class="run-info-row"><dt>Updates</dt><dd>{{ fmt(live.updates) }}</dd></div>
+            <div class="run-info-row"><dt>Model</dt><dd>Laya {{ release || '—' }}</dd></div>
           </dl>
         </aside>
 

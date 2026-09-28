@@ -27,6 +27,7 @@ def _ui_settings(*, port: int = 0, enabled: bool = True) -> UISettings:
         host="127.0.0.1",
         port=port,
         max_episodes=10,
+        release="2026.09.28-4",
     )
 
 
@@ -213,6 +214,7 @@ def test_snapshot_endpoint_merges_control_and_server_metadata(monkeypatch):
     assert payload["control"]["game"] == "Game"
     assert "csrf_token" in payload["control"]
     assert payload["server"]["bind_address"] == "127.0.0.1:0"
+    assert payload["server"]["release"] == "2026.09.28-4"
 
 
 def test_sources_endpoint_lists_generated_files(monkeypatch, tmp_path: Path):

@@ -42,6 +42,7 @@ class UISettings:
     host: str
     port: int
     max_episodes: int
+    release: str
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             host=_text(ui.host, "ui.host"),
             port=_port(ui.port),
             max_episodes=_positive_int(ui.max_episodes, "ui.max_episodes"),
+            release=_text(ui.release, "ui.release"),
         ),
         log_level=_text(document.log_level, "log_level").upper(),
     )
