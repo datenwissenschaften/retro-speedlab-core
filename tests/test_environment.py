@@ -76,7 +76,7 @@ def test_losing_all_lives_records_a_curriculum_failure(tmp_path: Path):
 def test_reset_resumes_from_the_active_curriculum_checkpoint(tmp_path: Path):
     env = fake_environment(tmp_path, [(3, 0)])
     curriculum = env.curriculum.curriculum
-    curriculum.save_checkpoint("Boss", b"boss")
+    curriculum.save_checkpoint("Boss", b"boss", 7.5)
     for _ in range(ReverseCurriculum.WIN_TARGET):
         curriculum.record_success("Survive", 10)
 
@@ -85,7 +85,18 @@ def test_reset_resumes_from_the_active_curriculum_checkpoint(tmp_path: Path):
     assert observation["question"] == "Which move beats the boss?"
     assert info["started_from_initial_savestate"] is False
     assert info["episode_start_state"] == "Boss"
+    assert info["episode_start_score"] == 7.5
     assert env.env.pressed[-1].tolist() == [0, 0]
+
+
+def test_a_new_checkpoint_remembers_the_score_that_reached_it(tmp_path: Path):
+    run = CurriculumRun(tmp_path, ("Survive", "Boss"))
+    run.begin_episode()
+    run.add_reward(3.0, False)
+
+    run.transition("Survive", "Boss", b"boss", 2.0)
+
+    assert run.curriculum.entry_score("Boss") == 5.0
 
 
 def test_unknown_curriculum_state_fails_fast(tmp_path: Path):

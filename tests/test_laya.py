@@ -1,25 +1,42 @@
 import json
+import math
 from pathlib import Path
 
 import pytest
 import torch
 from fakes import ACTIONS, FakeTokenizer, fake_laya_load
 
+from datenwissenschaften.laya import learning as learning_module
 from datenwissenschaften.laya import network as network_module
 from datenwissenschaften.laya.agent import EXPLORATION_DECISIONS, FINAL_EXPLORATION, INITIAL_EXPLORATION, LayaAgent
 from datenwissenschaften.laya.decision import Decision
+from datenwissenschaften.laya.learning import MAX_BACKTRACKS
 from datenwissenschaften.laya.network import LayaNetwork
 from datenwissenschaften.laya.question import LayaQuestion
 from datenwissenschaften.laya.rollout import Rollout
+from datenwissenschaften.laya.trust_region import TARGET_KL
+from datenwissenschaften.laya.weight_snapshot import WeightSnapshot
 
 QUESTION = "Which move survives?"
+VISIBLE_LEARNING_RATE = 1e-3
 OBSERVATION = {"state": json.dumps({"lives": 3, "score": 1}), "question": QUESTION}
 
 
 @pytest.fixture
 def network(monkeypatch) -> LayaNetwork:
     monkeypatch.setattr(network_module.laya, "load", fake_laya_load)
+    monkeypatch.setattr(learning_module, "ENCODER_LEARNING_RATE", VISIBLE_LEARNING_RATE)
+    monkeypatch.setattr(learning_module, "HEAD_LEARNING_RATE", VISIBLE_LEARNING_RATE)
     return LayaNetwork("fake/laya", ACTIONS, "cpu")
+
+
+def _rollout(steps: int) -> Rollout:
+    rollout = Rollout()
+    for step in range(steps):
+        rollout.add(
+            OBSERVATION["state"], QUESTION, Decision(step % 2, {"left": 0.5, "right": 0.5}, 0.5), float(step % 2), False
+        )
+    return rollout
 
 
 def test_network_enables_memory_saving_and_scores_every_option(network: LayaNetwork):
@@ -70,7 +87,14 @@ def test_agent_learning_changes_every_trainable_part(network: LayaNetwork):
     assert agent.num_timesteps == len(rollout)
     after = list(network.parameters())
     assert any(not torch.equal(old, new) for old, new in zip(before, after, strict=True))
-    assert set(agent.last_update) == {"policy_loss", "entropy", "kl", "entropy_coefficient", "learning_rate_scale"}
+    assert set(agent.last_update) == {
+        "policy_loss",
+        "entropy",
+        "step_kl",
+        "kl",
+        "entropy_coefficient",
+        "learning_rate_scale",
+    }
     assert agent.last_update["kl"] >= 0.0
     assert agent.metadata()["entropy"] == agent.last_update["entropy"]
 
@@ -122,6 +146,7 @@ def test_exploration_fades_as_laya_gains_experience(network: LayaNetwork):
 def test_float16_learning_scales_gradients_and_stays_finite(monkeypatch):
     monkeypatch.setattr(network_module, "autocast_dtype", lambda device: torch.float16)
     monkeypatch.setattr(network_module.laya, "load", fake_laya_load)
+    monkeypatch.setattr(learning_module, "HEAD_LEARNING_RATE", VISIBLE_LEARNING_RATE)
     network = LayaNetwork("fake/laya", ACTIONS, "cpu")
     agent = LayaAgent(network, (QUESTION,))
     before = [parameter.detach().clone() for parameter in network.parameters()]
@@ -151,3 +176,40 @@ def test_agent_restart_returns_to_the_pretrained_laya(network: LayaNetwork):
 
     assert (agent.num_timesteps, agent.last_update) == (0, {})
     assert all(torch.equal(old, new) for old, new in zip(pretrained, network.parameters(), strict=True))
+
+
+def test_an_overshooting_update_is_pulled_back_into_the_trust_region(network: LayaNetwork):
+    learner = LayaAgent(network, (QUESTION,)).learner
+    measured, blends = iter([0.5, 0.001]), []
+    learner._measure_kl = lambda rollout, previous: next(measured)
+    learner.snapshot.blend = blends.append
+
+    kl = learner._backtrack(_rollout(2), torch.ones(2, 2), 1.0)
+
+    assert kl == 0.001
+    assert blends == pytest.approx([math.sqrt(TARGET_KL / 1.0), math.sqrt(TARGET_KL / 0.5)])
+
+
+def test_an_update_that_stays_too_far_away_is_reverted(network: LayaNetwork):
+    learner = LayaAgent(network, (QUESTION,)).learner
+    blends = []
+    learner._measure_kl = lambda rollout, previous: 0.0 if blends[-1:] == [0.0] else 1.0
+    learner.snapshot.blend = blends.append
+
+    kl = learner._backtrack(_rollout(2), torch.ones(2, 2), 1.0)
+
+    assert kl == 0.0
+    assert len(blends) == MAX_BACKTRACKS + 1
+    assert blends[-1] == 0.0
+
+
+def test_weight_snapshot_blends_back_toward_the_captured_weights():
+    parameter = torch.nn.Parameter(torch.zeros(3))
+    snapshot = WeightSnapshot([parameter])
+    snapshot.capture()
+    with torch.no_grad():
+        parameter.add_(4.0)
+
+    snapshot.blend(0.25)
+
+    assert torch.equal(parameter.detach(), torch.full((3,), 1.0))

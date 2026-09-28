@@ -4,9 +4,9 @@ TARGET_KL = 0.01
 KL_TOLERANCE = 2.0
 LEARNING_RATE_DECREASE = 0.5
 STRONGEST_DECREASE = 0.1
-LEARNING_RATE_INCREASE = 1.2
-MIN_LEARNING_RATE_SCALE = 1e-3
-MAX_LEARNING_RATE_SCALE = 10.0
+LEARNING_RATE_INCREASE = 1.5
+MIN_LEARNING_RATE_SCALE = 1e-2
+MAX_LEARNING_RATE_SCALE = 1e3
 INITIAL_ENTROPY_COEFFICIENT = 0.05
 MIN_ENTROPY_COEFFICIENT = 1e-3
 MAX_ENTROPY_COEFFICIENT = 1.0
@@ -29,6 +29,12 @@ class TrustRegion:
     def load_state_dict(self, state: dict[str, float]) -> None:
         self.learning_rate_scale = state["learning_rate_scale"]
         self.entropy_coefficient = state["entropy_coefficient"]
+
+    def accepts(self, kl: float) -> bool:
+        return kl <= TARGET_KL * KL_TOLERANCE
+
+    def backtrack_fraction(self, kl: float) -> float:
+        return math.sqrt(TARGET_KL / kl)
 
     def _adapt_learning_rate(self, kl: float) -> None:
         if kl > TARGET_KL * KL_TOLERANCE:

@@ -27,7 +27,7 @@ class EpisodeRecord:
             curriculum_state=info["state"],
             duration_seconds=0.0,
             step_count=0,
-            score=0.0,
+            score=info["episode_start_score"],
             won=False,
             curriculum_succeeded=False,
             curriculum_mastered=False,

@@ -7,13 +7,15 @@ from datenwissenschaften.laya.network import LayaNetwork
 from datenwissenschaften.laya.precision import minibatch_size
 from datenwissenschaften.laya.rollout import Rollout
 from datenwissenschaften.laya.trust_region import TrustRegion
+from datenwissenschaften.laya.weight_snapshot import WeightSnapshot
 
-ENCODER_LEARNING_RATE = 1e-5
-HEAD_LEARNING_RATE = 1e-4
+ENCODER_LEARNING_RATE = 1e-9
+HEAD_LEARNING_RATE = 1e-8
 WEIGHT_DECAY = 0.01
 GAMMA = 0.99
 PROBABILITY_FLOOR = 1e-8
 MAX_GRADIENT_NORM = 1.0
+MAX_BACKTRACKS = 3
 
 
 class GroupRelativeLearner:
@@ -30,21 +32,36 @@ class GroupRelativeLearner:
         self.trust_region = TrustRegion()
         self.minibatch_size = minibatch_size(network.device)
         self.scaler = torch.amp.GradScaler(network.device.type, enabled=network.dtype == torch.float16)
+        self.snapshot = WeightSnapshot(list(network.parameters()))
 
     def update(self, rollout: Rollout) -> dict[str, float]:
         previous = torch.as_tensor(rollout.probabilities, device=self.network.device).clamp_min(PROBABILITY_FLOOR)
+        self.snapshot.capture()
         policy_loss, entropy = self._step(rollout, previous)
-        kl = self._measure_kl(rollout, previous)
-        self.trust_region.adapt(kl, entropy, previous.shape[1])
+        step_kl = self._measure_kl(rollout, previous)
+        kl = self._backtrack(rollout, previous, step_kl)
+        self.trust_region.adapt(step_kl, entropy, previous.shape[1])
         for group, base in zip(self.optimizer.param_groups, self.base_learning_rates, strict=True):
             group["lr"] = base * self.trust_region.learning_rate_scale
         return {
             "policy_loss": policy_loss,
             "entropy": entropy,
+            "step_kl": step_kl,
             "kl": kl,
             "entropy_coefficient": self.trust_region.entropy_coefficient,
             "learning_rate_scale": self.trust_region.learning_rate_scale,
         }
+
+    def _backtrack(self, rollout: Rollout, previous: torch.Tensor, kl: float) -> float:
+        for _ in range(MAX_BACKTRACKS):
+            if self.trust_region.accepts(kl):
+                return kl
+            self.snapshot.blend(self.trust_region.backtrack_fraction(kl))
+            kl = self._measure_kl(rollout, previous)
+        if self.trust_region.accepts(kl):
+            return kl
+        self.snapshot.blend(0.0)
+        return self._measure_kl(rollout, previous)
 
     def state_dict(self) -> dict[str, Any]:
         return {

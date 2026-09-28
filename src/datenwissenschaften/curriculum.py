@@ -24,7 +24,7 @@ class ReverseCurriculum:
         self.root = root
         self.state_names = tuple(state_names)
 
-    def save_checkpoint(self, state_name: str, emulator_state: bytes) -> bool:
+    def save_checkpoint(self, state_name: str, emulator_state: bytes, entry_score: float) -> bool:
         self._require_state(state_name)
         if self.is_mastered(state_name):
             return False
@@ -32,8 +32,13 @@ class ReverseCurriculum:
         with self._lock(state_name):
             if path.is_file():
                 return False
+            self._atomic_write(self._entry_score_path(state_name), repr(float(entry_score)).encode("utf-8"))
             self._atomic_write(path, emulator_state)
         return True
+
+    def entry_score(self, state_name: str) -> float:
+        self._require_state(state_name)
+        return float(self._entry_score_path(state_name).read_text(encoding="utf-8"))
 
     def active_state(self) -> str | None:
         for state_name in self.state_names:
@@ -110,6 +115,7 @@ class ReverseCurriculum:
                 return False
 
             checkpoint.unlink(missing_ok=True)
+            self._entry_score_path(state_name).unlink(missing_ok=True)
             self._clear_score_evidence(state_name)
             return True
 
@@ -175,6 +181,9 @@ class ReverseCurriculum:
 
     def _checkpoint_path(self, state_name: str) -> Path:
         return self.root / f"{state_name}.state"
+
+    def _entry_score_path(self, state_name: str) -> Path:
+        return self.root / f"{state_name}.entry_score"
 
     def _success_path(self, state_name: str) -> Path:
         return self.root / f"{state_name}.successes"

@@ -29,6 +29,7 @@ INFO = {
     "episode_bk2_path": "run.bk2",
     "started_from_initial_savestate": True,
     "episode_start_state": "Level1",
+    "episode_start_score": 0.0,
     "state": "Survive",
 }
 OBSERVATION = {"state": '{"lives": 3}', "question": "Which move survives?"}

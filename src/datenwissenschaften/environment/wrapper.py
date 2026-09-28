@@ -57,6 +57,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         self._episode_info = {
             "started_from_initial_savestate": checkpoint_state is None,
             "episode_start_state": checkpoint_state or self.initial_savestate,
+            "episode_start_score": self.curriculum.episode_score,
             "episode_bk2_path": active_movie_path(emulator),
         }
         return self._observation(ram), {**self._step_view(), **self._episode_info}
@@ -78,7 +79,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
             transition = self.state_machine.last_transition
             if transition is not None:
                 emulator_state = bytes(self.env.unwrapped.em.get_state())
-                succeeded, mastered = self.curriculum.transition(*transition, emulator_state)
+                succeeded, mastered = self.curriculum.transition(*transition, emulator_state, reward)
                 terminated = terminated or succeeded
             if transition is not None or terminated or truncated:
                 break

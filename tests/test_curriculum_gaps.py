@@ -8,14 +8,14 @@ def test_save_checkpoint_is_a_no_op_once_mastered(tmp_path):
     for _ in range(64):
         curriculum.record_success("Start", 4)
 
-    assert curriculum.save_checkpoint("Start", b"ignored") is False
+    assert curriculum.save_checkpoint("Start", b"ignored", 0.0) is False
 
 
 def test_save_checkpoint_does_not_overwrite_an_existing_checkpoint(tmp_path):
     curriculum = ReverseCurriculum(tmp_path, ("Start", "Finish"))
 
-    assert curriculum.save_checkpoint("Finish", b"first") is True
-    assert curriculum.save_checkpoint("Finish", b"second") is False
+    assert curriculum.save_checkpoint("Finish", b"first", 0.0) is True
+    assert curriculum.save_checkpoint("Finish", b"second", 0.0) is False
     assert curriculum.checkpoint("Finish") == b"first"
 
 
@@ -55,7 +55,7 @@ def test_record_failure_is_a_no_op_once_mastered(tmp_path):
 
 def test_record_failure_rejects_non_finite_scores(tmp_path):
     curriculum = ReverseCurriculum(tmp_path, ("Start", "Finish"))
-    curriculum.save_checkpoint("Finish", b"state")
+    curriculum.save_checkpoint("Finish", b"state", 0.0)
 
     with pytest.raises(ValueError, match="score must be finite"):
         curriculum.record_failure("Finish", 4, float("nan"))

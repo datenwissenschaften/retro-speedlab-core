@@ -15,6 +15,7 @@ class CurriculumRun:
         self.outcome_recorded = False
         self.episode_steps = 0
         self.segment_return = 0.0
+        self.episode_score = 0.0
         self.publish()
 
     def reset_memory(self) -> None:
@@ -27,7 +28,9 @@ class CurriculumRun:
         self.outcome_recorded = active_state is None
         self.episode_steps = 0
         self.segment_return = 0.0
-        return self.curriculum.episode_start_state()
+        checkpoint_state = self.curriculum.episode_start_state()
+        self.episode_score = 0.0 if checkpoint_state is None else self.curriculum.entry_score(checkpoint_state)
+        return checkpoint_state
 
     def checkpoint(self, state_name: str) -> bytes:
         return self.curriculum.checkpoint(state_name)
@@ -35,8 +38,10 @@ class CurriculumRun:
     def count_step(self) -> None:
         self.episode_steps += 1
 
-    def transition(self, previous_state: str, new_state: str, emulator_state: bytes) -> tuple[bool, bool]:
-        if self.curriculum.save_checkpoint(new_state, emulator_state):
+    def transition(
+        self, previous_state: str, new_state: str, emulator_state: bytes, step_reward: float
+    ) -> tuple[bool, bool]:
+        if self.curriculum.save_checkpoint(new_state, emulator_state, self.episode_score + step_reward):
             logger.info(f"Saved automatic curriculum checkpoint for {new_state}")
         if new_state == self.start_state:
             self.episode_steps = 0
@@ -74,6 +79,7 @@ class CurriculumRun:
         self.publish()
 
     def add_reward(self, reward: float, transitioned: bool) -> None:
+        self.episode_score += reward
         self.segment_return = 0.0 if transitioned else self.segment_return + reward
 
     def publish(self) -> None:
