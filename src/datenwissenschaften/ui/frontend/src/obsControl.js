@@ -1,7 +1,7 @@
 export const STREAM_TIME_ZONE = 'Europe/Berlin'
 const RESTART_HOUR = 4
 const RESTART_MINUTE = 0
-const CHECK_INTERVAL_MS = 20000
+const CHECK_INTERVAL_MS = 10000
 const FULL_CONTROL_LEVEL = 5
 
 const clock = new Intl.DateTimeFormat('en-CA', {
@@ -24,22 +24,26 @@ export const createObsControl = () => {
   let restartedOn = null
   let timer
 
-  const restart = () => {
-    window.addEventListener('obsStreamingStopped', () => obs.startStreaming(), { once: true })
-    obs.stopStreaming()
-  }
-  const checkSchedule = () => {
+  const restartDue = () => {
     const { day, hour, minute } = localTime()
-    if (hour !== RESTART_HOUR || minute !== RESTART_MINUTE || day === restartedOn) return
+    if (hour !== RESTART_HOUR || minute !== RESTART_MINUTE || day === restartedOn) return false
     restartedOn = day
-    obs.getStatus(status => { if (status.streaming) restart() })
+    return true
+  }
+  const keepStreaming = () => {
+    const restart = restartDue()
+    obs.getStatus(status => {
+      if (!status.streaming) obs.startStreaming()
+      else if (restart) obs.stopStreaming()
+    })
   }
   const schedule = level => {
     if (level < FULL_CONTROL_LEVEL) {
-      console.error('OBS nightly restart needs the browser source permission "Full access to OBS"')
+      console.error('Keeping the OBS stream alive needs the browser source permission "Full access to OBS"')
       return
     }
-    timer = window.setInterval(checkSchedule, CHECK_INTERVAL_MS)
+    keepStreaming()
+    timer = window.setInterval(keepStreaming, CHECK_INTERVAL_MS)
   }
 
   return {
