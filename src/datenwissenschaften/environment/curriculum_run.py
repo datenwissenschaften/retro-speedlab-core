@@ -41,6 +41,8 @@ class CurriculumRun:
     def transition(
         self, previous_state: str, new_state: str, emulator_state: bytes, step_reward: float
     ) -> tuple[bool, bool]:
+        if self.state_names.index(new_state) < self.state_names.index(previous_state):
+            return False, False
         if self.curriculum.save_checkpoint(new_state, emulator_state, self.episode_score + step_reward):
             logger.info(f"Saved automatic curriculum checkpoint for {new_state}")
         if new_state == self.start_state:

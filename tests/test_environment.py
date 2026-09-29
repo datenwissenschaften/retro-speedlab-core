@@ -100,6 +100,19 @@ def test_a_new_checkpoint_remembers_the_score_that_reached_it(tmp_path: Path):
     assert run.curriculum.entry_score("Boss") == 5.0
 
 
+def test_falling_back_to_an_earlier_state_is_no_curriculum_success(tmp_path: Path):
+    run = CurriculumRun(tmp_path, ("Survive", "Boss"))
+    run.curriculum.save_checkpoint("Boss", b"boss", 0.0)
+    run.begin_episode()
+    run.start_state = "Boss"
+
+    outcome = run.transition("Boss", "Survive", b"survive", 1.0)
+
+    assert outcome == (False, False)
+    assert run.curriculum.wins("Boss") == 0
+    assert not run.curriculum.has_checkpoint("Survive")
+
+
 def test_unknown_curriculum_state_fails_fast(tmp_path: Path):
     with pytest.raises(ValueError, match="Unknown state"):
         fake_environment(tmp_path, [(3, 0)])._state_class("Missing")
