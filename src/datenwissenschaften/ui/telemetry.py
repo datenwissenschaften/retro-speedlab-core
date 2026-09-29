@@ -252,9 +252,15 @@ class TelemetryStore:
         with self._lock:
             return int(self._summary["episodes"])
 
-    def best_fitness(self) -> float | None:
+    def level_episode_count(self, savestate: str) -> int:
         with self._lock:
-            return self._summary["best_fitness"]
+            levels = self._summary["by_savestate"]
+            return int(levels[savestate]["episodes"]) if savestate in levels else 0
+
+    def best_fitness(self, savestate: str) -> float | None:
+        with self._lock:
+            levels = self._summary["by_savestate"]
+            return levels[savestate]["best_fitness"] if savestate in levels else None
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
@@ -367,8 +373,12 @@ def episode_count() -> int:
     return _store.episode_count()
 
 
-def best_fitness() -> float | None:
-    return _store.best_fitness()
+def level_episode_count(savestate: str) -> int:
+    return _store.level_episode_count(savestate)
+
+
+def best_fitness(savestate: str) -> float | None:
+    return _store.best_fitness(savestate)
 
 
 def publish_episode(**values: Any) -> None:

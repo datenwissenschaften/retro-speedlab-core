@@ -216,13 +216,14 @@ def test_module_level_configure_history_delegates_to_the_shared_store(monkeypatc
     assert calls == ["Game"]
 
 
-def test_best_fitness_reports_the_all_time_best_episode():
+def test_best_fitness_and_attempts_are_counted_per_level():
     store = TelemetryStore()
-    assert store.best_fitness() is None
+    assert store.best_fitness("Level1") is None
 
-    store.publish_episode({"fitness": 2.0, "won": False})
-    store.publish_episode({"fitness": 5.0, "won": False})
-    store.publish_episode({"fitness": 1.0, "won": False})
+    store.publish_episode({"fitness": 2.0, "won": False, "savestate": "Level1"})
+    store.publish_episode({"fitness": 5.0, "won": False, "savestate": "Level1"})
+    store.publish_episode({"fitness": 9.0, "won": False, "savestate": "Level2"})
 
-    assert store.best_fitness() == 5.0
+    assert (store.best_fitness("Level1"), store.best_fitness("Level2")) == (5.0, 9.0)
+    assert (store.level_episode_count("Level1"), store.level_episode_count("Level3")) == (2, 0)
     assert store.episode_count() == 3

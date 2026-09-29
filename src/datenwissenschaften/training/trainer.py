@@ -1,5 +1,4 @@
 import time
-from itertools import cycle
 from pathlib import Path
 
 import torch
@@ -17,9 +16,10 @@ from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.hooks import TrainingHook
 from datenwissenschaften.training.identity import TrainingIdentity
 from datenwissenschaften.training.live_stream_hook import LiveStreamHook
+from datenwissenschaften.training.rotation import Rotation
 from datenwissenschaften.training.session import TrainingSession
 from datenwissenschaften.training.state_models import StateModels
-from datenwissenschaften.training.story_book import StoryBook
+from datenwissenschaften.training.story_book import StoryBook, level_identity
 from datenwissenschaften.training.story_teller import StoryTeller
 from datenwissenschaften.training.telemetry_hook import TelemetryHook
 from datenwissenschaften.training.upload_hook import UploadHook
@@ -28,8 +28,6 @@ from datenwissenschaften.ui.control import ModelResetRequest, configure_training
 from datenwissenschaften.ui.live import live_feed
 from datenwissenschaften.ui.server import start_ui
 from datenwissenschaften.ui.telemetry import configure_history, publish_metadata
-
-SECONDS_PER_MINUTE = 60
 
 
 class LayaTrainer:
@@ -42,25 +40,31 @@ class LayaTrainer:
 
     def train(self) -> None:
         database = JsonDatabase(self.config.paths.database_path)
-        for savestate in cycle(self.config.training.savestates):
+        training = self.config.training
+        rotation = Rotation(database, training.game_identity, training.savestates, training.rotation_minutes)
+        while True:
+            savestate, seconds = rotation.next()
             self.context = RunContext(self.config, savestate)
             env = make_environment(self.wrapper_cls, self.config, savestate)
             identity = TrainingIdentity(self.context, database)
             identity.require_compatible(env)
             self._start_ui(identity, env, database)
-            request = self._train_level(env, database)
+            request = self._train_level(env, database, seconds)
             env.close()
             torch.cuda.empty_cache()
             if request is not None:
                 perform_model_reset(request)
                 live_feed.clear()
 
-    def _train_level(self, env: StateMachineGymWrapper, database: JsonDatabase) -> ModelResetRequest | None:
+    def _train_level(
+        self, env: StateMachineGymWrapper, database: JsonDatabase, seconds: float
+    ) -> ModelResetRequest | None:
         models = self._models()
         self._publish_run()
         publish_metadata("model", model_metadata(models), replace=True)
-        story = StoryBook(database, self.config.training.game_identity, self._phases())
-        deadline = time.monotonic() + self.config.training.rotation_minutes * SECONDS_PER_MINUTE
+        identity = level_identity(self.config.training.game_identity, self.context.savestate)
+        story = StoryBook(database, identity, self._phases())
+        deadline = time.monotonic() + seconds
         try:
             return TrainingSession(env, models, self._hooks(env, models, StoryTeller(story)), deadline).run()
         finally:
@@ -80,7 +84,7 @@ class LayaTrainer:
 
     def _hooks(self, env: StateMachineGymWrapper, models: StateModels, teller: StoryTeller) -> list[TrainingHook]:
         return [
-            LiveStreamHook(env.unwrapped.em.get_screen_rate(), teller),
+            LiveStreamHook(env.unwrapped.em.get_screen_rate(), teller, self.context.savestate),
             TelemetryHook(self.context),
             CheckpointHook(models),
             BestVideoHook(self.context),

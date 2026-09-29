@@ -21,6 +21,10 @@ def story_key(identity: str) -> str:
     return f"{STORY_KEY}:{identity}"
 
 
+def level_identity(identity: str, savestate: str) -> str:
+    return f"{identity}:{savestate}"
+
+
 def label(name: str) -> str:
     return WORD_BOUNDARY.sub(" ", name).strip().title()
 

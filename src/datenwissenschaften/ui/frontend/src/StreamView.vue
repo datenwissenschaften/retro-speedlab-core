@@ -158,7 +158,7 @@ onBeforeUnmount(() => {
 
 const release = computed(() => snapshot.value.server?.release || null)
 const run = computed(() => snapshot.value.metadata?.run || {})
-const summary = computed(() => snapshot.value.summary || {})
+const summary = computed(() => snapshot.value.summary?.by_savestate?.[run.value.savestate] || {})
 const story = computed(() => snapshot.value.metadata?.story || { phases: [], danger: [] })
 const curriculum = computed(() => snapshot.value.metadata?.savestate_curriculum || {})
 const phase = computed(() => live.value.training_state || story.value.phases[0]?.name || '')
@@ -201,7 +201,7 @@ watch(() => live.value.ram, (current, previous) => {
           <div class="run-info-medal">
             <span class="run-info-medal-icon">🧠</span>
             <span>
-              <strong class="run-info-medal-title">Attempt {{ replayEpisode ? `#${replayEpisode.id}` : '—' }}</strong>
+              <strong class="run-info-medal-title">Attempt {{ replayEpisode ? `#${replayEpisode.result.attempt} · ${replayEpisode.result.level}` : '—' }}</strong>
               <span v-if="isReplay" class="replay-badge">Replay · not live training</span>
               <span class="replay-track"><span :style="{ width: percent(replayProgress) }"></span></span>
             </span>

@@ -8,7 +8,7 @@ from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
 from datenwissenschaften.training.story_teller import StoryTeller
 from datenwissenschaften.ui.live import live_feed
-from datenwissenschaften.ui.telemetry import best_fitness, episode_count
+from datenwissenschaften.ui.telemetry import best_fitness, episode_count, level_episode_count
 from datenwissenschaften.vision.overlay import draw_detections
 
 JPEG_QUALITY = 80
@@ -16,10 +16,12 @@ RECENT_SCORES = 120
 
 
 class LiveStreamHook:
-    def __init__(self, frame_rate: float, teller: StoryTeller) -> None:
+    def __init__(self, frame_rate: float, teller: StoryTeller, savestate: str) -> None:
         self.frame_rate = frame_rate
         self.teller = teller
+        self.savestate = savestate
         self.episode = episode_count() + 1
+        self.attempt = level_episode_count(savestate) + 1
         self.episode_reward = 0.0
         self.updates = 0
         self.recent_scores: deque[float] = deque(maxlen=RECENT_SCORES)
@@ -30,9 +32,11 @@ class LiveStreamHook:
         self.step += 1
         status = {
             "step": self.step,
-            "events": self.teller.observe(transition, self.episode),
+            "events": self.teller.observe(transition, self.attempt),
             "timesteps": transition.timesteps,
             "episode": self.episode,
+            "attempt": self.attempt,
+            "level": self.savestate,
             "episode_reward": self.episode_reward,
             "updates": self.updates,
             "training_state": transition.info["state"],
@@ -47,7 +51,7 @@ class LiveStreamHook:
 
     def on_episode_end(self, episode: EpisodeRecord) -> None:
         self.recent_scores.append(episode.score)
-        previous_best = best_fitness()
+        previous_best = best_fitness(self.savestate)
         new_best = previous_best is not None and episode.score > previous_best
         live_feed.add_events(self.teller.finish(episode, new_best, live_feed.last_image()))
         result = {
@@ -56,9 +60,12 @@ class LiveStreamHook:
             "new_best": new_best,
             "full_run": episode.started_from_initial_savestate,
             "succeeded": episode.curriculum_succeeded or episode.won,
+            "attempt": self.attempt,
+            "level": self.savestate,
         }
         live_feed.finish_episode(self.episode, self.frame_rate, result, {"recent_scores": list(self.recent_scores)})
         self.episode += 1
+        self.attempt += 1
         self.episode_reward = 0.0
 
     def on_update(self) -> None:

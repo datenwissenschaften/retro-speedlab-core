@@ -6,7 +6,7 @@ from loguru import logger
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.training.context import RunContext
-from datenwissenschaften.training.story_book import story_key
+from datenwissenschaften.training.story_book import level_identity, story_key
 from datenwissenschaften.ui.control import ModelResetRequest, perform_model_reset
 
 PACKAGE_NAME = "datenwissenschaften"
@@ -63,7 +63,9 @@ class TrainingIdentity:
 
     def _forget(self, env: StateMachineGymWrapper) -> None:
         env.reset_training_memory()
-        self.database.delete(story_key(self.context.config.training.game_identity))
+        training = self.context.config.training
+        for savestate in training.savestates:
+            self.database.delete(story_key(level_identity(training.game_identity, savestate)))
 
     @staticmethod
     def _release(engine: str | None) -> tuple[str, ...] | None:

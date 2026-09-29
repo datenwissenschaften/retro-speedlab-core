@@ -126,9 +126,10 @@ def test_live_stream_hook_records_every_frame_of_an_episode_with_its_result(monk
     feed = LiveFeed()
     best_scores = iter([None, 3.0])
     monkeypatch.setattr(live_stream_hook, "live_feed", feed)
-    monkeypatch.setattr(live_stream_hook, "best_fitness", lambda: next(best_scores))
+    monkeypatch.setattr(live_stream_hook, "best_fitness", lambda savestate: next(best_scores))
     monkeypatch.setattr(live_stream_hook, "episode_count", lambda: 41)
-    hook = live_stream_hook.LiveStreamHook(50.0, teller)
+    monkeypatch.setattr(live_stream_hook, "level_episode_count", lambda savestate: 6)
+    hook = live_stream_hook.LiveStreamHook(50.0, teller, "Level2")
 
     hook.on_step(_transition())
     hook.on_update()
@@ -152,7 +153,10 @@ def test_live_stream_hook_records_every_frame_of_an_episode_with_its_result(monk
         "new_best": True,
         "full_run": True,
         "succeeded": True,
+        "attempt": 8,
+        "level": "Level2",
     }
+    assert (status["attempt"], status["level"]) == (7, "Level2")
     assert feed._episodes[0]["result"]["new_best"] is False
     assert latest["summary"] == {"recent_scores": [5.0, 4.0]}
     assert hook.updates == 1

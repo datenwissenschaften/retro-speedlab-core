@@ -8,6 +8,7 @@ from datenwissenschaften.laya import network as network_module
 from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.training import identity as identity_module
+from datenwissenschaften.training import rotation as rotation_module
 from datenwissenschaften.training import trainer as trainer_module
 from datenwissenschaften.training import video_playback
 from datenwissenschaften.training.context import RunContext
@@ -186,6 +187,8 @@ def test_trainer_rotates_through_the_levels_until_a_reset(tmp_path: Path, monkey
 
     monkeypatch.setattr(trainer_module, "make_environment", make)
     monkeypatch.setattr(trainer_module.TrainingSession, "run", lambda session: next(outcomes))
+    clock = iter(range(0, 100 * 3600, 3600))
+    monkeypatch.setattr(rotation_module.time, "time", lambda: next(clock))
     monkeypatch.setattr(trainer_module, "perform_model_reset", stop)
     trainer = trainer_module.LayaTrainer(FakeWrapper, config_path)
 
