@@ -48,6 +48,8 @@ class StoryTeller:
         return events
 
     def _transition_event(self, previous: str, current: str, attempt: int) -> Event:
+        if self.book.phases.index(current) < self.book.phases.index(previous):
+            return event("bad", f"Back to {label(current)}", f"Lost progress in {label(previous)}")
         if self.book.has_reached(current):
             return event("good", f"{label(previous)} done", f"Next: {label(current)}")
         self.book.reach(current, attempt)

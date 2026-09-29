@@ -55,6 +55,15 @@ def test_first_visit_of_a_phase_is_a_milestone_and_later_ones_are_progress(tmp_p
     assert again[0]["kind"] == "good"
 
 
+def test_falling_back_to_an_earlier_phase_is_told_as_a_setback(tmp_path: Path, published):
+    teller = StoryTeller(StoryBook(JsonDatabase(tmp_path / "db.json"), "Game", PHASES))
+    teller.observe(_transition({"weight": 1}, (0, 0), "OpenDoor", None), 1)
+
+    back = teller.observe(_transition({"weight": 1}, (0, 0), "FindDoor", ("OpenDoor", "FindDoor")), 1)
+
+    assert back == [{"kind": "bad", "text": "Back to Find Door", "detail": "Lost progress in Open Door"}]
+
+
 def test_only_quiet_facts_become_events(tmp_path: Path, published):
     teller = StoryTeller(StoryBook(JsonDatabase(tmp_path / "db.json"), "Game", PHASES))
     teller.observe(_transition({"weight": 1, "time": 90, "door": False}, (0, 0), "FindDoor", None), 1)
