@@ -1,6 +1,5 @@
 import json
 import math
-from pathlib import Path
 
 import pytest
 import torch
@@ -115,16 +114,16 @@ def test_agent_learning_changes_every_trainable_part(network: LayaNetwork):
     assert agent.metadata()["entropy"] == agent.last_update["entropy"]
 
 
-def test_agent_checkpoint_round_trip(network: LayaNetwork, monkeypatch, tmp_path: Path):
+def test_agent_checkpoint_round_trip(network: LayaNetwork, monkeypatch):
     agent = LayaAgent(network, (QUESTION,))
     agent.num_timesteps = 42
     agent.learner.trust_region.learning_rate_scale = 0.3
     agent.last_update = {"kl": 0.01}
-    path = tmp_path / "laya.pt"
-    agent.save(path)
+    checkpoint = agent.checkpoint()
+    checkpoint.seek(0)
     restored = LayaAgent(LayaNetwork("fake/laya", ACTIONS, "cpu"), (QUESTION,))
 
-    restored.load(path)
+    restored.restore(torch.load(checkpoint))
 
     assert restored.num_timesteps == 42
     assert restored.learner.trust_region.learning_rate_scale == 0.3

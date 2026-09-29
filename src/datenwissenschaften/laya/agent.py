@@ -1,4 +1,4 @@
-from pathlib import Path
+import io
 from typing import Any
 
 import torch
@@ -39,8 +39,8 @@ class LayaAgent:
         self.num_timesteps = 0
         self.last_update = {}
 
-    def save(self, path: Path) -> None:
-        temporary = path.with_suffix(".tmp")
+    def checkpoint(self) -> io.BytesIO:
+        buffer = io.BytesIO()
         torch.save(
             {
                 "network": self.network.state_dict(),
@@ -48,16 +48,15 @@ class LayaAgent:
                 "num_timesteps": self.num_timesteps,
                 "last_update": self.last_update,
             },
-            temporary,
+            buffer,
         )
-        temporary.replace(path)
+        return buffer
 
-    def load(self, path: Path) -> None:
-        saved = torch.load(path, map_location="cpu")
-        self.network.load_state_dict(saved["network"])
-        self.learner.load_state_dict(saved["learner"])
-        self.num_timesteps = int(saved["num_timesteps"])
-        self.last_update = saved["last_update"]
+    def restore(self, checkpoint: dict[str, Any]) -> None:
+        self.network.load_state_dict(checkpoint["network"])
+        self.learner.load_state_dict(checkpoint["learner"])
+        self.num_timesteps = int(checkpoint["num_timesteps"])
+        self.last_update = checkpoint["last_update"]
 
     def metadata(self) -> dict[str, Any]:
         return {

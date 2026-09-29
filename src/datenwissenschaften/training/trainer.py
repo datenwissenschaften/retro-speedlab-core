@@ -52,7 +52,10 @@ class LayaTrainer:
         self._publish_run()
         publish_metadata("model", model_metadata(models), replace=True)
         story = StoryBook(database, self.config.training.game_identity, self._phases())
-        return TrainingSession(env, models, self._hooks(env, models, StoryTeller(story))).run()
+        try:
+            return TrainingSession(env, models, self._hooks(env, models, StoryTeller(story))).run()
+        finally:
+            models.close()
 
     def _phases(self) -> tuple[str, ...]:
         classes = (self.wrapper_cls.start_state_cls, *self.wrapper_cls.state_classes)
@@ -64,7 +67,7 @@ class LayaTrainer:
         )
         state_classes = (self.wrapper_cls.start_state_cls, *self.wrapper_cls.state_classes)
         agent = LayaAgent(network, tuple(state_cls.description for state_cls in state_classes))
-        return StateModels(agent, self.context, tuple(state_cls.__name__ for state_cls in state_classes))
+        return StateModels(agent, self.context, self._phases())
 
     def _hooks(self, env: StateMachineGymWrapper, models: StateModels, teller: StoryTeller) -> list[TrainingHook]:
         return [

@@ -89,6 +89,7 @@ def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_pa
     models = trainer._models()
     models.activate("Survive")
     models.save()
+    models.close()
 
     with pytest.raises(StopTraining):
         trainer.train()

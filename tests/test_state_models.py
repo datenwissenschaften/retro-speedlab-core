@@ -1,5 +1,7 @@
+import io
 from pathlib import Path
 
+import torch
 from fakes import write_config
 
 from datenwissenschaften.laya.decision import Decision
@@ -14,11 +16,13 @@ class SwappingAgent:
         self.num_timesteps = 0
         self.learned: list[int] = []
 
-    def load(self, path: Path) -> None:
-        self.weights = path.read_text()
+    def restore(self, checkpoint: dict[str, str]) -> None:
+        self.weights = checkpoint["weights"]
 
-    def save(self, path: Path) -> None:
-        path.write_text(self.weights)
+    def checkpoint(self) -> io.BytesIO:
+        buffer = io.BytesIO()
+        torch.save({"weights": self.weights}, buffer)
+        return buffer
 
     def restart(self) -> None:
         self.weights = "pretrained"
@@ -44,3 +48,22 @@ def test_every_state_trains_and_keeps_its_own_model(tmp_path: Path):
     assert agent.learned == [0]
     assert agent.weights == "survivor"
     assert len(models.rollout) == 1
+
+
+def test_the_following_state_is_prefetched_and_wraps_around(tmp_path: Path):
+    agent = SwappingAgent()
+    models = StateModels(agent, RunContext(load_config(write_config(tmp_path))), ("Survive", "Boss"))
+    models.activate("Boss")
+    agent.weights = "boss"
+    models.save()
+    models.activate("Survive")
+    agent.weights = "survivor"
+    models.save()
+
+    models.activate("Boss")
+    prefetched_state, prefetched = models.prefetched
+    models.close()
+
+    assert agent.weights == "boss"
+    assert prefetched_state == "Survive"
+    assert prefetched.result() == {"weights": "survivor"}

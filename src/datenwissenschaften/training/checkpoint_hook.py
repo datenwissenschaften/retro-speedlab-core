@@ -30,4 +30,6 @@ class CheckpointHook:
     def on_update(self) -> None:
         self.models.save()
         publish_metadata("model", model_metadata(self.models), replace=True)
-        logger.debug(f"{self.models.active} model saved at {self.models.agent.num_timesteps:,} trained decisions")
+        logger.debug(
+            f"{self.models.active} model queued for saving at {self.models.agent.num_timesteps:,} trained decisions"
+        )

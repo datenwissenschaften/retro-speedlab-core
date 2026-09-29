@@ -1,3 +1,4 @@
+import io
 import json
 import subprocess
 from pathlib import Path
@@ -43,8 +44,8 @@ FRAMES = [np.zeros((4, 4, 3), np.uint8), np.ones((4, 4, 3), np.uint8)]
 class FakeAgent:
     num_timesteps = 7
 
-    def save(self, path: Path) -> None:
-        path.write_bytes(b"weights")
+    def checkpoint(self) -> io.BytesIO:
+        return io.BytesIO(b"weights")
 
     def metadata(self) -> dict[str, object]:
         return {"checkpoint": "fake/laya"}
@@ -113,6 +114,7 @@ def test_checkpoint_hook_saves_and_publishes_metadata(context: RunContext, monke
     hook.on_step(_transition())
     hook.on_episode_end(_episode("run.bk2", 1.0, False, True))
     hook.on_update()
+    models.close()
 
     assert context.model_path("Survive").read_bytes() == b"weights"
     assert published[0][1]["laya"] == {"state": "Survive", "checkpoint": "fake/laya"}
