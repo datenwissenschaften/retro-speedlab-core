@@ -16,13 +16,14 @@ const fetchJson = async url => {
 export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting, onSummary, onConnection }) => {
   let generation = null
   let latest = null
-  let lastPlayedId = null
+  let replays = []
+  let shownLiveId = null
   let episode = null
   let frames = []
   let bitmaps = new Map()
   let startedAt = null
   let shown = -1
-  let repeating = false
+  let replaying = false
   let timer
   let animation
 
@@ -33,7 +34,8 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
       onSummary(payload.summary)
       if (payload.generation !== generation) startGeneration(payload.generation)
       latest = payload.episode
-      if (latest && latest.id !== lastPlayedId && (!episode || repeating)) begin(latest)
+      replays = payload.replays
+      if (!episode && latest && latest.id !== shownLiveId) begin(latest, false)
     } catch {
       onConnection(false)
     }
@@ -52,34 +54,42 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
   const startGeneration = next => {
     const interrupted = episode !== null
     generation = next
-    lastPlayedId = null
+    shownLiveId = null
     episode = null
     release()
     if (interrupted) onWaiting()
   }
 
-  const begin = next => {
+  const begin = (next, replay) => {
     release()
     episode = next
     startedAt = null
     shown = -1
-    repeating = false
-    onEpisode(next)
+    replaying = replay
+    onEpisode(next, replay)
     download(next)
   }
 
   const finish = () => {
     onEpisodeEnd(episode)
-    lastPlayedId = episode.id
-    if (latest && latest.id !== lastPlayedId) begin(latest)
+    if (!replaying) shownLiveId = episode.id
+    if (latest && latest.id !== shownLiveId) begin(latest, false)
+    else if (replays.length) begin(pickReplay(), true)
     else repeat()
+  }
+
+  const pickReplay = () => {
+    const others = replays.filter(replay => replay.id !== episode.id)
+    const pool = others.length ? others : replays
+    return pool[Math.floor(Math.random() * pool.length)]
   }
 
   const repeat = () => {
     closeBitmaps()
     startedAt = null
     shown = -1
-    repeating = true
+    replaying = true
+    onEpisode(episode, true)
   }
 
   const download = async target => {
@@ -137,7 +147,7 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
     decodeAhead(index)
     const bitmap = bitmaps.get(index)
     if (index === shown || !bitmap) return
-    const passed = repeating ? [] : frames.slice(shown + 1, index + 1).map(frame => frame.status)
+    const passed = replaying ? [] : frames.slice(shown + 1, index + 1).map(frame => frame.status)
     shown = index
     onFrame({ bitmap, status: frames[index].status, passed, progress: index / episode.frame_count })
   }

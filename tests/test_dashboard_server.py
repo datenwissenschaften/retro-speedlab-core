@@ -182,7 +182,8 @@ def test_live_endpoints_serve_the_latest_finished_episode_in_chunks(monkeypatch)
     feed = LiveFeed()
     feed.record(b"one", {"timesteps": 1})
     feed.record(b"two", {"timesteps": 2})
-    feed.finish_episode(7, 60.0, {"score": 3.0, "won": False, "new_best": True}, {"recent_scores": [3.0]})
+    result = {"score": 3.0, "won": False, "new_best": True, "full_run": True, "succeeded": False}
+    feed.finish_episode(7, 60.0, result, {"recent_scores": [3.0]})
     monkeypatch.setattr(server_module, "live_feed", feed)
 
     with _running_server(monkeypatch) as server:
@@ -196,8 +197,9 @@ def test_live_endpoints_serve_the_latest_finished_episode_in_chunks(monkeypatch)
         "id": 7,
         "frame_rate": 60.0,
         "frame_count": 2,
-        "result": {"score": 3.0, "won": False, "new_best": True},
+        "result": result,
     }
+    assert [replay["id"] for replay in latest["replays"]] == [7]
     assert [frame["status"]["timesteps"] for frame in frames["frames"]] == [2]
     assert missing.status == 404
     assert outdated.status == 404

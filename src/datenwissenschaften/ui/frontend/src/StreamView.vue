@@ -25,6 +25,7 @@ const clock = new Intl.DateTimeFormat('en-GB', { timeZone: STREAM_TIME_ZONE, dat
 const live = ref({})
 const screen = ref(null)
 const replayEpisode = ref(null)
+const isReplay = ref(false)
 const waiting = ref(true)
 const replayProgress = ref(0)
 const snapshot = ref({ metadata: {}, summary: {} })
@@ -115,8 +116,9 @@ const reload = async () => {
 const reloadIfPending = () => { if (reloadPending) reload() }
 const player = createReplayPlayer({
   onFrame: drawFrame,
-  onEpisode: episode => {
+  onEpisode: (episode, replay) => {
     replayEpisode.value = episode
+    isReplay.value = replay
     waiting.value = false
   },
   onWaiting: () => {
@@ -192,12 +194,13 @@ watch(() => live.value.ram, (current, previous) => {
         <aside class="run-info-panel">
           <div class="run-info-brand">
             <img class="run-info-logo" src="/logo.png" alt="Retro Speedlab" />
-            <span class="run-info-kicker">{{ connected ? 'Live' : 'Offline' }}</span>
+            <span class="run-info-kicker">{{ connected ? (isReplay ? 'Replay' : 'Live') : 'Offline' }}</span>
           </div>
           <div class="run-info-medal">
             <span class="run-info-medal-icon">🧠</span>
             <span>
               <strong class="run-info-medal-title">Attempt {{ replayEpisode ? `#${replayEpisode.id}` : '—' }}</strong>
+              <span v-if="isReplay" class="replay-badge">Replay · not live training</span>
               <span class="replay-track"><span :style="{ width: percent(replayProgress) }"></span></span>
             </span>
           </div>

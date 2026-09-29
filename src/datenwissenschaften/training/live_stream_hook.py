@@ -50,7 +50,13 @@ class LiveStreamHook:
         previous_best = best_fitness()
         new_best = previous_best is not None and episode.score > previous_best
         live_feed.add_events(self.teller.finish(episode, new_best, live_feed.last_image()))
-        result = {"score": episode.score, "won": episode.won, "new_best": new_best}
+        result = {
+            "score": episode.score,
+            "won": episode.won,
+            "new_best": new_best,
+            "full_run": episode.started_from_initial_savestate,
+            "succeeded": episode.curriculum_succeeded or episode.won,
+        }
         live_feed.finish_episode(self.episode, self.frame_rate, result, {"recent_scores": list(self.recent_scores)})
         self.episode += 1
         self.episode_reward = 0.0

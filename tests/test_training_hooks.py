@@ -146,7 +146,13 @@ def test_live_stream_hook_records_every_frame_of_an_episode_with_its_result(monk
     assert second[-1]["status"]["events"][-1]["text"] == "New best score!"
     latest = feed.latest_episode()
     assert latest["episode"]["frame_rate"] == 50.0
-    assert latest["episode"]["result"] == {"score": 4.0, "won": True, "new_best": True}
+    assert latest["episode"]["result"] == {
+        "score": 4.0,
+        "won": True,
+        "new_best": True,
+        "full_run": True,
+        "succeeded": True,
+    }
     assert feed._episodes[0]["result"]["new_best"] is False
     assert latest["summary"] == {"recent_scores": [5.0, 4.0]}
     assert hook.updates == 1
