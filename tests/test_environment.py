@@ -163,6 +163,7 @@ def test_recording_is_mandatory(tmp_path: Path):
 def test_factory_records_into_the_game_and_savestate_folder(tmp_path: Path, monkeypatch):
     calls = {}
     monkeypatch.setattr(factory, "import_roms", lambda roms: calls.setdefault("roms", roms))
+    monkeypatch.setattr(factory, "import_savestates", lambda game, folder: calls.setdefault("savestates", folder))
 
     def make(game, state, render_mode, record):
         calls.update(game=game, state=state, record=record)
@@ -171,11 +172,12 @@ def test_factory_records_into_the_game_and_savestate_folder(tmp_path: Path, monk
     monkeypatch.setattr(factory.retro, "make", make)
     config = load_config(write_config(tmp_path))
 
-    env = factory.make_environment(FakeWrapper, config)
+    env = factory.make_environment(FakeWrapper, config, "Level2")
 
     assert calls["roms"] == config.paths.roms_path
-    assert (calls["game"], calls["state"]) == ("FakeGame-v0", "Level1")
-    assert calls["record"] == str(config.paths.record_dir / "FakeGame-v0" / "Level1")
+    assert calls["savestates"] == config.paths.savestates_dir
+    assert (calls["game"], calls["state"]) == ("FakeGame-v0", "Level2")
+    assert calls["record"] == str(config.paths.record_dir / "FakeGame-v0" / "Level2")
     assert env.curriculum.state_names == ("Survive", "Boss")
 
 

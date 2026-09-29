@@ -53,9 +53,9 @@ def test_session_plays_learns_and_stops_on_a_reset_request(tmp_path: Path, monke
     monkeypatch.setattr(session_module, "consume_model_reset", lambda: next(requests))
     env = fake_environment(tmp_path, [(3, 0), (3, 1), (0, 2)])
     agent, hook = RecordingAgent(), RecordingHook()
-    models = StateModels(agent, RunContext(load_config(write_config(tmp_path))), ("Survive", "Boss"))
+    models = StateModels(agent, RunContext(load_config(write_config(tmp_path)), "Level1"), ("Survive", "Boss"))
 
-    result = TrainingSession(env, models, [hook]).run()
+    result = TrainingSession(env, models, [hook], float("inf")).run()
 
     assert result == "reset"
     assert agent.num_timesteps == ROLLOUT_STEPS
@@ -74,11 +74,25 @@ def test_session_plays_learns_and_stops_on_a_reset_request(tmp_path: Path, monke
 
 def test_mastered_states_explore_less(tmp_path: Path):
     env = fake_environment(tmp_path, [(3, 0)])
-    models = StateModels(RecordingAgent(), RunContext(load_config(write_config(tmp_path))), ("Survive", "Boss"))
+    context = RunContext(load_config(write_config(tmp_path)), "Level1")
+    models = StateModels(RecordingAgent(), context, ("Survive", "Boss"))
     for _ in range(env.curriculum.curriculum.WIN_TARGET):
         env.curriculum.curriculum.record_success("Survive", 1)
 
-    session = TrainingSession(env, models, [])
+    session = TrainingSession(env, models, [], float("inf"))
 
     assert session._exploration("Survive") == EXPLORATION_ONCE_MASTERED
     assert session._exploration("Boss") == EXPLORATION_WHILE_LEARNING
+
+
+def test_session_hands_over_to_the_next_level_after_an_episode_past_the_deadline(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(session_module, "consume_model_reset", lambda: None)
+    env = fake_environment(tmp_path, [(3, 0), (3, 1), (0, 2)])
+    hook = RecordingHook()
+    context = RunContext(load_config(write_config(tmp_path)), "Level1")
+    models = StateModels(RecordingAgent(), context, ("Survive", "Boss"))
+
+    result = TrainingSession(env, models, [hook], 0.0).run()
+
+    assert result is None
+    assert len(hook.episodes) == 1

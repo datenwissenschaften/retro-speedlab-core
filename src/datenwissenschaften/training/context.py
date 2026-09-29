@@ -9,14 +9,11 @@ MODEL_FILENAME = "laya.pt"
 @dataclass(slots=True, frozen=True)
 class RunContext:
     config: RetroSpeedlabConfig
+    savestate: str
 
     @property
     def game(self) -> str:
         return self.config.training.game
-
-    @property
-    def savestate(self) -> str:
-        return self.config.training.savestate
 
     @property
     def record_root(self) -> Path:

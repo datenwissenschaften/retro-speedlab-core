@@ -12,13 +12,16 @@ EXPLORATION_ONCE_MASTERED = 0.05
 
 
 class TrainingSession:
-    def __init__(self, env: StateMachineGymWrapper, models: StateModels, hooks: list[TrainingHook]) -> None:
+    def __init__(
+        self, env: StateMachineGymWrapper, models: StateModels, hooks: list[TrainingHook], deadline: float
+    ) -> None:
         self.env = env
+        self.deadline = deadline
         self.models = models
         self.hooks = hooks
         self.episodes = 0
 
-    def run(self) -> ModelResetRequest:
+    def run(self) -> ModelResetRequest | None:
         observation, info = self.env.reset()
         episode, started_at = EpisodeRecord.start(self.episodes, info), time.monotonic()
         while (request := consume_model_reset()) is None:
@@ -40,6 +43,8 @@ class TrainingSession:
                 for hook in self.hooks:
                     hook.on_episode_end(episode)
                 self.episodes += 1
+                if time.monotonic() >= self.deadline:
+                    return None
                 next_observation, info = self.env.reset()
                 episode, started_at = EpisodeRecord.start(self.episodes, info), time.monotonic()
             observation = next_observation

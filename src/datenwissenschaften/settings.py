@@ -11,6 +11,7 @@ MAX_PORT = 65_535
 @dataclass(frozen=True)
 class RetroSpeedlabPaths:
     roms_path: Path
+    savestates_dir: Path
     models_dir: Path
     record_dir: Path
     cache_dir: Path
@@ -21,7 +22,8 @@ class RetroSpeedlabPaths:
 class TrainingSettings:
     game: str
     game_identity: str
-    savestate: str
+    savestates: tuple[str, ...]
+    rotation_minutes: int
     fingerprint: str | None
 
 
@@ -66,6 +68,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
     return RetroSpeedlabConfig(
         paths=RetroSpeedlabPaths(
             roms_path=_path(document.paths.roms, base_dir),
+            savestates_dir=_path(document.paths.savestates, base_dir),
             models_dir=_path(document.paths.models, base_dir),
             record_dir=_path(document.paths.recordings, base_dir),
             cache_dir=_path(document.paths.cache, base_dir),
@@ -76,7 +79,8 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             game_identity=_text(training.game_identity, "training.game_identity")
             if "game_identity" in training
             else _text(training.game, "training.game"),
-            savestate=_text(training.savestate, "training.savestate"),
+            savestates=_texts(training.savestates, "training.savestates"),
+            rotation_minutes=_positive_int(training.rotation_minutes, "training.rotation_minutes"),
             fingerprint=_optional_text(training.fingerprint, "training.fingerprint"),
         ),
         laya=LayaSettings(checkpoint=_text(document.laya.checkpoint, "laya.checkpoint")),
@@ -99,6 +103,12 @@ def _text(value: Any, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise RuntimeError(f"Configuration value '{name}' must be a non-empty string.")
     return value.strip()
+
+
+def _texts(value: Any, name: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value:
+        raise RuntimeError(f"Configuration value '{name}' must be a non-empty list.")
+    return tuple(_text(item, name) for item in value)
 
 
 def _optional_text(value: Any, name: str) -> str | None:

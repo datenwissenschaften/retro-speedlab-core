@@ -53,7 +53,7 @@ class FakeAgent:
 
 @pytest.fixture
 def context(tmp_path: Path) -> RunContext:
-    return RunContext(load_config(write_config(tmp_path)))
+    return RunContext(load_config(write_config(tmp_path)), "Level1")
 
 
 def _episode(bk2_path: str, score: float, won: bool, full_run: bool) -> EpisodeRecord:

@@ -146,8 +146,9 @@ def write_config(tmp_path: Path) -> Path:
     config_path.write_text(
         "\n".join(
             [
-                "paths: {roms: roms, models: models, recordings: recordings, cache: cache, database: database.json}",
-                "training: {game: FakeGame-v0, savestate: Level1, fingerprint: null}",
+                "paths: {roms: roms, savestates: savestates, models: models, recordings: recordings, cache: cache,"
+                " database: database.json}",
+                "training: {game: FakeGame-v0, savestates: [Level1], rotation_minutes: 60, fingerprint: null}",
                 "laya: {checkpoint: fake/laya}",
                 "upload: {url: 'https://upload.test', api_key: null}",
                 "ui: {enable: false, host: 127.0.0.1, port: 18080, max_episodes: 10, release: local}",

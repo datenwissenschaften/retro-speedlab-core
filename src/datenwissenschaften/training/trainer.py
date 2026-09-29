@@ -1,3 +1,5 @@
+import time
+from itertools import cycle
 from pathlib import Path
 
 import torch
@@ -27,33 +29,40 @@ from datenwissenschaften.ui.live import live_feed
 from datenwissenschaften.ui.server import start_ui
 from datenwissenschaften.ui.telemetry import configure_history, publish_metadata
 
+SECONDS_PER_MINUTE = 60
+
 
 class LayaTrainer:
     def __init__(self, wrapper_cls: type[StateMachineGymWrapper], config_path: Path) -> None:
         self.config = load_config(config_path)
         setup_logging(self.config.log_level)
-        self.context = RunContext(self.config)
+        self.context = RunContext(self.config, self.config.training.savestates[0])
         self.wrapper_cls = wrapper_cls
+        self.ui_started = False
 
     def train(self) -> None:
-        env = make_environment(self.wrapper_cls, self.config)
         database = JsonDatabase(self.config.paths.database_path)
-        identity = TrainingIdentity(self.context, database)
-        identity.require_compatible(env)
-        self._start_ui(identity, env, database)
-        while True:
-            request = self._train_until_reset(env, database)
+        for savestate in cycle(self.config.training.savestates):
+            self.context = RunContext(self.config, savestate)
+            env = make_environment(self.wrapper_cls, self.config, savestate)
+            identity = TrainingIdentity(self.context, database)
+            identity.require_compatible(env)
+            self._start_ui(identity, env, database)
+            request = self._train_level(env, database)
+            env.close()
             torch.cuda.empty_cache()
-            perform_model_reset(request)
-            live_feed.clear()
+            if request is not None:
+                perform_model_reset(request)
+                live_feed.clear()
 
-    def _train_until_reset(self, env: StateMachineGymWrapper, database: JsonDatabase) -> ModelResetRequest:
+    def _train_level(self, env: StateMachineGymWrapper, database: JsonDatabase) -> ModelResetRequest | None:
         models = self._models()
         self._publish_run()
         publish_metadata("model", model_metadata(models), replace=True)
         story = StoryBook(database, self.config.training.game_identity, self._phases())
+        deadline = time.monotonic() + self.config.training.rotation_minutes * SECONDS_PER_MINUTE
         try:
-            return TrainingSession(env, models, self._hooks(env, models, StoryTeller(story))).run()
+            return TrainingSession(env, models, self._hooks(env, models, StoryTeller(story)), deadline).run()
         finally:
             models.close()
 
@@ -82,7 +91,6 @@ class LayaTrainer:
         ui = self.config.ui
         if not ui.enabled:
             return
-        configure_history(self.config.training.game_identity, database)
         reset = identity.reset_request(env)
         configure_training_control(
             game=reset.game,
@@ -91,12 +99,20 @@ class LayaTrainer:
             artifact_dirs=reset.artifact_dirs,
             on_reset=reset.on_reset,
         )
+        if self.ui_started:
+            return
+        configure_history(self.config.training.game_identity, database)
         start_ui(ui, self.context.record_root)
+        self.ui_started = True
 
     def _publish_run(self) -> None:
         publish_metadata(
             "run",
-            {"game": self.context.game, "savestate": self.context.savestate, "savestates": [self.context.savestate]},
+            {
+                "game": self.context.game,
+                "savestate": self.context.savestate,
+                "savestates": list(self.config.training.savestates),
+            },
         )
         publish_metadata(
             "environment",

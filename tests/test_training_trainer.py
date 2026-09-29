@@ -24,7 +24,7 @@ class StopTraining(Exception):
 def test_identity_resets_training_when_the_release_changes(tmp_path: Path, monkeypatch):
     resets = []
     monkeypatch.setattr(identity_module, "perform_model_reset", resets.append)
-    context = RunContext(load_config(write_config(tmp_path)))
+    context = RunContext(load_config(write_config(tmp_path)), "Level1")
     database = JsonDatabase(tmp_path / "database.json")
     database.set("engine-version:FakeGame-v0", "0.1.0")
 
@@ -37,7 +37,7 @@ def test_identity_resets_training_when_the_release_changes(tmp_path: Path, monke
 def test_identity_keeps_training_for_the_same_release(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(identity_module, "perform_model_reset", lambda request: pytest.fail("unexpected reset"))
     monkeypatch.setattr(identity_module, "version", lambda package: "2.10.99")
-    context = RunContext(load_config(write_config(tmp_path)))
+    context = RunContext(load_config(write_config(tmp_path)), "Level1")
     database = JsonDatabase(tmp_path / "database.json")
     database.set("engine-version:FakeGame-v0", "2.10.1")
     database.set("database-fingerprint:FakeGame-v0", None)
@@ -51,7 +51,7 @@ def test_identity_keeps_training_for_the_same_release(tmp_path: Path, monkeypatc
 def test_identity_resets_training_when_the_model_layout_changes(tmp_path: Path, monkeypatch):
     resets = []
     monkeypatch.setattr(identity_module, "perform_model_reset", resets.append)
-    context = RunContext(load_config(write_config(tmp_path)))
+    context = RunContext(load_config(write_config(tmp_path)), "Level1")
     database = JsonDatabase(tmp_path / "database.json")
     database.set("engine-version:FakeGame-v0", engine_version())
     database.set("database-fingerprint:FakeGame-v0", None)
@@ -69,7 +69,7 @@ def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_pa
     agents, ui = [], []
     monkeypatch.setattr(network_module.laya, "load", fake_laya_load)
     monkeypatch.setattr(trainer_module, "configure_accelerator", lambda: "cpu")
-    monkeypatch.setattr(trainer_module, "make_environment", lambda wrapper, config: env)
+    monkeypatch.setattr(trainer_module, "make_environment", lambda wrapper, config, savestate: env)
     monkeypatch.setattr(identity_module, "perform_model_reset", lambda request: None)
     monkeypatch.setattr(trainer_module, "configure_history", lambda *args, **kwargs: ui.append("history"))
     monkeypatch.setattr(trainer_module, "start_ui", lambda settings, root: ui.append(root))
@@ -167,3 +167,30 @@ def test_full_and_successful_runs_stay_available_as_replays():
 
     assert [replay["id"] for replay in feed.latest_episode()["replays"]] == [1, 2]
     assert feed.episode_frames(generation, 1, 0)[0]["status"] == {"timesteps": 1}
+
+
+def test_trainer_rotates_through_the_levels_until_a_reset(tmp_path: Path, monkeypatch):
+    config_path = write_config(tmp_path)
+    config_path.write_text(config_path.read_text().replace("[Level1]", "[Level1, Level2]"), encoding="utf-8")
+    levels, outcomes = [], iter([None, None, "reset"])
+    monkeypatch.setattr(network_module.laya, "load", fake_laya_load)
+    monkeypatch.setattr(trainer_module, "configure_accelerator", lambda: "cpu")
+    monkeypatch.setattr(identity_module, "perform_model_reset", lambda request: None)
+
+    def make(wrapper, config, savestate):
+        levels.append(savestate)
+        return fake_environment(tmp_path / savestate, [(3, 0)])
+
+    def stop(request):
+        raise StopTraining
+
+    monkeypatch.setattr(trainer_module, "make_environment", make)
+    monkeypatch.setattr(trainer_module.TrainingSession, "run", lambda session: next(outcomes))
+    monkeypatch.setattr(trainer_module, "perform_model_reset", stop)
+    trainer = trainer_module.LayaTrainer(FakeWrapper, config_path)
+
+    with pytest.raises(StopTraining):
+        trainer.train()
+
+    assert levels == ["Level1", "Level2", "Level1"]
+    assert trainer.context.model_dir.name == "Level1"

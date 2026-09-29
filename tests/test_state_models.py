@@ -33,7 +33,7 @@ class SwappingAgent:
 
 def test_every_state_trains_and_keeps_its_own_model(tmp_path: Path):
     agent = SwappingAgent()
-    models = StateModels(agent, RunContext(load_config(write_config(tmp_path))), ("Survive", "Boss"))
+    models = StateModels(agent, RunContext(load_config(write_config(tmp_path)), "Level1"), ("Survive", "Boss"))
 
     models.activate("Survive")
     agent.weights = "survivor"
@@ -52,7 +52,7 @@ def test_every_state_trains_and_keeps_its_own_model(tmp_path: Path):
 
 def test_the_following_state_is_prefetched_and_wraps_around(tmp_path: Path):
     agent = SwappingAgent()
-    models = StateModels(agent, RunContext(load_config(write_config(tmp_path))), ("Survive", "Boss"))
+    models = StateModels(agent, RunContext(load_config(write_config(tmp_path)), "Level1"), ("Survive", "Boss"))
     models.activate("Boss")
     agent.weights = "boss"
     models.save()
