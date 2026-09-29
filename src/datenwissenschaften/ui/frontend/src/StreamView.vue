@@ -20,6 +20,7 @@ const RELOAD_DEADLINE_MS = 90000
 const RELOAD_SETTLE_MS = 15000
 const RELOAD_RETRY_MS = 5000
 const CLOCK_INTERVAL_MS = 1000
+const HIDDEN_SIGHTINGS = new Set(['nearest_powerup'])
 const clock = new Intl.DateTimeFormat('en-GB', { timeZone: STREAM_TIME_ZONE, dateStyle: 'medium', timeStyle: 'medium' })
 
 const live = ref({})
@@ -165,7 +166,8 @@ const areasReached = computed(() => story.value.phases.filter(item => item.reach
 const probabilities = computed(() => Object.entries(live.value.probabilities || {}))
 const confidence = computed(() => Math.max(0, ...probabilities.value.map(([, p]) => p)))
 const isSighting = value => Boolean(value) && typeof value === 'object' && 'visible' in value
-const sightings = computed(() => Object.entries(live.value.ram || {}).filter(([, value]) => isSighting(value)))
+const sightings = computed(() => Object.entries(live.value.ram || {})
+  .filter(([name, value]) => isSighting(value) && !HIDDEN_SIGHTINGS.has(name)))
 const ramState = computed(() => Object.entries(live.value.ram || {})
   .filter(([name, value]) => !isSighting(value) && name !== 'snake_visible'))
 
