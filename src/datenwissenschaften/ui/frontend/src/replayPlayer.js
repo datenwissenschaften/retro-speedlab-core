@@ -22,6 +22,7 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
   let bitmaps = new Map()
   let startedAt = null
   let shown = -1
+  let repeating = false
   let timer
   let animation
 
@@ -32,15 +33,19 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
       onSummary(payload.summary)
       if (payload.generation !== generation) startGeneration(payload.generation)
       latest = payload.episode
-      if (!episode && latest && latest.id !== lastPlayedId) begin(latest)
+      if (latest && latest.id !== lastPlayedId && (!episode || repeating)) begin(latest)
     } catch {
       onConnection(false)
     }
   }
 
-  const release = () => {
+  const closeBitmaps = () => {
     bitmaps.forEach(bitmap => bitmap?.close())
     bitmaps = new Map()
+  }
+
+  const release = () => {
+    closeBitmaps()
     frames = []
   }
 
@@ -58,6 +63,7 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
     episode = next
     startedAt = null
     shown = -1
+    repeating = false
     onEpisode(next)
     download(next)
   }
@@ -65,10 +71,15 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
   const finish = () => {
     onEpisodeEnd(episode)
     lastPlayedId = episode.id
-    release()
-    episode = null
     if (latest && latest.id !== lastPlayedId) begin(latest)
-    else onWaiting()
+    else repeat()
+  }
+
+  const repeat = () => {
+    closeBitmaps()
+    startedAt = null
+    shown = -1
+    repeating = true
   }
 
   const download = async target => {
@@ -126,7 +137,7 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
     decodeAhead(index)
     const bitmap = bitmaps.get(index)
     if (index === shown || !bitmap) return
-    const passed = frames.slice(shown + 1, index + 1).map(frame => frame.status)
+    const passed = repeating ? [] : frames.slice(shown + 1, index + 1).map(frame => frame.status)
     shown = index
     onFrame({ bitmap, status: frames[index].status, passed, progress: index / episode.frame_count })
   }
