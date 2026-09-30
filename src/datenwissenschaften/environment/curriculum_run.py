@@ -7,8 +7,9 @@ from datenwissenschaften.ui.telemetry import publish_metadata
 
 
 class CurriculumRun:
-    def __init__(self, root: Path, state_names: tuple[str, ...]) -> None:
+    def __init__(self, root: Path, state_names: tuple[str, ...], level: str) -> None:
         self.root = root
+        self.level = level
         self.state_names = state_names
         self.curriculum = ReverseCurriculum(root, state_names)
         self.start_state = state_names[0]
@@ -85,7 +86,9 @@ class CurriculumRun:
         self.segment_return = 0.0 if transitioned else self.segment_return + reward
 
     def publish(self) -> None:
-        publish_metadata("savestate_curriculum", self.curriculum.progress(), replace=True)
+        progress = self.curriculum.progress()
+        publish_metadata("savestate_curriculum", progress, replace=True)
+        publish_metadata("curricula", {self.level: progress})
 
     def _record_success(self) -> bool:
         if self.outcome_recorded:

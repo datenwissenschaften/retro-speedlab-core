@@ -122,7 +122,7 @@ def test_checkpoint_hook_saves_and_publishes_metadata(context: RunContext, monke
 
 def test_live_stream_hook_records_every_frame_of_an_episode_with_its_result(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(story_book, "publish_metadata", lambda *args, **kwargs: None)
-    teller = StoryTeller(StoryBook(JsonDatabase(tmp_path / "db.json"), "FakeGame-v0", ("Survive", "Boss")))
+    teller = StoryTeller(StoryBook(JsonDatabase(tmp_path / "db.json"), "FakeGame-v0", "Level1", ("Survive", "Boss")))
     feed = LiveFeed()
     best_scores = iter([None, 3.0])
     monkeypatch.setattr(live_stream_hook, "live_feed", feed)

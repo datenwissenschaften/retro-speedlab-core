@@ -137,7 +137,7 @@ class FakeWrapper(StateMachineGymWrapper[FakeRam]):
 
 def fake_environment(tmp_path: Path, script: list[tuple[int, int]]) -> FakeWrapper:
     emulator = FakeEmulator(tmp_path / "recordings", script)
-    curriculum = CurriculumRun(tmp_path / "curriculum", ("Survive", "Boss"))
+    curriculum = CurriculumRun(tmp_path / "curriculum", ("Survive", "Boss"), "Level1")
     return FakeWrapper(emulator, curriculum, Landmarks(tmp_path / "landmarks.json"), "Level1")
 
 

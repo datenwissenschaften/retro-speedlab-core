@@ -4,7 +4,8 @@ from pathlib import Path
 import torch
 
 from datenwissenschaften.accelerator import configure_accelerator
-from datenwissenschaften.environment.factory import make_environment
+from datenwissenschaften.environment.curriculum_run import CurriculumRun
+from datenwissenschaften.environment.factory import curriculum_root, make_environment, state_names
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.laya.agent import LayaAgent
 from datenwissenschaften.laya.network import LayaNetwork
@@ -19,7 +20,7 @@ from datenwissenschaften.training.live_stream_hook import LiveStreamHook
 from datenwissenschaften.training.rotation import Rotation
 from datenwissenschaften.training.session import TrainingSession
 from datenwissenschaften.training.state_models import StateModels
-from datenwissenschaften.training.story_book import StoryBook, level_identity
+from datenwissenschaften.training.story_book import StoryBook
 from datenwissenschaften.training.story_teller import StoryTeller
 from datenwissenschaften.training.telemetry_hook import TelemetryHook
 from datenwissenschaften.training.upload_hook import UploadHook
@@ -44,6 +45,7 @@ class LayaTrainer:
         rotation = Rotation(database, training.game_identity, training.savestates, training.rotation_minutes)
         while True:
             savestate, seconds = rotation.next()
+            self._publish_levels(database)
             self.context = RunContext(self.config, savestate)
             env = make_environment(self.wrapper_cls, self.config, savestate)
             identity = TrainingIdentity(self.context, database)
@@ -62,13 +64,18 @@ class LayaTrainer:
         models = self._models()
         self._publish_run()
         publish_metadata("model", model_metadata(models), replace=True)
-        identity = level_identity(self.config.training.game_identity, self.context.savestate)
-        story = StoryBook(database, identity, self._phases())
+        story = StoryBook(database, self.config.training.game_identity, self.context.savestate, self._phases())
         deadline = time.monotonic() + seconds
         try:
             return TrainingSession(env, models, self._hooks(env, models, StoryTeller(story)), deadline).run()
         finally:
             models.close()
+
+    def _publish_levels(self, database: JsonDatabase) -> None:
+        training = self.config.training
+        for savestate in training.savestates:
+            StoryBook(database, training.game_identity, savestate, self._phases())
+            CurriculumRun(curriculum_root(self.config, savestate), state_names(self.wrapper_cls), savestate)
 
     def _phases(self) -> tuple[str, ...]:
         classes = (self.wrapper_cls.start_state_cls, *self.wrapper_cls.state_classes)

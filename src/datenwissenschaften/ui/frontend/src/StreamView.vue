@@ -158,9 +158,10 @@ onBeforeUnmount(() => {
 
 const release = computed(() => snapshot.value.server?.release || null)
 const run = computed(() => snapshot.value.metadata?.run || {})
-const summary = computed(() => snapshot.value.summary?.by_savestate?.[run.value.savestate] || {})
-const story = computed(() => snapshot.value.metadata?.story || { phases: [], danger: [] })
-const curriculum = computed(() => snapshot.value.metadata?.savestate_curriculum || {})
+const level = computed(() => live.value.level || run.value.savestate || '')
+const summary = computed(() => snapshot.value.summary?.by_savestate?.[level.value] || {})
+const story = computed(() => snapshot.value.metadata?.stories?.[level.value] || { phases: [], danger: [] })
+const curriculum = computed(() => snapshot.value.metadata?.curricula?.[level.value] || {})
 const phase = computed(() => live.value.training_state || story.value.phases[0]?.name || '')
 const areasReached = computed(() => story.value.phases.filter(item => item.reached).length)
 const probabilities = computed(() => Object.entries(live.value.probabilities || {}))
@@ -208,7 +209,7 @@ watch(() => live.value.ram, (current, previous) => {
           </div>
           <dl class="run-info-grid">
             <div class="run-info-row"><dt>Game</dt><dd>{{ run.game || 'Waiting' }}</dd></div>
-            <div class="run-info-row"><dt>Level</dt><dd>{{ run.savestate || '—' }}</dd></div>
+            <div class="run-info-row"><dt>Level</dt><dd>{{ level || '—' }}</dd></div>
             <div class="run-info-row"><dt>Model</dt><dd>Laya {{ release || '—' }}</dd></div>
           </dl>
         </aside>
@@ -222,7 +223,7 @@ watch(() => live.value.ram, (current, previous) => {
           <span v-if="!sightings.length" class="game-cover-loading">Waiting for the first attempt</span>
         </section>
 
-        <SpotlightPanel :danger="story.danger" />
+        <SpotlightPanel :danger="story.danger" :level="level" />
       </div>
 
       <div class="stream-screen">

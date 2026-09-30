@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import stable_retro as retro
 
 from datenwissenschaften.environment.curriculum_run import CurriculumRun
@@ -18,7 +20,14 @@ def make_environment(
     record_dir = config.paths.record_dir / training.game / savestate
     record_dir.mkdir(parents=True, exist_ok=True)
     env = retro.make(training.game, savestate, render_mode="rgb_array", record=str(record_dir))
-    curriculum_root = config.paths.cache_dir / "automatic_savestates" / training.game_identity / savestate
-    state_names = tuple(state_cls.__name__ for state_cls in wrapper_cls.state_classes)
-    curriculum = CurriculumRun(curriculum_root, state_names)
-    return wrapper_cls(env, curriculum, Landmarks(curriculum_root / LANDMARKS_FILE), savestate)
+    root = curriculum_root(config, savestate)
+    curriculum = CurriculumRun(root, state_names(wrapper_cls), savestate)
+    return wrapper_cls(env, curriculum, Landmarks(root / LANDMARKS_FILE), savestate)
+
+
+def curriculum_root(config: RetroSpeedlabConfig, savestate: str) -> Path:
+    return config.paths.cache_dir / "automatic_savestates" / config.training.game_identity / savestate
+
+
+def state_names(wrapper_cls: type[StateMachineGymWrapper]) -> tuple[str, ...]:
+    return tuple(state_cls.__name__ for state_cls in wrapper_cls.state_classes)

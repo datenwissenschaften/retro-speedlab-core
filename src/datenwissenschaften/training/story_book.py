@@ -41,9 +41,10 @@ def empty_story() -> dict[str, Any]:
 
 
 class StoryBook:
-    def __init__(self, database: JsonDatabase, identity: str, phases: tuple[str, ...]) -> None:
+    def __init__(self, database: JsonDatabase, identity: str, level: str, phases: tuple[str, ...]) -> None:
         self.database = database
-        self.key = story_key(identity)
+        self.key = story_key(level_identity(identity, level))
+        self.level = level
         self.phases = phases
         self.data = self._load()
         self.publish()
@@ -77,7 +78,7 @@ class StoryBook:
         self.publish()
 
     def publish(self) -> None:
-        publish_metadata("story", self.view(), replace=True)
+        publish_metadata("stories", {self.level: self.view()})
 
     def view(self) -> dict[str, Any]:
         return {

@@ -8,7 +8,7 @@ from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.training import story_book
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
-from datenwissenschaften.training.story_book import DANGER_CELL, StoryBook, label, story_key
+from datenwissenschaften.training.story_book import DANGER_CELL, StoryBook, label, level_identity, story_key
 from datenwissenschaften.training.story_teller import QUIET_STEPS, StoryTeller
 
 PHASES = ("FindDoor", "OpenDoor")
@@ -17,7 +17,7 @@ PHASES = ("FindDoor", "OpenDoor")
 @pytest.fixture
 def published(monkeypatch) -> list[dict]:
     views = []
-    monkeypatch.setattr(story_book, "publish_metadata", lambda section, values, replace: views.append(values))
+    monkeypatch.setattr(story_book, "publish_metadata", lambda section, values: views.append((section, values)))
     return views
 
 
@@ -45,7 +45,7 @@ def test_labels_read_like_words():
 
 
 def test_first_visit_of_a_phase_is_a_milestone_and_later_ones_are_progress(tmp_path: Path, published):
-    teller = StoryTeller(StoryBook(JsonDatabase(tmp_path / "db.json"), "Game", PHASES))
+    teller = StoryTeller(StoryBook(JsonDatabase(tmp_path / "db.json"), "Game", "Level1", PHASES))
 
     teller.observe(_transition({"weight": 1}, (0, 0), "FindDoor", None), 1)
     first = teller.observe(_transition({"weight": 1}, (0, 0), "OpenDoor", ("FindDoor", "OpenDoor")), 1)
@@ -56,7 +56,7 @@ def test_first_visit_of_a_phase_is_a_milestone_and_later_ones_are_progress(tmp_p
 
 
 def test_falling_back_to_an_earlier_phase_is_told_as_a_setback(tmp_path: Path, published):
-    teller = StoryTeller(StoryBook(JsonDatabase(tmp_path / "db.json"), "Game", PHASES))
+    teller = StoryTeller(StoryBook(JsonDatabase(tmp_path / "db.json"), "Game", "Level1", PHASES))
     teller.observe(_transition({"weight": 1}, (0, 0), "OpenDoor", None), 1)
 
     back = teller.observe(_transition({"weight": 1}, (0, 0), "FindDoor", ("OpenDoor", "FindDoor")), 1)
@@ -65,7 +65,7 @@ def test_falling_back_to_an_earlier_phase_is_told_as_a_setback(tmp_path: Path, p
 
 
 def test_only_quiet_facts_become_events(tmp_path: Path, published):
-    teller = StoryTeller(StoryBook(JsonDatabase(tmp_path / "db.json"), "Game", PHASES))
+    teller = StoryTeller(StoryBook(JsonDatabase(tmp_path / "db.json"), "Game", "Level1", PHASES))
     teller.observe(_transition({"weight": 1, "time": 90, "door": False}, (0, 0), "FindDoor", None), 1)
 
     changed = teller.observe(_transition({"weight": 2, "time": 89, "door": True}, (0, 0), "FindDoor", None), 1)
@@ -80,14 +80,14 @@ def test_only_quiet_facts_become_events(tmp_path: Path, published):
 
 def test_failures_are_counted_and_persisted(tmp_path: Path, published):
     database = JsonDatabase(tmp_path / "db.json")
-    teller = StoryTeller(StoryBook(database, "Game", PHASES))
+    teller = StoryTeller(StoryBook(database, "Game", "Level1", PHASES))
     teller.observe(_transition({}, (40, 20), "FindDoor", None), 1)
 
     first = teller.finish(_episode("FindDoor", False), False, "jpeg-1")
     teller.observe(_transition({}, (40, 20), "FindDoor", None), 2)
     second = teller.finish(_episode("FindDoor", True), True, "jpeg-2")
 
-    view = StoryBook(database, "Game", PHASES).view()
+    view = StoryBook(database, "Game", "Level1", PHASES).view()
     assert first == [{"kind": "bad", "text": "Attempt over in Find Door", "detail": "#1 today"}]
     assert second == [{"kind": "good", "text": "New best score!", "detail": "0.0 points"}]
     assert view["phases"][0] == {
@@ -98,12 +98,12 @@ def test_failures_are_counted_and_persisted(tmp_path: Path, published):
     }
     assert view["phases"][1]["reached"] is False
     assert view["danger"] == [{"phase": "Find Door", "count": 1, "image": "jpeg-1"}]
-    assert published[-1] == view
-    assert database.contains(story_key("Game"))
+    assert published[-1] == ("stories", {"Level1": view})
+    assert database.contains(story_key(level_identity("Game", "Level1")))
 
 
 def test_danger_spots_rank_places_by_recent_failures_with_their_latest_picture(tmp_path: Path, published):
-    book = StoryBook(JsonDatabase(tmp_path / "db.json"), "Game", PHASES)
+    book = StoryBook(JsonDatabase(tmp_path / "db.json"), "Game", "Level1", PHASES)
     near, far = (10, 10), (10 + 4 * DANGER_CELL, 10)
 
     for index in range(3):
@@ -120,9 +120,9 @@ def test_danger_spots_rank_places_by_recent_failures_with_their_latest_picture(t
 
 def test_a_story_in_an_older_format_is_replaced(tmp_path: Path, published):
     database = JsonDatabase(tmp_path / "db.json")
-    database.set(story_key("Game"), {"reached": {"FindDoor": 3}, "visits": {}, "ends": {}})
+    database.set(story_key(level_identity("Game", "Level1")), {"reached": {"FindDoor": 3}, "visits": {}, "ends": {}})
 
-    view = StoryBook(database, "Game", PHASES).view()
+    view = StoryBook(database, "Game", "Level1", PHASES).view()
 
     assert view["danger"] == []
     assert view["phases"][0]["reached"] is False

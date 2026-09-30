@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = defineProps({
+  level: { type: String, required: true },
   danger: { type: Array, required: true },
 })
 
@@ -22,7 +23,7 @@ const loadVideos = async () => {
   }
 }
 
-const best = computed(() => videos.value.reduce((top, video) => (!top || video.score > top.score ? video : top), null))
+const best = computed(() => videos.value.filter(video => video.savestate === props.level).reduce((top, video) => (!top || video.score > top.score ? video : top), null))
 const phaseLabel = name => name.replace(/([a-z])([A-Z])/g, '$1 $2')
 const age = recordedAt => {
   const minutes = Math.round((Date.now() - new Date(recordedAt).getTime()) / MINUTE_MS)

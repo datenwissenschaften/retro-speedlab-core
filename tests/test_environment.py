@@ -91,7 +91,7 @@ def test_reset_resumes_from_the_active_curriculum_checkpoint(tmp_path: Path):
 
 
 def test_a_new_checkpoint_remembers_the_score_that_reached_it(tmp_path: Path):
-    run = CurriculumRun(tmp_path, ("Survive", "Boss"))
+    run = CurriculumRun(tmp_path, ("Survive", "Boss"), "Level1")
     run.begin_episode()
     run.add_reward(3.0, False)
 
@@ -101,7 +101,7 @@ def test_a_new_checkpoint_remembers_the_score_that_reached_it(tmp_path: Path):
 
 
 def test_falling_back_to_an_earlier_state_is_no_curriculum_success(tmp_path: Path):
-    run = CurriculumRun(tmp_path, ("Survive", "Boss"))
+    run = CurriculumRun(tmp_path, ("Survive", "Boss"), "Level1")
     run.curriculum.save_checkpoint("Boss", b"boss", 0.0)
     run.begin_episode()
     run.start_state = "Boss"
@@ -125,7 +125,7 @@ def test_every_action_needs_a_description(tmp_path: Path):
     with pytest.raises(ValueError, match="description"):
         Undescribed(
             FakeEmulator(tmp_path, [(3, 0)]),
-            CurriculumRun(tmp_path, ("Survive",)),
+            CurriculumRun(tmp_path, ("Survive",), "Level1"),
             Landmarks(tmp_path / "landmarks.json"),
             "Level1",
         )
@@ -138,7 +138,7 @@ def test_actions_must_be_button_sequences(tmp_path: Path):
     with pytest.raises(ValueError, match="frames"):
         Flat(
             FakeEmulator(tmp_path, [(3, 0)]),
-            CurriculumRun(tmp_path, ("Survive",)),
+            CurriculumRun(tmp_path, ("Survive",), "Level1"),
             Landmarks(tmp_path / "landmarks.json"),
             "Level1",
         )
@@ -199,7 +199,7 @@ def test_what_a_state_sees_becomes_part_of_layas_text(tmp_path: Path):
 
     env = SeeingWrapper(
         FakeEmulator(tmp_path, [(3, 0), (3, 1)]),
-        CurriculumRun(tmp_path, ("Seeing", "Boss")),
+        CurriculumRun(tmp_path, ("Seeing", "Boss"), "Level1"),
         Landmarks(tmp_path / "landmarks.json"),
         "Level1",
     )
