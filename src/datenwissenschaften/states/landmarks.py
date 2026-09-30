@@ -2,6 +2,7 @@ from math import dist
 from pathlib import Path
 
 from datenwissenschaften.persistence import JsonDatabase
+from datenwissenschaften.states.safety_map import SafetyMap
 
 Location = tuple[int, int]
 
@@ -14,6 +15,7 @@ class Landmarks:
     def __init__(self, path: Path) -> None:
         self.path = path
         self.database = JsonDatabase(path)
+        self.safety = SafetyMap(self.database)
 
     def remember(self, label: str, location: Location) -> None:
         if not self.database.contains(label):
@@ -46,6 +48,7 @@ class Landmarks:
     def forget(self) -> None:
         self.path.unlink(missing_ok=True)
         self.database = JsonDatabase(self.path)
+        self.safety = SafetyMap(self.database)
 
     def _route(self, label: str) -> list[Location] | None:
         if not self.database.contains(ROUTE_PREFIX + label):

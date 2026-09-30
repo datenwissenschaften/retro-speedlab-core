@@ -51,3 +51,26 @@ def test_the_waypoint_follows_the_route_and_ends_at_the_landmark(tmp_path: Path)
 def test_small_steps_along_a_route_are_no_loop(tmp_path: Path):
     assert without_loops([(0, 0), (8, 0), (16, 0), (24, 6), (8, 10)]) == [(0, 0), (8, 10)]
     assert without_loops([(0, 0), (8, 0), (16, 0), (24, 0)]) == [(0, 0), (8, 0), (16, 0), (24, 0)]
+
+
+def test_the_safety_map_counts_danger_per_cell_and_survives_restarts(tmp_path: Path):
+    path = tmp_path / "landmarks.json"
+    landmarks = Landmarks(path)
+    landmarks.safety.mark("danger", (33, 40))
+    landmarks.safety.mark("danger", (47, 32))
+    landmarks.safety.mark("blocked", (-1, 0))
+
+    restarted = Landmarks(path).safety
+
+    assert restarted.count("danger", (40, 45)) == 2
+    assert restarted.count("danger", (48, 45)) == 0
+    assert restarted.count("blocked", (-16, 15)) == 1
+
+
+def test_forgetting_clears_the_safety_map(tmp_path: Path):
+    landmarks = Landmarks(tmp_path / "landmarks.json")
+    landmarks.safety.mark("danger", (0, 0))
+
+    landmarks.forget()
+
+    assert landmarks.safety.count("danger", (0, 0)) == 0
