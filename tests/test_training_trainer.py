@@ -13,6 +13,7 @@ from datenwissenschaften.training import trainer as trainer_module
 from datenwissenschaften.training import video_playback
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.identity import MODEL_LAYOUT, TrainingIdentity, engine_version
+from datenwissenschaften.ui import telemetry as telemetry_module
 from datenwissenschaften.ui.live import MAX_COMPLETED_EPISODES, MAX_FRAMES_PER_REQUEST, MAX_REPLAYS, LiveFeed
 
 LOST = {"score": 1.0, "won": False, "new_best": False, "full_run": False, "succeeded": False}
@@ -186,6 +187,12 @@ def test_trainer_rotates_through_the_levels_until_a_reset(tmp_path: Path, monkey
         raise StopTraining
 
     monkeypatch.setattr(trainer_module, "make_environment", make)
+    published = {}
+    monkeypatch.setattr(
+        telemetry_module._store,
+        "publish_metadata",
+        lambda section, values, **kwargs: published.setdefault(section, {}).update(values),
+    )
     monkeypatch.setattr(trainer_module.TrainingSession, "run", lambda session: next(outcomes))
     clock = iter(range(0, 100 * 3600, 3600))
     monkeypatch.setattr(rotation_module.time, "time", lambda: next(clock))
@@ -196,4 +203,6 @@ def test_trainer_rotates_through_the_levels_until_a_reset(tmp_path: Path, monkey
         trainer.train()
 
     assert levels == ["Level1", "Level2", "Level1"]
+    assert set(published["stories"]) == {"Level1", "Level2"}
+    assert set(published["curricula"]) == {"Level1", "Level2"}
     assert trainer.context.model_dir.name == "Level1"
