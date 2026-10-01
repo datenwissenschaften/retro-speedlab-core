@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build --outDir ../static --emptyOutDir",
-    "test": "node --test src/naming.test.js src/attempts.test.js src/runtime.test.js"
+    "test": "node --test src/naming.test.js src/attempts.test.js src/runtime.test.js src/replayPlayer.test.js"
   },
   "dependencies": {
     "dompurify": "^3.4.16",

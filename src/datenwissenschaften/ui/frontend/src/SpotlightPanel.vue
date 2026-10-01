@@ -1,10 +1,12 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { dangerNote, dangerTitle } from './attempts.js'
 import { words } from './naming.js'
 
 const props = defineProps({
   level: { type: String, required: true },
   danger: { type: Array, required: true },
+  failures: { type: Number, required: true },
   refresh: { type: Number, required: true },
 })
 
@@ -78,11 +80,11 @@ onBeforeUnmount(() => {
         <span class="sight-title">Danger spots</span>
         <ol class="danger-spots">
           <li v-for="(spot, index) in danger" :key="index">
-            <img :src="`data:image/jpeg;base64,${spot.image}`" alt="Where attempts fail" />
-            <span><b>Failed here {{ spot.count }}×</b>{{ words(spot.phase) }}</span>
+            <img :src="`data:image/jpeg;base64,${spot.image}`" alt="Last frame of a failed attempt" />
+            <span><b>{{ dangerTitle(spot) }}</b>{{ spot.phase }}</span>
           </li>
         </ol>
-        <span class="spotlight-note">Where the last 100 failed attempts ended</span>
+        <span class="spotlight-note">{{ dangerNote(failures, danger.some(spot => spot.located)) }}</span>
       </div>
     </Transition>
   </section>

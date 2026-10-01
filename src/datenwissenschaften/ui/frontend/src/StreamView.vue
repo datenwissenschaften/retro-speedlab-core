@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ProgressPath from './ProgressPath.vue'
-import { arrivalBanner, createArrivalTracker, holdsBest, newlyMastered, recentAttempts, resultBanner } from './attempts.js'
+import { arrivalBanner, createArrivalTracker, holdsBest, inProgressLine, newlyMastered, recentAttempts, resultBanner, status } from './attempts.js'
 import { gameTitle, words } from './naming.js'
 import { createObsControl, STREAM_TIME_ZONE } from './obsControl.js'
 import { createReplayPlayer } from './replayPlayer.js'
@@ -32,7 +32,7 @@ const replayEpisode = ref(null)
 const latestEpisode = ref(null)
 const recentScores = ref([])
 const banner = ref(null)
-const firstWatch = ref(false)
+const inProgress = ref(null)
 const bestRefresh = ref(0)
 const waiting = ref(true)
 const replayProgress = ref(0)
@@ -139,7 +139,6 @@ const player = createReplayPlayer({
   onEpisode: (episode, replay, generation) => {
     replayEpisode.value = episode
     waiting.value = false
-    firstWatch.value = !replay
     if (arrived(generation, episode, replay)) showArrival(episode)
   },
   onWaiting: () => {
@@ -150,9 +149,10 @@ const player = createReplayPlayer({
     show(resultBanner(episode, levelBest(episode.result.level)), false)
     reloadIfPending()
   },
-  onLatest: (episode, summary) => {
+  onLatest: (episode, summary, running) => {
     latestEpisode.value = episode
     recentScores.value = summary.recent_scores || []
+    inProgress.value = running
   },
   onConnection: online => { connected.value = online },
 })
@@ -198,15 +198,11 @@ const summary = computed(() => snapshot.value.summary?.by_savestate?.[level.valu
 const story = computed(() => snapshot.value.metadata?.stories?.[level.value] || { phases: [], danger: [] })
 const levelBest = savestate => snapshot.value.summary?.by_savestate?.[savestate]?.best_fitness ?? null
 const recent = computed(() => recentAttempts(latestEpisode.value, recentScores.value, levelBest(latestEpisode.value?.result.level), RECENT_ATTEMPTS))
-const status = computed(() => {
-  if (!connected.value) return 'Offline'
-  if (banner.value) return banner.value.arrival ? 'New' : 'Result'
-  if (!replayEpisode.value) return 'Waiting'
-  return firstWatch.value ? 'Latest' : 'Replay'
-})
+const replayStatus = computed(() => status(connected.value, banner.value, replayEpisode.value))
+const progressLine = computed(() => connected.value ? inProgressLine(replayEpisode.value, inProgress.value) : null)
 const replayIsBest = computed(() => replayEpisode.value !== null && holdsBest(replayEpisode.value, levelBest(replayEpisode.value.result.level)))
 const learningFor = computed(() => snapshot.value.started_at ? elapsed(snapshot.value.started_at, now.value) : '—')
-const agentName = computed(() => snapshot.value.metadata?.model?.display_name || '—')
+const agentName = computed(() => [snapshot.value.server?.code_agent, snapshot.value.metadata?.model?.display_name].filter(Boolean).join(' + ') || '—')
 const areasReached = computed(() => story.value.phases.filter(item => item.reached).length)
 const probabilities = computed(() => Object.entries(live.value.probabilities || {}))
 const confidence = computed(() => Math.max(0, ...probabilities.value.map(([, p]) => p)))
@@ -247,13 +243,13 @@ watch(() => live.value.ram, (current, previous) => {
         <aside class="run-info-panel">
           <div class="run-info-brand">
             <img class="run-info-logo" src="/logo.png" alt="Retro Speedlab" />
-            <span :class="['run-info-kicker', { fresh: banner?.arrival }]">{{ status }}</span>
+            <span :class="['run-info-kicker', { fresh: banner?.arrival }]">{{ replayStatus }}</span>
           </div>
           <div class="run-info-medal">
             <span class="run-info-medal-icon">🧠</span>
             <span>
               <strong class="run-info-medal-title">Attempt {{ replayEpisode ? `#${replayEpisode.result.attempt} · ${words(replayEpisode.result.level)}` : '—' }}</strong>
-              <span v-if="connected && replayEpisode" class="replay-badge">Next attempt in progress</span>
+              <span v-if="progressLine" class="replay-badge">{{ progressLine }}</span>
               <span v-if="replayIsBest" class="replay-badge best">★ Best so far</span>
               <span class="replay-track"><span :style="{ width: percent(replayProgress) }"></span></span>
             </span>
@@ -287,7 +283,7 @@ watch(() => live.value.ram, (current, previous) => {
           </div>
         </section>
 
-        <SpotlightPanel :danger="story.danger" :level="level" :refresh="bestRefresh" />
+        <SpotlightPanel :danger="story.danger" :failures="story.failures || 0" :level="level" :refresh="bestRefresh" />
       </div>
 
       <div class="stream-screen">

@@ -40,11 +40,11 @@ class StoryTeller:
         self.facts, self.location = None, None
         events = []
         if episode.won:
-            events.append(event("milestone", "Level cleared!", f"{episode.score:.1f} points"))
+            events.append(event("milestone", "Attempt won!", f"reward {episode.score:.1f}"))
         elif not succeeded:
             events.append(event("bad", f"Attempt over in {label(episode.final_state)}", f"#{failures_today} today"))
         if new_best:
-            events.append(event("good", "New best score!", f"{episode.score:.1f} points"))
+            events.append(event("good", "New best reward!", f"reward {episode.score:.1f}"))
         return events
 
     def _transition_event(self, previous: str, current: str, attempt: int) -> Event:

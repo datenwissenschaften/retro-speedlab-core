@@ -89,7 +89,7 @@ def test_failures_are_counted_and_persisted(tmp_path: Path, published):
 
     view = StoryBook(database, "Game", "Level1", PHASES).view()
     assert first == [{"kind": "bad", "text": "Attempt over in Find Door", "detail": "#1 today"}]
-    assert second == [{"kind": "good", "text": "New best score!", "detail": "0.0 points"}]
+    assert second == [{"kind": "good", "text": "New best reward!", "detail": "reward 0.0"}]
     assert view["phases"][0] == {
         "name": "FindDoor",
         "label": "Find Door",
@@ -97,7 +97,8 @@ def test_failures_are_counted_and_persisted(tmp_path: Path, published):
         "first_attempt": 1,
     }
     assert view["phases"][1]["reached"] is False
-    assert view["danger"] == [{"phase": "Find Door", "count": 1, "image": "jpeg-1"}]
+    assert view["failures"] == 1
+    assert view["danger"] == [{"phase": "Find Door", "located": True, "count": 1, "image": "jpeg-1"}]
     assert published[-1] == ("stories", {"Level1": view})
     assert database.contains(story_key(level_identity("Game", "Level1")))
 
@@ -111,10 +112,30 @@ def test_danger_spots_rank_places_by_recent_failures_with_their_latest_picture(t
     book.finish("FindDoor", False, far, "far")
     book.finish("OpenDoor", False, None, "door")
 
-    assert [(spot["count"], spot["image"]) for spot in book.view()["danger"]] == [
-        (3, "near-2"),
-        (1, "far"),
-        (1, "door"),
+    view = book.view()
+    assert view["failures"] == 5
+    assert [(spot["count"], spot["located"], spot["image"]) for spot in view["danger"]] == [
+        (3, True, "near-2"),
+        (1, True, "far"),
+        (1, False, "door"),
+    ]
+
+
+def test_the_danger_window_keeps_only_the_most_recent_failures(tmp_path: Path, published):
+    book = StoryBook(JsonDatabase(tmp_path / "db.json"), "Game", "Level1", PHASES)
+
+    for index in range(story_book.DANGER_WINDOW + 5):
+        book.finish("FindDoor", False, None, f"frame-{index}")
+
+    view = book.view()
+    assert view["failures"] == story_book.DANGER_WINDOW
+    assert view["danger"] == [
+        {
+            "phase": "Find Door",
+            "located": False,
+            "count": story_book.DANGER_WINDOW,
+            "image": f"frame-{story_book.DANGER_WINDOW + 4}",
+        }
     ]
 
 

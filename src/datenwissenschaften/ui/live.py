@@ -65,6 +65,7 @@ class LiveFeed:
                 "generation": self._generation,
                 "episode": _overview(self._episodes[-1]) if self._episodes else None,
                 "replays": [_overview(episode) for episode in self._replays],
+                "in_progress": _in_progress(self._recording[-1]["status"]) if self._recording else None,
                 "summary": dict(self._summary),
             }
 
@@ -77,6 +78,10 @@ class LiveFeed:
                     frames = episode["frames"][start : start + MAX_FRAMES_PER_REQUEST]
                     return [{"image": frame["image"], "status": dict(frame["status"])} for frame in frames]
         raise KeyError(episode_id)
+
+
+def _in_progress(status: dict[str, Any]) -> dict[str, Any]:
+    return {"attempt": status["attempt"], "level": status["level"]}
 
 
 def _overview(episode: dict[str, Any]) -> dict[str, Any]:

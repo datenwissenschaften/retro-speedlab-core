@@ -144,7 +144,7 @@ def test_live_stream_hook_records_every_frame_of_an_episode_with_its_result(monk
     assert (status["action"], status["probabilities"]["right"]) == ("right", 0.7)
     assert (status["ram"], status["episode_reward"]) == ({"lives": 3}, 2.0)
     assert first[-1]["status"]["events"][0]["text"] == "Attempt over in Survive"
-    assert second[-1]["status"]["events"][-1]["text"] == "New best score!"
+    assert second[-1]["status"]["events"][-1]["text"] == "New best reward!"
     latest = feed.latest_episode()
     assert latest["episode"]["frame_rate"] == 50.0
     assert latest["episode"]["result"] == {

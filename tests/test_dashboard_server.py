@@ -31,6 +31,7 @@ def _ui_settings(*, port: int = 0, enabled: bool = True) -> UISettings:
         max_episodes=10,
         release="2026.09.28-4",
         persona="Retra",
+        code_agent="Claude",
         twitch=True,
     )
 
@@ -204,6 +205,7 @@ def test_live_endpoints_serve_the_latest_finished_episode_in_chunks(monkeypatch)
         "result": result,
     }
     assert [replay["id"] for replay in latest["replays"]] == [7]
+    assert latest["in_progress"] is None
     assert [frame["status"]["timesteps"] for frame in frames["frames"]] == [2]
     assert missing.status == 404
     assert outdated.status == 404
@@ -462,3 +464,16 @@ def test_the_persona_tag_is_six_cool_characters_stable_per_release():
 
     assert len(tag) == 6 and tag.isalnum() and tag.islower()
     assert tag == persona_tag("2026.10.01-3") != persona_tag("2026.10.01-4")
+
+
+def test_the_attempt_being_played_is_reported_until_it_finishes():
+    feed = LiveFeed()
+    assert feed.latest_episode()["in_progress"] is None
+
+    feed.record(b"one", {"attempt": 6, "level": "Level1"})
+    assert feed.latest_episode()["in_progress"] == {"attempt": 6, "level": "Level1"}
+
+    result = {"attempt": 6, "level": "Level1", "full_run": True, "succeeded": False}
+    feed.finish_episode(5, 60.0, result, {"recent_scores": []})
+    assert feed.latest_episode()["in_progress"] is None
+    assert feed.latest_episode()["episode"]["result"]["attempt"] == 6

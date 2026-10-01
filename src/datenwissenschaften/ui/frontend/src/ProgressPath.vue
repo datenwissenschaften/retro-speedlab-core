@@ -10,7 +10,7 @@ const props = defineProps({
 const phases = savestate => Object.values(props.curricula[savestate] || {})
 const learning = savestate => phases(savestate).find(phase => !phase.mastered)
 const mastered = savestate => phases(savestate).length > 0 && !learning(savestate)
-const clearedWidth = savestate => {
+const winWidth = savestate => {
   const all = phases(savestate)
   if (!all.length) return '0%'
   const open = learning(savestate)
@@ -24,7 +24,7 @@ const note = savestate => {
   if (!open) return status
   const all = phases(savestate)
   const part = all.length > 1 ? ` · part ${all.indexOf(open) + 1}/${all.length}` : ''
-  return `${status} · ${open.wins} / ${open.win_target} clears${part}`
+  return `${status} · ${open.wins} / ${open.win_target} wins${part}`
 }
 </script>
 
@@ -39,7 +39,7 @@ const note = savestate => {
       >
         <span class="path-dot">{{ mastered(savestate) ? '✓' : index + 1 }}</span>
         <strong class="path-label">{{ words(savestate) }}</strong>
-        <span class="path-skill"><span :style="{ width: clearedWidth(savestate) }"></span></span>
+        <span class="path-skill"><span :style="{ width: winWidth(savestate) }"></span></span>
         <small class="path-note">{{ note(savestate) }}</small>
       </li>
     </ol>

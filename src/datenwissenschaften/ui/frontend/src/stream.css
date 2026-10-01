@@ -312,8 +312,8 @@
 .arrival-banner { position: absolute; top: 12px; left: 12px; z-index: 45; display: grid; gap: 3px; padding: 8px 14px; background: rgba(6, 4, 15, 0.88); border: 2px solid var(--secondary); border-radius: 8px; box-shadow: 0 0 18px rgba(41, 240, 255, 0.4); }
 .arrival-banner strong { color: var(--text-strong); font-family: var(--font-display); font-size: 0.72rem; line-height: 1.6; text-transform: uppercase; }
 .arrival-banner span { color: var(--secondary); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-.arrival-banner.best, .arrival-banner.cleared { border-color: var(--primary); box-shadow: 0 0 22px rgba(255, 79, 163, 0.6); }
-.arrival-banner.best strong, .arrival-banner.cleared strong { color: #ffd84f; text-shadow: 0 0 12px rgba(255, 216, 79, 0.6); }
+.arrival-banner.best, .arrival-banner.won { border-color: var(--primary); box-shadow: 0 0 22px rgba(255, 79, 163, 0.6); }
+.arrival-banner.best strong, .arrival-banner.won strong { color: #ffd84f; text-shadow: 0 0 12px rgba(255, 216, 79, 0.6); }
 
 .spotlight-panel { transition: border-color 0.4s ease, box-shadow 0.4s ease; }
 .spotlight-panel.fresh { border-color: var(--primary); box-shadow: var(--panel-shadow), 0 0 24px rgba(255, 79, 163, 0.55); }

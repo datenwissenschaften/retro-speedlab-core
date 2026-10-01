@@ -17,7 +17,7 @@ const alignedScores = (episode, recentScores) =>
 
 export const arrivalOutcome = (episode, recentScores) => {
   const { result } = episode
-  if (result.won) return { kind: 'cleared' }
+  if (result.won) return { kind: 'won' }
   if (result.new_best) return { kind: 'best' }
   const scores = alignedScores(episode, recentScores)
   if (scores && scores.length > 1 && result.score > scores.at(-2)) return { kind: 'improved', previous: scores.at(-2) }
@@ -52,16 +52,37 @@ export const holdsBest = (episode, levelBest) => levelBest != null && episode.re
 
 export const arrivalBanner = (episode, recentScores) => {
   const outcome = arrivalOutcome(episode, recentScores)
-  const { attempt, level, score } = episode.result
-  if (outcome.kind === 'cleared') return { kind: 'cleared', title: `★ ${words(level)} cleared`, detail: `#${attempt} · ${reward(score)}` }
+  const { attempt, score } = episode.result
+  if (outcome.kind === 'won') return { kind: 'won', title: '★ Attempt won', detail: `#${attempt} · ${reward(score)}` }
   if (outcome.kind === 'best') return { kind: 'best', title: '★ New best attempt', detail: `#${attempt} · ${reward(score)}` }
   const detail = outcome.kind === 'improved' ? `${reward(score)} · up from ${outcome.previous.toFixed(1)}` : reward(score)
   return { kind: 'arrival', title: `New attempt · #${attempt}`, detail }
 }
 
 export const resultBanner = (episode, levelBest) => {
-  const { attempt, level, score, won } = episode.result
-  if (won) return { kind: 'cleared', title: `★ ${words(level)} cleared`, detail: `#${attempt} · ${reward(score)}` }
+  const { attempt, score, won } = episode.result
+  if (won) return { kind: 'won', title: '★ Attempt won', detail: `#${attempt} · ${reward(score)}` }
   if (holdsBest(episode, levelBest)) return { kind: 'best', title: `Result · #${attempt}`, detail: `${reward(score)} · ★ best so far` }
   return { kind: 'result', title: `Result · #${attempt}`, detail: reward(score) }
+}
+
+export const status = (connected, banner, replayed) => {
+  if (!connected) return 'Offline'
+  if (banner?.arrival) return 'New'
+  return replayed ? 'Replay' : 'Waiting'
+}
+
+export const inProgressLine = (replayed, inProgress) => {
+  if (!inProgress) return null
+  const { attempt, level } = inProgress
+  if (replayed && replayed.result.level === level && replayed.result.attempt + 1 === attempt) return 'Next attempt in progress'
+  const where = replayed && replayed.result.level !== level ? `${words(level)} · ` : ''
+  return `${where}Attempt #${attempt} in progress`
+}
+
+export const dangerTitle = spot => spot.located ? `Failed here ${spot.count}×` : `Failed ${spot.count}×`
+
+export const dangerNote = (failures, located) => {
+  const attempts = `last ${failures} failed ${failures === 1 ? 'attempt' : 'attempts'}`
+  return located ? `Where the ${attempts} ended` : `From the ${attempts}`
 }

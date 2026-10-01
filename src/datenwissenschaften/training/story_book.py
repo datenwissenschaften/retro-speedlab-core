@@ -83,9 +83,11 @@ class StoryBook:
     def view(self) -> dict[str, Any]:
         return {
             "phases": [self._phase_view(phase) for phase in self.phases],
+            "failures": len(self.data["failures"]),
             "danger": [
                 {
                     "phase": label(self.data["images"][spot]["phase"]),
+                    "located": spot != self.data["images"][spot]["phase"],
                     "count": count,
                     "image": self.data["images"][spot]["image"],
                 }

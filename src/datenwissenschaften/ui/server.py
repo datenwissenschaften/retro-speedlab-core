@@ -203,6 +203,7 @@ class _DashboardHandler(BaseHTTPRequestHandler):
                 "version": DATENWISSENSCHAFTEN_VERSION,
                 "release": settings.release,
                 "persona": settings.persona,
+                "code_agent": settings.code_agent,
                 "persona_tag": persona_tag(settings.release),
                 "twitch": settings.twitch,
             }

@@ -32,7 +32,7 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
       const payload = await fetchJson('/api/live/episode')
       onConnection(true)
       if (payload.generation !== generation) startGeneration(payload.generation)
-      onLatest(payload.episode, payload.summary)
+      onLatest(payload.episode, payload.summary, payload.in_progress)
       latest = payload.episode
       replays = payload.replays
       if (!episode && latest && latest.id !== shownLiveId) begin(latest, false)

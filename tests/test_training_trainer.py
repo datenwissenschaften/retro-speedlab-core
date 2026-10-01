@@ -120,10 +120,16 @@ def test_video_playback_imports_roms_and_replays_headless(monkeypatch, tmp_path:
 def test_live_feed_keeps_the_latest_finished_episodes_and_serves_them_in_chunks():
     feed = LiveFeed()
     generation = feed.latest_episode()["generation"]
-    assert feed.latest_episode() == {"generation": generation, "episode": None, "replays": [], "summary": {}}
+    assert feed.latest_episode() == {
+        "generation": generation,
+        "episode": None,
+        "replays": [],
+        "in_progress": None,
+        "summary": {},
+    }
     for episode_id in range(1, MAX_COMPLETED_EPISODES + 2):
         for index in range(MAX_FRAMES_PER_REQUEST + 5):
-            feed.record(b"jpeg", {"timesteps": index})
+            feed.record(b"jpeg", {"timesteps": index, "attempt": 1, "level": "Level1"})
         feed.finish_episode(episode_id, 60.0, LOST, {})
 
     newest = MAX_COMPLETED_EPISODES + 1
@@ -141,13 +147,13 @@ def test_live_feed_keeps_the_latest_finished_episodes_and_serves_them_in_chunks(
 
 def test_clearing_the_live_feed_starts_a_new_generation_without_old_frames():
     feed = LiveFeed()
-    feed.record(b"jpeg", {"timesteps": 1})
+    feed.record(b"jpeg", {"timesteps": 1, "attempt": 1, "level": "Level1"})
     feed.finish_episode(1, 60.0, LOST, {})
-    feed.record(b"half", {"timesteps": 2})
+    feed.record(b"half", {"timesteps": 2, "attempt": 1, "level": "Level1"})
     old = feed.latest_episode()["generation"]
 
     feed.clear()
-    feed.record(b"jpeg", {"timesteps": 3})
+    feed.record(b"jpeg", {"timesteps": 3, "attempt": 1, "level": "Level1"})
     feed.finish_episode(1, 60.0, LOST, {})
 
     latest = feed.latest_episode()
@@ -160,16 +166,16 @@ def test_clearing_the_live_feed_starts_a_new_generation_without_old_frames():
 def test_full_and_successful_runs_stay_available_as_replays():
     feed = LiveFeed()
     generation = feed.latest_episode()["generation"]
-    feed.record(b"jpeg", {"timesteps": 1})
+    feed.record(b"jpeg", {"timesteps": 1, "attempt": 1, "level": "Level1"})
     feed.finish_episode(1, 60.0, {**LOST, "full_run": True}, {})
-    feed.record(b"jpeg", {"timesteps": 2})
+    feed.record(b"jpeg", {"timesteps": 2, "attempt": 1, "level": "Level1"})
     feed.finish_episode(2, 60.0, {**LOST, "succeeded": True}, {})
     for episode_id in range(3, MAX_REPLAYS + MAX_COMPLETED_EPISODES + 3):
-        feed.record(b"jpeg", {"timesteps": episode_id})
+        feed.record(b"jpeg", {"timesteps": episode_id, "attempt": 1, "level": "Level1"})
         feed.finish_episode(episode_id, 60.0, LOST, {})
 
     assert [replay["id"] for replay in feed.latest_episode()["replays"]] == [1, 2]
-    assert feed.episode_frames(generation, 1, 0)[0]["status"] == {"timesteps": 1}
+    assert feed.episode_frames(generation, 1, 0)[0]["status"]["timesteps"] == 1
 
 
 def test_trainer_rotates_through_the_levels_until_a_reset(tmp_path: Path, monkeypatch):
