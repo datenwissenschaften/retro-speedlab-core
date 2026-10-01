@@ -17,6 +17,7 @@ def _document() -> dict[str, Any]:
             "recordings": "recordings",
             "cache": "cache",
             "database": "database.json",
+            "reports": "agent/reports",
         },
         "training": {
             "game": "TestGame",
@@ -32,6 +33,7 @@ def _document() -> dict[str, Any]:
             "port": 18080,
             "max_episodes": 1000,
             "release": "local",
+            "persona": "Retra",
         },
         "log_level": "info",
     }

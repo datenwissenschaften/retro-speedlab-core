@@ -25,3 +25,9 @@ footer{text-align:center;color:#4e5865;font:11px 'DM Mono',monospace;text-transf
 .modal-backdrop{position:fixed;z-index:20;inset:0;background:#030508d9;backdrop-filter:blur(6px);display:grid;place-items:center;padding:24px}.reset-dialog{width:min(480px,100%);padding:24px;box-shadow:0 30px 90px #000b;border-color:#4b2928}.reset-dialog h2{font-size:24px;margin:7px 0 12px}.reset-dialog>p:not(.eyebrow):not(.error){color:#9da7b4;font-size:14px;line-height:1.7}.danger-text{color:#ff817a}.dialog-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:22px}.cancel-button{color:#aeb7c2;background:#161c24;border:1px solid #303a46}.confirm-reset{color:#fff;background:#702d29;border:1px solid #a64a44}
 @media(max-width:1300px){.kpis{grid-template-columns:repeat(2,1fr)}.detail-card dl{grid-template-columns:minmax(85px,25%) minmax(0,1fr)}}
 .stream-link{padding:7px 11px;border:1px solid #4a3a7a;background:#1a1530;color:#d8c6ff;border-radius:99px;font:600 12px 'DM Mono',monospace;text-transform:uppercase;letter-spacing:.08em;text-decoration:none}.stream-link:hover{background:#261e45}
+
+.report-body { padding: 16px 20px; overflow: auto; line-height: 1.55; }
+.report-body h1, .report-body h2, .report-body h3 { margin: 1em 0 0.4em; }
+.report-body pre { padding: 10px; overflow: auto; background: rgba(0, 0, 0, 0.25); border-radius: 6px; }
+.report-body table { border-collapse: collapse; }
+.report-body th, .report-body td { padding: 4px 8px; border: 1px solid rgba(255, 255, 255, 0.15); }

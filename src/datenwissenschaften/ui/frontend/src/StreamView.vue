@@ -157,6 +157,7 @@ onBeforeUnmount(() => {
 })
 
 const release = computed(() => snapshot.value.server?.release || null)
+const persona = computed(() => snapshot.value.server?.persona || '')
 const run = computed(() => snapshot.value.metadata?.run || {})
 const level = computed(() => live.value.level || run.value.savestate || '')
 const summary = computed(() => snapshot.value.summary?.by_savestate?.[level.value] || {})
@@ -210,7 +211,7 @@ watch(() => live.value.ram, (current, previous) => {
           <dl class="run-info-grid">
             <div class="run-info-row"><dt>Game</dt><dd>{{ run.game || 'Waiting' }}</dd></div>
             <div class="run-info-row"><dt>Level</dt><dd>{{ level || '—' }}</dd></div>
-            <div class="run-info-row"><dt>Model</dt><dd>Laya {{ release || '—' }}</dd></div>
+            <div class="run-info-row"><dt>Model</dt><dd>{{ persona }} {{ release || '—' }}</dd></div>
           </dl>
         </aside>
 
@@ -232,7 +233,7 @@ watch(() => live.value.ram, (current, previous) => {
         <Transition name="fade">
           <div v-if="waiting" class="stream-waiting">
             <span class="stream-waiting-kicker">Next replay loading</span>
-            <strong class="stream-waiting-title">Laya trains<span class="stream-waiting-dots"><i>.</i><i>.</i><i>.</i></span></strong>
+            <strong class="stream-waiting-title">{{ persona }} trains<span class="stream-waiting-dots"><i>.</i><i>.</i><i>.</i></span></strong>
             <span class="stream-waiting-copy">The next attempt appears here as soon as it is finished.</span>
             <dl class="stream-waiting-stats">
               <div><dt>Attempts</dt><dd>{{ fmt(summary.episodes) }}</dd></div>

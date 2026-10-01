@@ -10,6 +10,7 @@ import pytest
 from datenwissenschaften.settings import UISettings
 from datenwissenschaften.ui import server as server_module
 from datenwissenschaften.ui.live import LiveFeed
+from datenwissenschaften.ui.reports import list_reports, read_report
 from datenwissenschaften.ui.server import (
     DashboardServer,
     _redact_config_secrets,
@@ -28,6 +29,7 @@ def _ui_settings(*, port: int = 0, enabled: bool = True) -> UISettings:
         port=port,
         max_episodes=10,
         release="2026.09.28-4",
+        persona="Retra",
     )
 
 
@@ -40,7 +42,7 @@ def _running_server(monkeypatch, *, runtime=None, store=None, control_metadata=N
     if request_model_reset is not None:
         monkeypatch.setattr(server_module, "request_model_reset", request_model_reset)
 
-    server = DashboardServer(_ui_settings(), Path.cwd() if runtime is None else runtime.record_dir)
+    server = DashboardServer(_ui_settings(), Path.cwd() if runtime is None else runtime.record_dir, Path.cwd())
     server.start()
     try:
         yield server
@@ -219,7 +221,7 @@ def test_snapshot_endpoint_merges_control_and_server_metadata(monkeypatch):
     assert payload["control"]["game"] == "Game"
     assert "csrf_token" in payload["control"]
     assert payload["server"]["bind_address"] == "127.0.0.1:0"
-    assert payload["server"]["release"] == "2026.09.28-4"
+    assert (payload["server"]["release"], payload["server"]["persona"]) == ("2026.09.28-4", "Retra")
 
 
 def test_sources_endpoint_lists_generated_files(monkeypatch, tmp_path: Path):
@@ -401,7 +403,7 @@ def test_handler_ignores_client_disconnects_but_not_other_errors(monkeypatch):
 def test_start_ui_returns_none_when_disabled(monkeypatch):
     monkeypatch.setattr(server_module, "_server", None)
 
-    assert server_module.start_ui(_ui_settings(enabled=False), Path.cwd()) is None
+    assert server_module.start_ui(_ui_settings(enabled=False), Path.cwd(), Path.cwd()) is None
 
 
 def test_start_ui_starts_and_reuses_the_singleton_server(monkeypatch):
@@ -409,9 +411,9 @@ def test_start_ui_starts_and_reuses_the_singleton_server(monkeypatch):
     store = SimpleNamespace(resize=lambda _max_episodes: None)
     monkeypatch.setattr(server_module, "get_store", lambda: store)
 
-    server = server_module.start_ui(_ui_settings(), Path.cwd())
+    server = server_module.start_ui(_ui_settings(), Path.cwd(), Path.cwd())
     try:
-        again = server_module.start_ui(_ui_settings(), Path.cwd())
+        again = server_module.start_ui(_ui_settings(), Path.cwd(), Path.cwd())
         assert again is server
     finally:
         server.stop()
@@ -428,13 +430,26 @@ def test_start_ui_returns_none_and_logs_when_the_port_is_taken(monkeypatch):
         blocker.listen(1)
         taken_port = blocker.getsockname()[1]
 
-        result = server_module.start_ui(_ui_settings(port=taken_port), Path.cwd())
+        result = server_module.start_ui(_ui_settings(port=taken_port), Path.cwd(), Path.cwd())
 
     assert result is None
     assert server_module._server is None
 
 
 def test_dashboard_server_start_and_stop_lifecycle():
-    server = DashboardServer(_ui_settings(), Path.cwd())
+    server = DashboardServer(_ui_settings(), Path.cwd(), Path.cwd())
     server.start()
     server.stop()
+
+
+def test_daily_reports_are_listed_newest_first_and_served_safely(tmp_path):
+    (tmp_path / "2026-10-01.md").write_text("# First", encoding="utf-8")
+    (tmp_path / "2026-10-02.md").write_text("# Second", encoding="utf-8")
+    (tmp_path / "notes.txt").write_text("ignored", encoding="utf-8")
+
+    assert [report["name"] for report in list_reports(tmp_path)] == ["2026-10-02.md", "2026-10-01.md"]
+    assert read_report(tmp_path, "2026-10-02.md") == {"name": "2026-10-02.md", "content": "# Second"}
+    assert list_reports(tmp_path / "missing") == []
+    for name in ("../secret.md", "notes.txt", "absent.md"):
+        with pytest.raises(FileNotFoundError):
+            read_report(tmp_path, name)

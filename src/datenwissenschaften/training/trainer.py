@@ -118,7 +118,7 @@ class LayaTrainer:
         )
         if self.ui_started:
             return
-        start_ui(ui, self.context.record_root)
+        start_ui(ui, self.context.record_root, self.config.paths.reports_dir)
         self.ui_started = True
 
     def _publish_run(self) -> None:

@@ -7,7 +7,9 @@
     "build": "vite build --outDir ../static --emptyOutDir"
   },
   "dependencies": {
+    "dompurify": "^3.4.16",
     "highlight.js": "^11.11.1",
+    "marked": "^18.0.14",
     "vue": "^3.5.17"
   },
   "devDependencies": {

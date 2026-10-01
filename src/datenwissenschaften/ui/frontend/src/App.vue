@@ -5,6 +5,8 @@ import ini from 'highlight.js/lib/languages/ini'
 import plaintext from 'highlight.js/lib/languages/plaintext'
 import python from 'highlight.js/lib/languages/python'
 import yaml from 'highlight.js/lib/languages/yaml'
+import DOMPurify from 'dompurify'
+import { marked } from 'marked'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 hljs.registerLanguage('dockerfile', dockerfile)
@@ -83,6 +85,33 @@ const loadSources = async () => {
   }
 }
 
+const reports = ref([])
+const selectedReport = ref(null)
+const reportError = ref('')
+const renderedReport = computed(() => selectedReport.value ? DOMPurify.sanitize(marked.parse(selectedReport.value.content)) : '')
+
+const loadReport = async name => {
+  reportError.value = ''
+  try {
+    const response = await fetch(`/api/report?name=${encodeURIComponent(name)}`, { cache: 'no-store' })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    selectedReport.value = await response.json()
+  } catch (reason) {
+    reportError.value = reason.message
+  }
+}
+
+const loadReports = async () => {
+  try {
+    const response = await fetch('/api/reports', { cache: 'no-store' })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    reports.value = (await response.json()).reports
+    if (reports.value.length && !selectedReport.value) await loadReport(reports.value[0].name)
+  } catch (reason) {
+    reportError.value = reason.message
+  }
+}
+
 const loadRolloutVideos = async () => {
   try {
     const response = await fetch('/api/rollout-videos', { cache: 'no-store' })
@@ -94,9 +123,9 @@ const loadRolloutVideos = async () => {
 }
 
 onMounted(() => {
-  load(); loadSources(); loadRolloutVideos()
+  load(); loadSources(); loadRolloutVideos(); loadReports()
   timer = window.setInterval(load, 1500)
-  mediaTimer = window.setInterval(loadRolloutVideos, 5000)
+  mediaTimer = window.setInterval(() => { loadRolloutVideos(); loadReports() }, 5000)
 })
 onBeforeUnmount(() => { window.clearInterval(timer); window.clearInterval(mediaTimer) })
 
@@ -298,7 +327,7 @@ const label = key => key.replaceAll('_', ' ')
 
     <section class="observatory-section">
       <div class="section-heading">
-        <div><p class="eyebrow">TRAINING ENGINE</p><h2>Runtime and learning system</h2><p>The game Laya plays and the Laya model making every decision.</p></div>
+        <div><p class="eyebrow">TRAINING ENGINE</p><h2>Runtime and learning system</h2><p>The game {{ server.persona }} plays and the Laya model making every decision.</p></div>
       </div>
       <div class="details-grid system-grid two-column">
       <article class="panel detail-card">
@@ -310,6 +339,32 @@ const label = key => key.replaceAll('_', ' ')
         <dl><template v-for="([key, value]) in entries(laya)" :key="key"><dt>{{ label(key) }}</dt><dd>{{ display(value) }}</dd></template></dl>
       </article>
       </div>
+    </section>
+
+    <section class="panel source-browser">
+      <div class="source-browser-heading">
+        <div><p class="eyebrow">DAILY AGENT</p><h2>Reports</h2></div>
+        <span class="chip" :class="{ muted: !reports.length }">{{ reports.length }} reports</span>
+      </div>
+      <div v-if="reports.length" class="source-browser-body">
+        <nav class="source-files" aria-label="Daily reports">
+          <button
+            v-for="report in reports"
+            :key="report.name"
+            :class="{ active: selectedReport?.name === report.name }"
+            @click="loadReport(report.name)"
+          >
+            <strong>{{ report.name.replace('.md', '') }}</strong><small>{{ fmt(report.size) }} B</small>
+          </button>
+        </nav>
+        <article class="source-viewer report-viewer">
+          <header v-if="selectedReport"><strong>{{ selectedReport.name }}</strong><span>markdown</span></header>
+          <div v-if="selectedReport" class="report-body" v-html="renderedReport"></div>
+          <p v-else class="placeholder">Choose a report to read it.</p>
+        </article>
+      </div>
+      <p v-else-if="reportError" class="error">Reports could not be loaded: {{ reportError }}</p>
+      <p v-else class="placeholder">No daily report yet. The first one appears after the next daily run.</p>
     </section>
 
     <section class="panel source-browser">

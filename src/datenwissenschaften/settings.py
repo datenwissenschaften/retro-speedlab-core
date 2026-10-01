@@ -16,6 +16,7 @@ class RetroSpeedlabPaths:
     record_dir: Path
     cache_dir: Path
     database_path: Path
+    reports_dir: Path
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,7 @@ class UISettings:
     port: int
     max_episodes: int
     release: str
+    persona: str
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             record_dir=_path(document.paths.recordings, base_dir),
             cache_dir=_path(document.paths.cache, base_dir),
             database_path=_path(document.paths.database, base_dir),
+            reports_dir=_path(document.paths.reports, base_dir),
         ),
         training=TrainingSettings(
             game=_text(training.game, "training.game"),
@@ -94,6 +97,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             port=_port(ui.port),
             max_episodes=_positive_int(ui.max_episodes, "ui.max_episodes"),
             release=_text(ui.release, "ui.release"),
+            persona=_text(ui.persona, "ui.persona"),
         ),
         log_level=_text(document.log_level, "log_level").upper(),
     )

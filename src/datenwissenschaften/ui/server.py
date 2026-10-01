@@ -16,6 +16,7 @@ from loguru import logger
 from datenwissenschaften.settings import UISettings
 from datenwissenschaften.ui.control import control_metadata, request_model_reset
 from datenwissenschaften.ui.live import live_feed
+from datenwissenschaften.ui.reports import list_reports, read_report
 from datenwissenschaften.ui.telemetry import get_store
 
 
@@ -130,12 +131,13 @@ def rollout_video_path(record_root: Path, relative_path: str) -> Path:
 
 
 class DashboardServer:
-    def __init__(self, settings: UISettings, record_root: Path) -> None:
+    def __init__(self, settings: UISettings, record_root: Path, reports_dir: Path) -> None:
         self.settings = settings
         self._httpd = ThreadingHTTPServer((settings.host, settings.port), _DashboardHandler)
         self._httpd.csrf_token = secrets.token_urlsafe(32)
         self._httpd.ui_settings = settings
         self._httpd.record_root = record_root
+        self._httpd.reports_dir = reports_dir
         self._thread = threading.Thread(target=self._httpd.serve_forever, name="training-ui", daemon=True)
 
     def start(self) -> None:
@@ -150,7 +152,7 @@ _server: DashboardServer | None = None
 _server_lock = threading.Lock()
 
 
-def start_ui(settings: UISettings, record_root: Path) -> DashboardServer | None:
+def start_ui(settings: UISettings, record_root: Path, reports_dir: Path) -> DashboardServer | None:
     global _server
     if not settings.enabled:
         return None
@@ -159,7 +161,7 @@ def start_ui(settings: UISettings, record_root: Path) -> DashboardServer | None:
         if _server is not None:
             return _server
         try:
-            _server = DashboardServer(settings, record_root)
+            _server = DashboardServer(settings, record_root, reports_dir)
             _server.start()
         except OSError as error:
             logger.error(f"Could not start training UI on {settings.host}:{settings.port}: {error}")
@@ -199,6 +201,7 @@ class _DashboardHandler(BaseHTTPRequestHandler):
                 "bind_address": f"{settings.host}:{settings.port}",
                 "version": DATENWISSENSCHAFTEN_VERSION,
                 "release": settings.release,
+                "persona": settings.persona,
             }
             self._send_json(snapshot)
             return
@@ -228,6 +231,16 @@ class _DashboardHandler(BaseHTTPRequestHandler):
                 self._send_json(generated_source(requested))
             except (FileNotFoundError, OSError, UnicodeError):
                 self.send_error(HTTPStatus.NOT_FOUND, "Generated source file not found")
+            return
+        if path == "/api/reports":
+            self._send_json({"reports": list_reports(self.server.reports_dir)})
+            return
+        if path == "/api/report":
+            requested = parse_qs(request.query).get("name", [""])[0]
+            try:
+                self._send_json(read_report(self.server.reports_dir, requested))
+            except (FileNotFoundError, OSError, UnicodeError):
+                self.send_error(HTTPStatus.NOT_FOUND, "Report not found")
             return
         if path == "/api/rollout-videos":
             self._send_json({"videos": rollout_videos(self.server.record_root)})
