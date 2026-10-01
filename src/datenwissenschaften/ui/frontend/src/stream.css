@@ -293,3 +293,7 @@
 @keyframes stream-blink { 50% { opacity: 0.15; } }
 @keyframes stream-flash { from { color: var(--bg); background: var(--secondary); } }
 @keyframes stream-slam { from { transform: translate(-50%, -50%) scale(2); opacity: 0; } }
+
+.persona { position: absolute; right: 10px; bottom: 6px; width: 170px; height: 187px; z-index: 4; pointer-events: none; }
+.persona-avatar { position: absolute; inset: 0; }
+.persona-speech { position: absolute; right: 120px; bottom: 140px; width: max-content; max-width: 300px; margin: 0; padding: 9px 13px; color: var(--text-strong); background: rgba(12, 12, 18, 0.92); border: 1px solid var(--primary); border-radius: 14px 14px 2px 14px; font-size: 0.82rem; line-height: 1.35; box-shadow: 0 0 18px rgba(255, 79, 163, 0.35); }

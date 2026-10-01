@@ -10,6 +10,7 @@ import pytest
 from datenwissenschaften.settings import UISettings
 from datenwissenschaften.ui import server as server_module
 from datenwissenschaften.ui.live import LiveFeed
+from datenwissenschaften.ui.persona import persona_tag
 from datenwissenschaften.ui.reports import list_reports, read_report
 from datenwissenschaften.ui.server import (
     DashboardServer,
@@ -31,6 +32,8 @@ def _ui_settings(*, port: int = 0, enabled: bool = True) -> UISettings:
         release="2026.09.28-4",
         persona="Retra",
         twitch=True,
+        dialogs=False,
+        dialog_model="test/model:free",
     )
 
 
@@ -454,3 +457,10 @@ def test_daily_reports_are_listed_newest_first_and_served_safely(tmp_path):
     for name in ("../secret.md", "notes.txt", "absent.md"):
         with pytest.raises(FileNotFoundError):
             read_report(tmp_path, name)
+
+
+def test_the_persona_tag_is_six_cool_characters_stable_per_release():
+    tag = persona_tag("2026.10.01-3")
+
+    assert len(tag) == 6 and tag.isalnum() and tag.islower()
+    assert tag == persona_tag("2026.10.01-3") != persona_tag("2026.10.01-4")

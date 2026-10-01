@@ -1,9 +1,11 @@
 import json
 from collections import deque
+from typing import Any
 
 import cv2
 import numpy as np
 
+from datenwissenschaften.training.dialog import DialogWriter
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
 from datenwissenschaften.training.story_teller import StoryTeller
@@ -16,8 +18,9 @@ RECENT_SCORES = 120
 
 
 class LiveStreamHook:
-    def __init__(self, frame_rate: float, teller: StoryTeller, savestate: str) -> None:
+    def __init__(self, frame_rate: float, teller: StoryTeller, savestate: str, dialog: DialogWriter | None) -> None:
         self.frame_rate = frame_rate
+        self.dialog = dialog
         self.teller = teller
         self.savestate = savestate
         self.episode = episode_count() + 1
@@ -48,12 +51,18 @@ class LiveStreamHook:
         detections = transition.info["detections"]
         for frame in transition.frames:
             live_feed.record(self._jpeg(draw_detections(frame, detections)), status)
+        if status["events"]:
+            event = status["events"][-1]
+            self._comment(f"{event['text']} {event['detail']}", status)
 
     def on_episode_end(self, episode: EpisodeRecord) -> None:
         self.recent_scores.append(episode.score)
         previous_best = best_fitness(self.savestate)
         new_best = previous_best is not None and episode.score > previous_best
-        live_feed.add_events(self.teller.finish(episode, new_best, live_feed.last_image()))
+        endings = self.teller.finish(episode, new_best, live_feed.last_image())
+        live_feed.add_events(endings)
+        if endings:
+            self._comment(f"{endings[0]['text']} {endings[0]['detail']}", live_feed.last_status())
         result = {
             "score": episode.score,
             "won": episode.won,
@@ -67,6 +76,13 @@ class LiveStreamHook:
         self.episode += 1
         self.attempt += 1
         self.episode_reward = 0.0
+
+    def _comment(self, event: str, status: dict[str, Any]) -> None:
+        if self.dialog is None:
+            return
+        phase = status["training_state"]
+        situation = f"{event.strip()}. Level {self.savestate}, attempt {self.attempt}, phase {phase}."
+        self.dialog.comment(situation, lambda line: live_feed.say(status, line))
 
     def on_update(self) -> None:
         self.updates += 1

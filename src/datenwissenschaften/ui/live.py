@@ -29,6 +29,16 @@ class LiveFeed:
         with self._lock:
             self._recording.append({"image": base64.b64encode(jpeg).decode("ascii"), "status": status})
 
+    def say(self, status: dict[str, Any], line: str) -> None:
+        with self._lock:
+            status["dialog"] = line
+
+    def last_status(self) -> dict[str, Any]:
+        with self._lock:
+            if not self._recording:
+                raise RuntimeError("No frame has been recorded for this episode.")
+            return self._recording[-1]["status"]
+
     def last_image(self) -> str:
         with self._lock:
             if not self._recording:
@@ -68,7 +78,8 @@ class LiveFeed:
                 raise KeyError(generation)
             for episode in (*self._episodes, *self._replays):
                 if episode["id"] == episode_id:
-                    return episode["frames"][start : start + MAX_FRAMES_PER_REQUEST]
+                    frames = episode["frames"][start : start + MAX_FRAMES_PER_REQUEST]
+                    return [{"image": frame["image"], "status": dict(frame["status"])} for frame in frames]
         raise KeyError(episode_id)
 
 

@@ -129,7 +129,7 @@ def test_live_stream_hook_records_every_frame_of_an_episode_with_its_result(monk
     monkeypatch.setattr(live_stream_hook, "best_fitness", lambda savestate: next(best_scores))
     monkeypatch.setattr(live_stream_hook, "episode_count", lambda: 41)
     monkeypatch.setattr(live_stream_hook, "level_episode_count", lambda savestate: 6)
-    hook = live_stream_hook.LiveStreamHook(50.0, teller, "Level2")
+    hook = live_stream_hook.LiveStreamHook(50.0, teller, "Level2", None)
 
     hook.on_step(_transition())
     hook.on_update()

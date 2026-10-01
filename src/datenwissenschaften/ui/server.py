@@ -16,6 +16,7 @@ from loguru import logger
 from datenwissenschaften.settings import UISettings
 from datenwissenschaften.ui.control import control_metadata, request_model_reset
 from datenwissenschaften.ui.live import live_feed
+from datenwissenschaften.ui.persona import persona_tag
 from datenwissenschaften.ui.reports import list_reports, read_report
 from datenwissenschaften.ui.telemetry import get_store
 
@@ -202,6 +203,7 @@ class _DashboardHandler(BaseHTTPRequestHandler):
                 "version": DATENWISSENSCHAFTEN_VERSION,
                 "release": settings.release,
                 "persona": settings.persona,
+                "persona_tag": persona_tag(settings.release),
                 "twitch": settings.twitch,
             }
             self._send_json(snapshot)

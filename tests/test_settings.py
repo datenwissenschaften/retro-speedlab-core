@@ -35,7 +35,7 @@ def _document() -> dict[str, Any]:
             "release": "local",
             "persona": "Retra",
         },
-        "twitch": {"enabled": True},
+        "twitch": {"enabled": True, "dialogs": False, "dialog_model": "test/model:free"},
         "log_level": "info",
     }
 
