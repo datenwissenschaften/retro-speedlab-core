@@ -13,7 +13,7 @@ const fetchJson = async url => {
   return response.json()
 }
 
-export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting, onSummary, onConnection }) => {
+export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting, onLatest, onConnection }) => {
   let generation = null
   let latest = null
   let replays = []
@@ -31,8 +31,8 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
     try {
       const payload = await fetchJson('/api/live/episode')
       onConnection(true)
-      onSummary(payload.summary)
       if (payload.generation !== generation) startGeneration(payload.generation)
+      onLatest(payload.episode, payload.summary)
       latest = payload.episode
       replays = payload.replays
       if (!episode && latest && latest.id !== shownLiveId) begin(latest, false)
@@ -66,7 +66,7 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
     startedAt = null
     shown = -1
     replaying = replay
-    onEpisode(next, replay)
+    onEpisode(next, replay, generation)
     download(next)
   }
 
@@ -89,7 +89,7 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
     startedAt = null
     shown = -1
     replaying = true
-    onEpisode(episode, true)
+    onEpisode(episode, true, generation)
   }
 
   const download = async target => {

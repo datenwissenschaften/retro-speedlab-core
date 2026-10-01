@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "vite build --outDir ../static --emptyOutDir"
+    "build": "vite build --outDir ../static --emptyOutDir",
+    "test": "node --test src/naming.test.js src/attempts.test.js src/runtime.test.js"
   },
   "dependencies": {
     "dompurify": "^3.4.16",

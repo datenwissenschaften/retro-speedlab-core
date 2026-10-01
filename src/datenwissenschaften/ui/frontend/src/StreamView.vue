@@ -1,8 +1,11 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ProgressPath from './ProgressPath.vue'
+import { arrivalBanner, createArrivalTracker, holdsBest, newlyMastered, recentAttempts, resultBanner } from './attempts.js'
+import { gameTitle, words } from './naming.js'
 import { createObsControl, STREAM_TIME_ZONE } from './obsControl.js'
 import { createReplayPlayer } from './replayPlayer.js'
+import { elapsed } from './runtime.js'
 import SpotlightPanel from './SpotlightPanel.vue'
 import StoryTicker from './StoryTicker.vue'
 import './stream.css'
@@ -14,19 +17,23 @@ const TOAST_MS = 4500
 const TICKER_SIZE = 3
 const TICKER_MS = 8000
 const MAX_TICKER_BACKLOG = 6
-const SITE_URL = 'https://www.retrospeedlab.com'
-const SITE_LABEL = 'www.retrospeedlab.com'
 const RELOAD_DEADLINE_MS = 90000
 const RELOAD_SETTLE_MS = 15000
 const RELOAD_RETRY_MS = 5000
 const CLOCK_INTERVAL_MS = 1000
 const HIDDEN_SIGHTINGS = new Set(['nearest_powerup'])
+const BANNER_MS = 6000
+const RECENT_ATTEMPTS = 5
 const clock = new Intl.DateTimeFormat('en-GB', { timeZone: STREAM_TIME_ZONE, dateStyle: 'medium', timeStyle: 'medium' })
 
 const live = ref({})
 const screen = ref(null)
 const replayEpisode = ref(null)
-const isReplay = ref(false)
+const latestEpisode = ref(null)
+const recentScores = ref([])
+const banner = ref(null)
+const firstWatch = ref(false)
+const bestRefresh = ref(0)
 const waiting = ref(true)
 const replayProgress = ref(0)
 const snapshot = ref({ metadata: {}, summary: {} })
@@ -42,6 +49,8 @@ let eventKey = 0
 let snapshotTimer
 let clockTimer
 let toastTimer
+let bannerTimer
+const arrived = createArrivalTracker()
 let reloadTimer
 let loadedRelease = null
 let reloadPending = false
@@ -57,6 +66,16 @@ const readable = value => {
     return value.remembered ? `remembered · ${value.move}` : 'not visible'
   }
   return String(value)
+}
+const show = (next, arrival) => {
+  banner.value = { ...next, arrival, key: Date.now() }
+  window.clearTimeout(bannerTimer)
+  bannerTimer = window.setTimeout(() => { banner.value = null }, BANNER_MS)
+}
+const showArrival = episode => {
+  const next = arrivalBanner(episode, recentScores.value)
+  if (next.kind !== 'arrival') bestRefresh.value += 1
+  show(next, true)
 }
 const announce = (title, detail) => {
   toast.value = { title, detail, key: Date.now() }
@@ -117,17 +136,24 @@ const reload = async () => {
 const reloadIfPending = () => { if (reloadPending) reload() }
 const player = createReplayPlayer({
   onFrame: drawFrame,
-  onEpisode: (episode, replay) => {
+  onEpisode: (episode, replay, generation) => {
     replayEpisode.value = episode
-    isReplay.value = replay
     waiting.value = false
+    firstWatch.value = !replay
+    if (arrived(generation, episode, replay)) showArrival(episode)
   },
   onWaiting: () => {
     waiting.value = true
     reloadIfPending()
   },
-  onEpisodeEnd: reloadIfPending,
-  onSummary: () => {},
+  onEpisodeEnd: episode => {
+    show(resultBanner(episode, levelBest(episode.result.level)), false)
+    reloadIfPending()
+  },
+  onLatest: (episode, summary) => {
+    latestEpisode.value = episode
+    recentScores.value = summary.recent_scores || []
+  },
   onConnection: online => { connected.value = online },
 })
 const obsControl = createObsControl()
@@ -161,18 +187,26 @@ onMounted(() => {
 onBeforeUnmount(() => {
   player.stop(); obsControl.stop()
   window.removeEventListener('resize', fit)
-  window.clearInterval(snapshotTimer); window.clearInterval(clockTimer); window.clearTimeout(toastTimer); window.clearTimeout(reloadTimer)
+  window.clearInterval(snapshotTimer); window.clearInterval(clockTimer); window.clearTimeout(toastTimer); window.clearTimeout(bannerTimer); window.clearTimeout(reloadTimer)
 })
 
 const release = computed(() => snapshot.value.server?.release || null)
-const persona = computed(() => snapshot.value.server?.persona || '')
-const personaTag = computed(() => snapshot.value.server?.persona_tag || '')
 const run = computed(() => snapshot.value.metadata?.run || {})
 const level = computed(() => live.value.level || run.value.savestate || '')
+const levelTitle = computed(() => words(level.value))
 const summary = computed(() => snapshot.value.summary?.by_savestate?.[level.value] || {})
 const story = computed(() => snapshot.value.metadata?.stories?.[level.value] || { phases: [], danger: [] })
-const curriculum = computed(() => snapshot.value.metadata?.curricula?.[level.value] || {})
-const phase = computed(() => live.value.training_state || story.value.phases[0]?.name || '')
+const levelBest = savestate => snapshot.value.summary?.by_savestate?.[savestate]?.best_fitness ?? null
+const recent = computed(() => recentAttempts(latestEpisode.value, recentScores.value, levelBest(latestEpisode.value?.result.level), RECENT_ATTEMPTS))
+const status = computed(() => {
+  if (!connected.value) return 'Offline'
+  if (banner.value) return banner.value.arrival ? 'New' : 'Result'
+  if (!replayEpisode.value) return 'Waiting'
+  return firstWatch.value ? 'Latest' : 'Replay'
+})
+const replayIsBest = computed(() => replayEpisode.value !== null && holdsBest(replayEpisode.value, levelBest(replayEpisode.value.result.level)))
+const learningFor = computed(() => snapshot.value.started_at ? elapsed(snapshot.value.started_at, now.value) : '—')
+const agentName = computed(() => snapshot.value.metadata?.model?.display_name || '—')
 const areasReached = computed(() => story.value.phases.filter(item => item.reached).length)
 const probabilities = computed(() => Object.entries(live.value.probabilities || {}))
 const confidence = computed(() => Math.max(0, ...probabilities.value.map(([, p]) => p)))
@@ -194,6 +228,12 @@ watch(release, current => {
   reloadTimer = window.setTimeout(reload, RELOAD_DEADLINE_MS)
 })
 
+watch(() => snapshot.value.metadata?.curricula, (current, previous) => {
+  newlyMastered(previous, current).forEach(({ savestate, phase, phases, wins, winTarget }) => {
+    announce(`${phases > 1 ? `${words(savestate)} · ${words(phase)}` : words(savestate)} mastered`, `${wins} / ${winTarget} wins`)
+  })
+})
+
 watch(() => live.value.ram, (current, previous) => {
   if (!current || !previous) return
   changedFields.value = new Set(Object.keys(current).filter(key => JSON.stringify(current[key]) !== JSON.stringify(previous[key])))
@@ -207,51 +247,71 @@ watch(() => live.value.ram, (current, previous) => {
         <aside class="run-info-panel">
           <div class="run-info-brand">
             <img class="run-info-logo" src="/logo.png" alt="Retro Speedlab" />
-            <span class="run-info-kicker">{{ connected ? (isReplay ? 'Replay' : 'Live') : 'Offline' }}</span>
+            <span :class="['run-info-kicker', { fresh: banner?.arrival }]">{{ status }}</span>
           </div>
           <div class="run-info-medal">
             <span class="run-info-medal-icon">🧠</span>
             <span>
-              <strong class="run-info-medal-title">Attempt {{ replayEpisode ? `#${replayEpisode.result.attempt} · ${replayEpisode.result.level}` : '—' }}</strong>
-              <span v-if="isReplay" class="replay-badge">Replay · not live training</span>
+              <strong class="run-info-medal-title">Attempt {{ replayEpisode ? `#${replayEpisode.result.attempt} · ${words(replayEpisode.result.level)}` : '—' }}</strong>
+              <span v-if="connected && replayEpisode" class="replay-badge">Next attempt in progress</span>
+              <span v-if="replayIsBest" class="replay-badge best">★ Best so far</span>
               <span class="replay-track"><span :style="{ width: percent(replayProgress) }"></span></span>
             </span>
           </div>
           <dl class="run-info-grid">
-            <div class="run-info-row"><dt>Game</dt><dd>{{ run.game || 'Waiting' }}</dd></div>
-            <div class="run-info-row"><dt>Level</dt><dd>{{ level || '—' }}</dd></div>
-            <div class="run-info-row"><dt>Model</dt><dd>{{ persona }} {{ personaTag || '—' }}</dd></div>
+            <div class="run-info-row"><dt>Game</dt><dd>{{ run.game ? gameTitle(run.game) : 'Waiting' }}</dd></div>
+            <div class="run-info-row"><dt>Level</dt><dd>{{ levelTitle || '—' }}</dd></div>
+            <div class="run-info-row"><dt>Agent</dt><dd>{{ agentName }}</dd></div>
           </dl>
+          <span class="run-info-premise">Learning on its own · no objective given</span>
         </aside>
 
         <section class="sight-panel">
+          <span class="sight-title">Recent attempts</span>
+          <ol v-if="recent.length" class="recent-attempts">
+            <li v-for="bar in recent" :key="bar.attempt" :class="{ best: bar.best }">
+              <b>#{{ bar.attempt }}</b>
+              <span class="recent-bar"><span :style="{ width: percent(bar.width) }"></span></span>
+              <span class="recent-reward">{{ fmt(bar.score) }}</span>
+              <i>{{ bar.best ? '★' : '' }}</i>
+            </li>
+          </ol>
+          <span v-else class="game-cover-loading">Waiting for the first attempt</span>
+        </section>
+
+        <section v-if="sightings.length" class="sight-panel">
           <span class="sight-title">In sight</span>
           <div v-for="[name, value] in sightings" :key="name" :class="['sighting', { seen: value.visible }]">
             <strong>{{ label(name) }}</strong>
             <span>{{ readable(value) }}</span>
           </div>
-          <span v-if="!sightings.length" class="game-cover-loading">Waiting for the first attempt</span>
         </section>
 
-        <SpotlightPanel :danger="story.danger" :level="level" />
+        <SpotlightPanel :danger="story.danger" :level="level" :refresh="bestRefresh" />
       </div>
 
       <div class="stream-screen">
         <canvas ref="screen" class="stream-video" aria-label="Replayed gameplay"></canvas>
         <StoryTicker :events="tickerEvents" />
         <Transition name="fade">
+          <div v-if="banner" :key="banner.key" :class="['arrival-banner', banner.kind]">
+            <strong>{{ banner.title }}</strong>
+            <span>{{ banner.detail }}</span>
+          </div>
+        </Transition>
+        <Transition name="fade">
           <div v-if="snapshot.server && !twitch" class="stream-waiting">
             <span class="stream-waiting-kicker">Stream off</span>
             <strong class="stream-waiting-title">Twitch is disabled</strong>
-            <span class="stream-waiting-copy">Set twitch.enabled to true in config.yaml to stream the training.</span>
+            <span class="stream-waiting-copy">Set twitch.enabled to true in config.yaml to stream the experiment.</span>
           </div>
           <div v-else-if="waiting" class="stream-waiting">
             <span class="stream-waiting-kicker">Next replay loading</span>
-            <strong class="stream-waiting-title">{{ persona }} trains<span class="stream-waiting-dots"><i>.</i><i>.</i><i>.</i></span></strong>
+            <strong class="stream-waiting-title">{{ agentName }} keeps exploring<span class="stream-waiting-dots"><i>.</i><i>.</i><i>.</i></span></strong>
             <span class="stream-waiting-copy">The next attempt appears here as soon as it is finished.</span>
             <dl class="stream-waiting-stats">
               <div><dt>Attempts</dt><dd>{{ fmt(summary.episodes) }}</dd></div>
-              <div><dt>Best score</dt><dd>{{ fmt(summary.best_fitness, 1) }}</dd></div>
+              <div><dt>Best reward</dt><dd>{{ fmt(summary.best_fitness, 1) }}</dd></div>
               <div><dt>Areas reached</dt><dd>{{ areasReached }} / {{ story.phases.length }}</dd></div>
             </dl>
           </div>
@@ -259,15 +319,15 @@ watch(() => live.value.ram, (current, previous) => {
       </div>
 
       <aside class="stream-ad-panel brain-panel">
-        <strong class="stream-ad-title">Thinking</strong>
-        <span class="stream-ad-copy">“{{ live.question || 'Waiting for the first finished attempt…' }}”</span>
+        <strong class="stream-ad-title">Next move</strong>
+        <span class="stream-ad-copy">{{ probabilities.length ? `Choosing from ${probabilities.length} actions` : 'Waiting for the first finished attempt…' }}</span>
         <ul class="brain-options">
           <li v-for="[name, probability] in probabilities" :key="name" :class="{ chosen: name === live.action }">
             <div class="brain-option-label"><strong>{{ name }}</strong><b>{{ percent(probability) }}</b></div>
             <div class="brain-bar"><span :style="{ width: percent(probability) }"></span></div>
           </li>
         </ul>
-        <span class="stream-ad-url">{{ percent(confidence) }} sure · {{ probabilities.length }} options</span>
+        <span class="stream-ad-url">{{ percent(confidence) }} confidence · {{ probabilities.length }} actions</span>
         <dl class="brain-ram">
           <template v-for="[name, value] in ramState" :key="name">
             <dt>{{ label(name) }}</dt><dd :class="{ flash: changedFields.has(name) }">{{ readable(value) }}</dd>
@@ -276,13 +336,13 @@ watch(() => live.value.ram, (current, previous) => {
       </aside>
 
       <div class="stream-bottom">
-        <ProgressPath :phases="story.phases" :current="phase" :curriculum="curriculum" />
-        <a class="site-card" :href="SITE_URL" target="_blank" rel="noopener noreferrer">
-          <span class="sight-title">Train your own runner</span>
-          <strong class="site-url">{{ SITE_LABEL }}</strong>
-          <span class="site-score">Best score {{ fmt(summary.best_fitness, 1) }} · {{ fmt(summary.episodes) }} attempts</span>
+        <ProgressPath :savestates="run.savestates || []" :curricula="snapshot.metadata?.curricula || {}" :current="level" />
+        <section class="site-card">
+          <span class="sight-title">Experiment</span>
+          <strong class="site-url">Learning for {{ learningFor }}</strong>
+          <span class="site-score">{{ fmt(summary.episodes) }} {{ summary.episodes === 1 ? 'attempt' : 'attempts' }} · best reward {{ fmt(summary.best_fitness, 1) }}</span>
           <time class="site-clock">{{ clock.format(now) }}</time>
-        </a>
+        </section>
       </div>
 
       <Transition name="toast">

@@ -1,33 +1,46 @@
 <script setup>
+import { words } from './naming.js'
+
 const props = defineProps({
-  phases: { type: Array, required: true },
+  savestates: { type: Array, required: true },
+  curricula: { type: Object, required: true },
   current: { type: String, required: true },
-  curriculum: { type: Object, required: true },
 })
 
-const progress = phase => props.curriculum[phase.name] || { wins: 0, win_target: 1, mastered: false }
-const mastered = phase => progress(phase).mastered
-const beatenWidth = phase => `${Math.round((progress(phase).wins / progress(phase).win_target) * 100)}%`
-const note = phase => {
-  if (!phase.reached) return 'not reached yet'
-  if (mastered(phase)) return 'mastered'
-  return `beaten ${progress(phase).wins} of ${progress(phase).win_target}`
+const phases = savestate => Object.values(props.curricula[savestate] || {})
+const learning = savestate => phases(savestate).find(phase => !phase.mastered)
+const mastered = savestate => phases(savestate).length > 0 && !learning(savestate)
+const clearedWidth = savestate => {
+  const all = phases(savestate)
+  if (!all.length) return '0%'
+  const open = learning(savestate)
+  const done = all.filter(phase => phase.mastered).length + (open ? open.wins / open.win_target : 0)
+  return `${Math.round((done / all.length) * 100)}%`
+}
+const note = savestate => {
+  if (mastered(savestate)) return 'mastered'
+  const status = savestate === props.current ? 'learning' : 'not active'
+  const open = learning(savestate)
+  if (!open) return status
+  const all = phases(savestate)
+  const part = all.length > 1 ? ` · part ${all.indexOf(open) + 1}/${all.length}` : ''
+  return `${status} · ${open.wins} / ${open.win_target} clears${part}`
 }
 </script>
 
 <template>
   <section class="path-panel">
-    <span class="path-title">The journey</span>
+    <span class="path-title">Progress</span>
     <ol class="path-track">
       <li
-        v-for="(phase, index) in phases"
-        :key="phase.name"
-        :class="['path-node', { reached: phase.reached, current: phase.name === current, mastered: mastered(phase) }]"
+        v-for="(savestate, index) in savestates"
+        :key="savestate"
+        :class="['path-node', { reached: savestate === current || mastered(savestate), current: savestate === current, mastered: mastered(savestate) }]"
       >
-        <span class="path-dot">{{ mastered(phase) ? '✓' : phase.reached ? index + 1 : '?' }}</span>
-        <strong class="path-label">{{ phase.reached ? phase.label : 'Unknown' }}</strong>
-        <span class="path-skill"><span :style="{ width: beatenWidth(phase) }"></span></span>
-        <small class="path-note">{{ note(phase) }}</small>
+        <span class="path-dot">{{ mastered(savestate) ? '✓' : index + 1 }}</span>
+        <strong class="path-label">{{ words(savestate) }}</strong>
+        <span class="path-skill"><span :style="{ width: clearedWidth(savestate) }"></span></span>
+        <small class="path-note">{{ note(savestate) }}</small>
       </li>
     </ol>
   </section>
