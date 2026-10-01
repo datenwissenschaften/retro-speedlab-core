@@ -263,7 +263,7 @@ watch(() => live.value.ram, (current, previous) => {
         <StoryTicker :events="tickerEvents" />
         <div class="persona">
           <Transition name="fade"><p v-if="speech" :key="speech.key" class="persona-speech">{{ speech.text }}</p></Transition>
-          <RetraAvatar class="persona-avatar" :expression="expression" />
+          <RetraAvatar class="persona-avatar" :expression="expression" :name="persona" :tag="personaTag" />
         </div>
         <Transition name="fade">
           <div v-if="snapshot.server && !twitch" class="stream-waiting">
