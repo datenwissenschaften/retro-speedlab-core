@@ -1,4 +1,3 @@
-import os
 import time
 from pathlib import Path
 
@@ -15,7 +14,6 @@ from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.training.checkpoint_hook import CheckpointHook, model_metadata
 from datenwissenschaften.training.context import RunContext
-from datenwissenschaften.training.dialog import DialogWriter
 from datenwissenschaften.training.hooks import TrainingHook
 from datenwissenschaften.training.identity import TrainingIdentity
 from datenwissenschaften.training.live_stream_hook import LiveStreamHook
@@ -31,8 +29,6 @@ from datenwissenschaften.ui.control import ModelResetRequest, configure_training
 from datenwissenschaften.ui.live import live_feed
 from datenwissenschaften.ui.server import start_ui
 from datenwissenschaften.ui.telemetry import configure_history, level_full_run_wins, publish_metadata
-
-OPENROUTER_KEY = "OPENROUTER_API_KEY"
 
 
 class LayaTrainer:
@@ -100,7 +96,7 @@ class LayaTrainer:
         return StateModels(agent, self.context, self._phases())
 
     def _hooks(self, env: StateMachineGymWrapper, models: StateModels, teller: StoryTeller) -> list[TrainingHook]:
-        stream = [LiveStreamHook(env.unwrapped.em.get_screen_rate(), teller, self.context.savestate, self._dialog())]
+        stream = [LiveStreamHook(env.unwrapped.em.get_screen_rate(), teller, self.context.savestate)]
         return [
             *(stream if self.config.ui.twitch else []),
             TelemetryHook(self.context),
@@ -108,14 +104,6 @@ class LayaTrainer:
             BestVideoHook(self.context),
             UploadHook(self.context, models.agent),
         ]
-
-    def _dialog(self) -> DialogWriter | None:
-        ui = self.config.ui
-        if not ui.dialogs:
-            return None
-        if OPENROUTER_KEY not in os.environ:
-            raise RuntimeError(f"twitch.dialogs is on but {OPENROUTER_KEY} is not set.")
-        return DialogWriter(ui.persona, self.context.game, ui.dialog_models, os.environ[OPENROUTER_KEY])
 
     def _start_ui(self, identity: TrainingIdentity, env: StateMachineGymWrapper, database: JsonDatabase) -> None:
         ui = self.config.ui

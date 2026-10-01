@@ -48,8 +48,6 @@ class UISettings:
     release: str
     persona: str
     twitch: bool
-    dialogs: bool
-    dialog_models: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -102,8 +100,6 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             release=_text(ui.release, "ui.release"),
             persona=_text(ui.persona, "ui.persona"),
             twitch=_boolean(document.twitch.enabled, "twitch.enabled"),
-            dialogs=_boolean(document.twitch.dialogs, "twitch.dialogs"),
-            dialog_models=_texts(document.twitch.dialog_models, "twitch.dialog_models"),
         ),
         log_level=_text(document.log_level, "log_level").upper(),
     )

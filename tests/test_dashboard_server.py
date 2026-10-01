@@ -32,8 +32,6 @@ def _ui_settings(*, port: int = 0, enabled: bool = True) -> UISettings:
         release="2026.09.28-4",
         persona="Retra",
         twitch=True,
-        dialogs=False,
-        dialog_models=("test/model:free",),
     )
 
 

@@ -2,7 +2,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ProgressPath from './ProgressPath.vue'
 import { createObsControl, STREAM_TIME_ZONE } from './obsControl.js'
-import RetraAvatar from './RetraAvatar.vue'
 import { createReplayPlayer } from './replayPlayer.js'
 import SpotlightPanel from './SpotlightPanel.vue'
 import StoryTicker from './StoryTicker.vue'
@@ -75,27 +74,7 @@ const showQueued = () => {
     }, TICKER_MS)
   }
 }
-const expression = ref('focused')
-const speech = ref(null)
-let expressionTimer
-let speechTimer
-const MOOD_MS = 3500
-const SPEECH_MS = 6500
-const LOST = /lives down|attempt over|back to/i
-const feel = item => {
-  if (item.kind === 'milestone') expression.value = 'cheer'
-  else if (item.kind === 'good') expression.value = 'happy'
-  else expression.value = LOST.test(item.text) ? 'sad' : 'shocked'
-  window.clearTimeout(expressionTimer)
-  expressionTimer = window.setTimeout(() => { expression.value = 'focused' }, MOOD_MS)
-}
-const say = text => {
-  speech.value = { text, key: Date.now() }
-  window.clearTimeout(speechTimer)
-  speechTimer = window.setTimeout(() => { speech.value = null }, SPEECH_MS)
-}
 const tell = item => {
-  feel(item)
   tickerQueue.push({ ...item, key: eventKey += 1 })
   tickerQueue.splice(0, Math.max(0, tickerQueue.length - MAX_TICKER_BACKLOG))
   showQueued()
@@ -105,7 +84,6 @@ const tellStep = status => {
   if (status.step === lastStep) return
   lastStep = status.step
   status.events.forEach(tell)
-  if (status.dialog) say(status.dialog)
 }
 
 const drawFrame = frame => {
@@ -261,10 +239,6 @@ watch(() => live.value.ram, (current, previous) => {
       <div class="stream-screen">
         <canvas ref="screen" class="stream-video" aria-label="Replayed gameplay"></canvas>
         <StoryTicker :events="tickerEvents" />
-        <div class="persona">
-          <Transition name="fade"><p v-if="speech" :key="speech.key" class="persona-speech">{{ speech.text }}</p></Transition>
-          <RetraAvatar class="persona-avatar" :expression="expression" :name="persona" :tag="personaTag" />
-        </div>
         <Transition name="fade">
           <div v-if="snapshot.server && !twitch" class="stream-waiting">
             <span class="stream-waiting-kicker">Stream off</span>

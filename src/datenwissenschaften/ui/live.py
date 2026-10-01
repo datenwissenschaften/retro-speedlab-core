@@ -29,10 +29,6 @@ class LiveFeed:
         with self._lock:
             self._recording.append({"image": base64.b64encode(jpeg).decode("ascii"), "status": status})
 
-    def say(self, status: dict[str, Any], line: str) -> None:
-        with self._lock:
-            status["dialog"] = line
-
     def last_status(self) -> dict[str, Any]:
         with self._lock:
             if not self._recording:
