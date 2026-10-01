@@ -35,6 +35,7 @@ def _document() -> dict[str, Any]:
             "release": "local",
             "persona": "Retra",
         },
+        "twitch": {"enabled": True},
         "log_level": "info",
     }
 
@@ -111,3 +112,11 @@ def test_rotation_needs_positive_minutes(tmp_path: Path):
 def test_missing_config_file_is_reported(tmp_path: Path):
     with pytest.raises(RuntimeError, match="not found"):
         load_config(tmp_path / "missing.yaml")
+
+
+def test_twitch_must_be_switched_on_or_off_explicitly(tmp_path: Path):
+    document = _document()
+    document["twitch"]["enabled"] = "yes"
+
+    with pytest.raises(RuntimeError, match="twitch.enabled"):
+        load_config(_write(tmp_path, document))

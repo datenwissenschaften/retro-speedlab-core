@@ -202,6 +202,7 @@ class _DashboardHandler(BaseHTTPRequestHandler):
                 "version": DATENWISSENSCHAFTEN_VERSION,
                 "release": settings.release,
                 "persona": settings.persona,
+                "twitch": settings.twitch,
             }
             self._send_json(snapshot)
             return

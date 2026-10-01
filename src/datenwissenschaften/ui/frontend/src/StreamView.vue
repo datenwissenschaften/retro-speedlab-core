@@ -144,8 +144,16 @@ const stageStyle = computed(() => ({
   transform: `translate(${(window.innerWidth - STAGE_WIDTH * scale.value) / 2}px, ${(window.innerHeight - STAGE_HEIGHT * scale.value) / 2}px) scale(${scale.value})`,
 }))
 
+const twitch = computed(() => snapshot.value.server?.twitch === true)
+let streaming = false
+watch(twitch, enabled => {
+  if (!enabled || streaming) return
+  streaming = true
+  player.start(); obsControl.start()
+})
+
 onMounted(() => {
-  fit(); loadSnapshot(); player.start(); obsControl.start()
+  fit(); loadSnapshot()
   window.addEventListener('resize', fit)
   snapshotTimer = window.setInterval(loadSnapshot, SNAPSHOT_INTERVAL_MS)
   clockTimer = window.setInterval(() => { now.value = new Date() }, CLOCK_INTERVAL_MS)
@@ -231,7 +239,12 @@ watch(() => live.value.ram, (current, previous) => {
         <canvas ref="screen" class="stream-video" aria-label="Replayed gameplay"></canvas>
         <StoryTicker :events="tickerEvents" />
         <Transition name="fade">
-          <div v-if="waiting" class="stream-waiting">
+          <div v-if="snapshot.server && !twitch" class="stream-waiting">
+            <span class="stream-waiting-kicker">Stream off</span>
+            <strong class="stream-waiting-title">Twitch is disabled</strong>
+            <span class="stream-waiting-copy">Set twitch.enabled to true in config.yaml to stream the training.</span>
+          </div>
+          <div v-else-if="waiting" class="stream-waiting">
             <span class="stream-waiting-kicker">Next replay loading</span>
             <strong class="stream-waiting-title">{{ persona }} trains<span class="stream-waiting-dots"><i>.</i><i>.</i><i>.</i></span></strong>
             <span class="stream-waiting-copy">The next attempt appears here as soon as it is finished.</span>

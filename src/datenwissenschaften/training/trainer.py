@@ -96,8 +96,9 @@ class LayaTrainer:
         return StateModels(agent, self.context, self._phases())
 
     def _hooks(self, env: StateMachineGymWrapper, models: StateModels, teller: StoryTeller) -> list[TrainingHook]:
+        stream = [LiveStreamHook(env.unwrapped.em.get_screen_rate(), teller, self.context.savestate)]
         return [
-            LiveStreamHook(env.unwrapped.em.get_screen_rate(), teller, self.context.savestate),
+            *(stream if self.config.ui.twitch else []),
             TelemetryHook(self.context),
             CheckpointHook(models),
             BestVideoHook(self.context),

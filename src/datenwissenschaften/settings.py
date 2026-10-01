@@ -47,6 +47,7 @@ class UISettings:
     max_episodes: int
     release: str
     persona: str
+    twitch: bool
 
 
 @dataclass(frozen=True)
@@ -98,6 +99,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             max_episodes=_positive_int(ui.max_episodes, "ui.max_episodes"),
             release=_text(ui.release, "ui.release"),
             persona=_text(ui.persona, "ui.persona"),
+            twitch=_boolean(document.twitch.enabled, "twitch.enabled"),
         ),
         log_level=_text(document.log_level, "log_level").upper(),
     )
