@@ -26,4 +26,3 @@ ui:
   max_episodes: 1000
   release: local
   persona: Retra
-  code_agent: Claude

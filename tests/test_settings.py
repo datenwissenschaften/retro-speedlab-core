@@ -34,7 +34,6 @@ def _document() -> dict[str, Any]:
             "max_episodes": 1000,
             "release": "local",
             "persona": "Retra",
-            "code_agent": "Claude",
         },
         "twitch": {"enabled": True},
         "log_level": "info",

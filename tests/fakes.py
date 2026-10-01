@@ -151,8 +151,7 @@ def write_config(tmp_path: Path) -> Path:
                 "training: {game: FakeGame-v0, savestates: [Level1], rotation_minutes: 60, fingerprint: null}",
                 "laya: {checkpoint: fake/laya}",
                 "upload: {url: 'https://upload.test', api_key: null}",
-                "ui: {enable: false, host: 127.0.0.1, port: 18080, max_episodes: 10, release: local,"
-                " persona: Retra, code_agent: Claude}",
+                "ui: {enable: false, host: 127.0.0.1, port: 18080, max_episodes: 10, release: local, persona: Retra}",
                 "twitch: {enabled: true}",
                 "log_level: INFO",
             ]

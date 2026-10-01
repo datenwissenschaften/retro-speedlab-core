@@ -202,7 +202,7 @@ const replayStatus = computed(() => status(connected.value, banner.value, replay
 const progressLine = computed(() => connected.value ? inProgressLine(replayEpisode.value, inProgress.value) : null)
 const replayIsBest = computed(() => replayEpisode.value !== null && holdsBest(replayEpisode.value, levelBest(replayEpisode.value.result.level)))
 const learningFor = computed(() => snapshot.value.started_at ? elapsed(snapshot.value.started_at, now.value) : '—')
-const agentName = computed(() => [snapshot.value.server?.code_agent, snapshot.value.metadata?.model?.display_name].filter(Boolean).join(' + ') || '—')
+const agentName = computed(() => snapshot.value.metadata?.model?.display_name || '—')
 const areasReached = computed(() => story.value.phases.filter(item => item.reached).length)
 const probabilities = computed(() => Object.entries(live.value.probabilities || {}))
 const confidence = computed(() => Math.max(0, ...probabilities.value.map(([, p]) => p)))

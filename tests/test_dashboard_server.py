@@ -31,7 +31,6 @@ def _ui_settings(*, port: int = 0, enabled: bool = True) -> UISettings:
         max_episodes=10,
         release="2026.09.28-4",
         persona="Retra",
-        code_agent="Claude",
         twitch=True,
     )
 
