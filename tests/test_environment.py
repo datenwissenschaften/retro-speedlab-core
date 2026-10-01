@@ -10,6 +10,7 @@ from datenwissenschaften.curriculum import ReverseCurriculum
 from datenwissenschaften.environment import factory
 from datenwissenschaften.environment.curriculum_run import CurriculumRun
 from datenwissenschaften.environment.recording import active_movie_path
+from datenwissenschaften.environment.wrapper import SPEEDRUN_FRAME_COST
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.states.landmarks import Landmarks
 
@@ -210,3 +211,15 @@ def test_what_a_state_sees_becomes_part_of_layas_text(tmp_path: Path):
     assert json.loads(observation["state"]) == {"lives": 3, "score": 0, "door": {"visible": True, "direction": "up"}}
     assert info["detections"] == (door,)
     assert step_info["detections"] == (door,)
+
+
+def test_speedrun_mode_charges_every_frame(tmp_path: Path):
+    env = fake_environment(tmp_path, [(3, 0)])
+    env.reset()
+    _, normal, *_ = env.step(0)
+    env.reset()
+    env.speedrun = True
+
+    _, speedrun, *_ = env.step(0)
+
+    assert speedrun == pytest.approx(normal - SPEEDRUN_FRAME_COST * env.action_table.shape[1])

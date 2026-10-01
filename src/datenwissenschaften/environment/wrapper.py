@@ -16,6 +16,7 @@ T = TypeVar("T", bound=RamInfo)
 
 MAX_TEXT_LENGTH = 8_192
 ACTION_TABLE_DIMENSIONS = 3
+SPEEDRUN_FRAME_COST = 0.005
 TEXT_SPACE = gym.spaces.Text(max_length=MAX_TEXT_LENGTH, charset=string.printable)
 
 Observation = dict[str, str]
@@ -41,6 +42,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         self.initial_savestate = initial_savestate
         self._episode_info: dict[str, Any] = {}
         self.frames: list[np.ndarray] = []
+        self.speedrun = False
 
     def reset(self, **kwargs: Any) -> tuple[Observation, dict[str, Any]]:
         emulator = self.env.unwrapped
@@ -74,7 +76,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
             self.frames.append(frame)
             ram = self._read_ram()
             state_reward, state_terminated, state_truncated = self.state_machine.step(ram, frame)
-            reward += state_reward
+            reward += state_reward - (SPEEDRUN_FRAME_COST if self.speedrun else 0.0)
             terminated = env_terminated or state_terminated
             truncated = env_truncated or state_truncated
             transition = self.state_machine.last_transition

@@ -257,6 +257,11 @@ class TelemetryStore:
             levels = self._summary["by_savestate"]
             return int(levels[savestate]["episodes"]) if savestate in levels else 0
 
+    def level_full_run_wins(self, savestate: str) -> int:
+        with self._lock:
+            levels = self._summary["by_savestate"]
+            return int(levels[savestate]["full_run_wins"]) if savestate in levels else 0
+
     def best_fitness(self, savestate: str) -> float | None:
         with self._lock:
             levels = self._summary["by_savestate"]
@@ -375,6 +380,10 @@ def episode_count() -> int:
 
 def level_episode_count(savestate: str) -> int:
     return _store.level_episode_count(savestate)
+
+
+def level_full_run_wins(savestate: str) -> int:
+    return _store.level_full_run_wins(savestate)
 
 
 def best_fitness(savestate: str) -> float | None:

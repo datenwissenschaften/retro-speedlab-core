@@ -13,6 +13,7 @@ from datenwissenschaften.training import trainer as trainer_module
 from datenwissenschaften.training import video_playback
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.identity import MODEL_LAYOUT, TrainingIdentity, engine_version
+from datenwissenschaften.training.rotation import BEATEN_FULL_RUN_WINS
 from datenwissenschaften.ui import telemetry as telemetry_module
 from datenwissenschaften.ui.live import MAX_COMPLETED_EPISODES, MAX_FRAMES_PER_REQUEST, MAX_REPLAYS, LiveFeed
 
@@ -196,6 +197,7 @@ def test_trainer_rotates_through_the_levels_until_a_reset(tmp_path: Path, monkey
     monkeypatch.setattr(trainer_module.TrainingSession, "run", lambda session: next(outcomes))
     clock = iter(range(0, 100 * 3600, 3600))
     monkeypatch.setattr(rotation_module.time, "time", lambda: next(clock))
+    monkeypatch.setattr(trainer_module, "level_full_run_wins", lambda savestate: BEATEN_FULL_RUN_WINS)
     monkeypatch.setattr(trainer_module, "perform_model_reset", stop)
     trainer = trainer_module.LayaTrainer(FakeWrapper, config_path)
 
@@ -203,6 +205,7 @@ def test_trainer_rotates_through_the_levels_until_a_reset(tmp_path: Path, monkey
         trainer.train()
 
     assert levels == ["Level1", "Level2", "Level1"]
+    assert trainer.speedrun is True
     assert set(published["stories"]) == {"Level1", "Level2"}
     assert set(published["curricula"]) == {"Level1", "Level2"}
     assert trainer.context.model_dir.name == "Level1"

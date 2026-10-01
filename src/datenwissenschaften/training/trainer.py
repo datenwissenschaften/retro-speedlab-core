@@ -28,7 +28,7 @@ from datenwissenschaften.training.video_hook import BestVideoHook
 from datenwissenschaften.ui.control import ModelResetRequest, configure_training_control, perform_model_reset
 from datenwissenschaften.ui.live import live_feed
 from datenwissenschaften.ui.server import start_ui
-from datenwissenschaften.ui.telemetry import configure_history, publish_metadata
+from datenwissenschaften.ui.telemetry import configure_history, level_full_run_wins, publish_metadata
 
 
 class LayaTrainer:
@@ -38,15 +38,20 @@ class LayaTrainer:
         self.context = RunContext(self.config, self.config.training.savestates[0])
         self.wrapper_cls = wrapper_cls
         self.ui_started = False
+        self.speedrun = False
 
     def train(self) -> None:
         database = JsonDatabase(self.config.paths.database_path)
         training = self.config.training
-        rotation = Rotation(database, training.game_identity, training.savestates, training.rotation_minutes)
+        configure_history(training.game_identity, database)
+        rotation = Rotation(
+            database, training.game_identity, training.savestates, training.rotation_minutes, level_full_run_wins
+        )
         while True:
-            savestate, seconds = rotation.next()
+            savestate, seconds, speedrun = rotation.next()
             self.context = RunContext(self.config, savestate)
             env = make_environment(self.wrapper_cls, self.config, savestate)
+            env.speedrun = self.speedrun = speedrun
             identity = TrainingIdentity(self.context, database)
             identity.require_compatible(env)
             self._start_ui(identity, env, database)
@@ -113,7 +118,6 @@ class LayaTrainer:
         )
         if self.ui_started:
             return
-        configure_history(self.config.training.game_identity, database)
         start_ui(ui, self.context.record_root)
         self.ui_started = True
 
@@ -124,6 +128,7 @@ class LayaTrainer:
                 "game": self.context.game,
                 "savestate": self.context.savestate,
                 "savestates": list(self.config.training.savestates),
+                "speedrun": self.speedrun,
             },
         )
         publish_metadata(
