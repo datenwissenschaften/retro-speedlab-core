@@ -36,3 +36,12 @@ def test_to_dict_reports_scalar_and_list_fields():
     ram_info = _SampleRam(health=10, inventory=[1, 2, 3])
 
     assert ram_info.to_dict() == {"health": 10, "inventory": [1, 2, 3]}
+
+
+def test_a_game_without_a_known_position_has_no_location():
+    @dataclass(frozen=True)
+    class Unknown(RamInfo):
+        pass
+
+    assert Unknown.from_ram(bytes(16)).location() is None
+    assert Unknown.from_ram(bytes(16)).describe() == {}
