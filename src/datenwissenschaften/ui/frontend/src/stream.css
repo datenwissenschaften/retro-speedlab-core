@@ -146,11 +146,6 @@
 .site-card { display: grid; gap: 6px; justify-items: center; padding: 12px 14px; text-decoration: none; }
 .site-url { color: var(--text-strong); font-family: var(--font-display); font-size: 0.62rem; line-height: 1.6; text-shadow: 0 0 12px rgba(255, 79, 163, 0.55); }
 .game-cover-loading { color: var(--text-subtle); font-size: 0.64rem; font-weight: 700; letter-spacing: 0.12em; text-align: center; text-transform: uppercase; }
-.sighting { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface-alt); }
-.sighting strong { color: var(--text-subtle); font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; }
-.sighting span { color: var(--text-muted); font-size: 0.8rem; font-weight: 700; text-align: right; text-transform: uppercase; white-space: nowrap; }
-.sighting.seen { border-color: var(--secondary); box-shadow: 0 0 12px rgba(41, 240, 255, 0.25); }
-.sighting.seen span { color: var(--secondary); text-shadow: 0 0 8px rgba(41, 240, 255, 0.5); }
 
 
 .stream-ad-panel {
