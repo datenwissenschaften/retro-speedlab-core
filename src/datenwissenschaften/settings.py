@@ -49,7 +49,7 @@ class UISettings:
     persona: str
     twitch: bool
     dialogs: bool
-    dialog_model: str
+    dialog_models: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -103,7 +103,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             persona=_text(ui.persona, "ui.persona"),
             twitch=_boolean(document.twitch.enabled, "twitch.enabled"),
             dialogs=_boolean(document.twitch.dialogs, "twitch.dialogs"),
-            dialog_model=_text(document.twitch.dialog_model, "twitch.dialog_model"),
+            dialog_models=_texts(document.twitch.dialog_models, "twitch.dialog_models"),
         ),
         log_level=_text(document.log_level, "log_level").upper(),
     )

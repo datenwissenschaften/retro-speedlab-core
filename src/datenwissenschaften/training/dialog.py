@@ -6,7 +6,7 @@ import httpx
 from loguru import logger
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-SECONDS_BETWEEN_LINES = 8.0
+SECONDS_BETWEEN_LINES = 90.0
 TIMEOUT_SECONDS = 20
 MAX_TOKENS = 80
 MAX_LINE_LENGTH = 160
@@ -18,9 +18,9 @@ VOICE = (
 
 
 class DialogWriter:
-    def __init__(self, persona: str, game: str, model: str, api_key: str) -> None:
+    def __init__(self, persona: str, game: str, models: tuple[str, ...], api_key: str) -> None:
         self.voice = VOICE.format(persona=persona, game=game)
-        self.model = model
+        self.models = models
         self.api_key = api_key
         self.busy = False
         self.last_request = -SECONDS_BETWEEN_LINES
@@ -38,8 +38,9 @@ class DialogWriter:
                 OPENROUTER_URL,
                 headers={"Authorization": f"Bearer {self.api_key}"},
                 json={
-                    "model": self.model,
+                    "models": list(self.models),
                     "max_tokens": MAX_TOKENS,
+                    "reasoning": {"enabled": False},
                     "messages": [{"role": "system", "content": self.voice}, {"role": "user", "content": situation}],
                 },
                 timeout=TIMEOUT_SECONDS,
@@ -49,6 +50,6 @@ class DialogWriter:
             if line:
                 deliver(line[:MAX_LINE_LENGTH])
         except (httpx.HTTPError, KeyError, IndexError, ValueError) as error:
-            logger.warning(f"No dialog line from {self.model}: {error}")
+            logger.warning(f"No dialog line from {', '.join(self.models)}: {error}")
         finally:
             self.busy = False

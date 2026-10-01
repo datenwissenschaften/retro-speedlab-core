@@ -33,7 +33,7 @@ def _ui_settings(*, port: int = 0, enabled: bool = True) -> UISettings:
         persona="Retra",
         twitch=True,
         dialogs=False,
-        dialog_model="test/model:free",
+        dialog_models=("test/model:free",),
     )
 
 

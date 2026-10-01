@@ -22,7 +22,7 @@ def _reply(content: str) -> SimpleNamespace:
 @pytest.fixture
 def writer(monkeypatch) -> DialogWriter:
     monkeypatch.setattr(dialog_module.threading, "Thread", InlineThread)
-    return DialogWriter("Retra", "SnakeRattleNRoll-Nes-v0", "test/model:free", "key")
+    return DialogWriter("Retra", "SnakeRattleNRoll-Nes-v0", ("test/model:free", "test/fallback:free"), "key")
 
 
 def test_a_line_is_written_in_the_persona_voice_and_rate_limited(writer, monkeypatch):
@@ -40,7 +40,8 @@ def test_a_line_is_written_in_the_persona_voice_and_rate_limited(writer, monkeyp
         writer.comment("Find Scale done.", lines.append)
 
     assert lines == ["Got it!", "Got it!"]
-    assert requests[0]["json"]["model"] == "test/model:free"
+    assert requests[0]["json"]["models"] == ["test/model:free", "test/fallback:free"]
+    assert requests[0]["json"]["reasoning"] == {"enabled": False}
     assert "Retra" in requests[0]["json"]["messages"][0]["content"]
     assert requests[0]["headers"] == {"Authorization": "Bearer key"}
 

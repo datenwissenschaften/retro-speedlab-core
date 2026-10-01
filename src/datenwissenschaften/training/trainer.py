@@ -115,7 +115,7 @@ class LayaTrainer:
             return None
         if OPENROUTER_KEY not in os.environ:
             raise RuntimeError(f"twitch.dialogs is on but {OPENROUTER_KEY} is not set.")
-        return DialogWriter(ui.persona, self.context.game, ui.dialog_model, os.environ[OPENROUTER_KEY])
+        return DialogWriter(ui.persona, self.context.game, ui.dialog_models, os.environ[OPENROUTER_KEY])
 
     def _start_ui(self, identity: TrainingIdentity, env: StateMachineGymWrapper, database: JsonDatabase) -> None:
         ui = self.config.ui
