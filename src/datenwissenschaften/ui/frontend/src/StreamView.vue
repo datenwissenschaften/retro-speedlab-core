@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ProgressPath from './ProgressPath.vue'
 import { arrivalBanner, createArrivalTracker, holdsBest, inProgressLine, newlyMastered, recentAttempts, resultBanner, status } from './attempts.js'
-import { gameTitle, words } from './naming.js'
+import { fmt, gameTitle, percent, words } from './naming.js'
 import { createObsControl, STREAM_TIME_ZONE } from './obsControl.js'
 import { createReplayPlayer } from './replayPlayer.js'
 import { elapsed } from './runtime.js'
@@ -22,7 +22,7 @@ const RELOAD_SETTLE_MS = 15000
 const RELOAD_RETRY_MS = 5000
 const CLOCK_INTERVAL_MS = 1000
 const BANNER_MS = 6000
-const RECENT_ATTEMPTS = 5
+const RECENT_ATTEMPTS = 8
 const clock = new Intl.DateTimeFormat('en-GB', { timeZone: STREAM_TIME_ZONE, dateStyle: 'medium', timeStyle: 'medium' })
 
 const live = ref({})
@@ -55,8 +55,6 @@ let loadedRelease = null
 let reloadPending = false
 let reloading = false
 
-const fmt = (value, digits = 0) => value == null ? '—' : Intl.NumberFormat('en', { maximumFractionDigits: digits }).format(value)
-const percent = value => `${Math.round(value * 100)}%`
 const label = name => name.replaceAll('_', ' ')
 const readable = value => {
   if (Array.isArray(value)) return value.join(' · ')
@@ -259,20 +257,7 @@ watch(() => live.value.ram, (current, previous) => {
           <span class="run-info-premise">Learning on its own · no objective given</span>
         </aside>
 
-        <section class="sight-panel">
-          <span class="sight-title">Recent attempts</span>
-          <ol v-if="recent.length" class="recent-attempts">
-            <li v-for="bar in recent" :key="bar.attempt" :class="{ best: bar.best }">
-              <b>#{{ bar.attempt }}</b>
-              <span class="recent-bar"><span :style="{ width: percent(bar.width) }"></span></span>
-              <span class="recent-reward">{{ fmt(bar.score) }}</span>
-              <i>{{ bar.best ? '★' : '' }}</i>
-            </li>
-          </ol>
-          <span v-else class="game-cover-loading">Waiting for the first attempt</span>
-        </section>
-
-        <SpotlightPanel :danger="story.danger" :failures="story.failures || 0" :level="level" :refresh="bestRefresh" />
+        <SpotlightPanel :danger="story.danger" :failures="story.failures || 0" :level="level" :recent="recent" :refresh="bestRefresh" />
       </div>
 
       <div class="stream-screen">

@@ -32,6 +32,7 @@ def _ui_settings(*, port: int = 0, enabled: bool = True) -> UISettings:
         release="2026.09.28-4",
         persona="Retra",
         twitch=True,
+        summary_models=("test/model:free",),
     )
 
 
@@ -44,7 +45,7 @@ def _running_server(monkeypatch, *, runtime=None, store=None, control_metadata=N
     if request_model_reset is not None:
         monkeypatch.setattr(server_module, "request_model_reset", request_model_reset)
 
-    server = DashboardServer(_ui_settings(), Path.cwd() if runtime is None else runtime.record_dir, Path.cwd())
+    server = DashboardServer(_ui_settings(), Path.cwd() if runtime is None else runtime.record_dir, Path.cwd(), None)
     server.start()
     try:
         yield server
@@ -406,7 +407,7 @@ def test_handler_ignores_client_disconnects_but_not_other_errors(monkeypatch):
 def test_start_ui_returns_none_when_disabled(monkeypatch):
     monkeypatch.setattr(server_module, "_server", None)
 
-    assert server_module.start_ui(_ui_settings(enabled=False), Path.cwd(), Path.cwd()) is None
+    assert server_module.start_ui(_ui_settings(enabled=False), Path.cwd(), Path.cwd(), None) is None
 
 
 def test_start_ui_starts_and_reuses_the_singleton_server(monkeypatch):
@@ -414,9 +415,9 @@ def test_start_ui_starts_and_reuses_the_singleton_server(monkeypatch):
     store = SimpleNamespace(resize=lambda _max_episodes: None)
     monkeypatch.setattr(server_module, "get_store", lambda: store)
 
-    server = server_module.start_ui(_ui_settings(), Path.cwd(), Path.cwd())
+    server = server_module.start_ui(_ui_settings(), Path.cwd(), Path.cwd(), None)
     try:
-        again = server_module.start_ui(_ui_settings(), Path.cwd(), Path.cwd())
+        again = server_module.start_ui(_ui_settings(), Path.cwd(), Path.cwd(), None)
         assert again is server
     finally:
         server.stop()
@@ -433,14 +434,14 @@ def test_start_ui_returns_none_and_logs_when_the_port_is_taken(monkeypatch):
         blocker.listen(1)
         taken_port = blocker.getsockname()[1]
 
-        result = server_module.start_ui(_ui_settings(port=taken_port), Path.cwd(), Path.cwd())
+        result = server_module.start_ui(_ui_settings(port=taken_port), Path.cwd(), Path.cwd(), None)
 
     assert result is None
     assert server_module._server is None
 
 
 def test_dashboard_server_start_and_stop_lifecycle():
-    server = DashboardServer(_ui_settings(), Path.cwd(), Path.cwd())
+    server = DashboardServer(_ui_settings(), Path.cwd(), Path.cwd(), None)
     server.start()
     server.stop()
 

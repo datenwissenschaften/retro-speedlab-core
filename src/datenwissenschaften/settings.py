@@ -48,6 +48,7 @@ class UISettings:
     release: str
     persona: str
     twitch: bool
+    summary_models: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -100,6 +101,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             release=_text(ui.release, "ui.release"),
             persona=_text(ui.persona, "ui.persona"),
             twitch=_boolean(document.twitch.enabled, "twitch.enabled"),
+            summary_models=_texts(document.twitch.summary_models, "twitch.summary_models"),
         ),
         log_level=_text(document.log_level, "log_level").upper(),
     )

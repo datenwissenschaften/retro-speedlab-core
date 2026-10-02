@@ -75,7 +75,8 @@ def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_pa
     monkeypatch.setattr(trainer_module, "make_environment", lambda wrapper, config, savestate: env)
     monkeypatch.setattr(identity_module, "perform_model_reset", lambda request: None)
     monkeypatch.setattr(trainer_module, "configure_history", lambda *args, **kwargs: ui.append("history"))
-    monkeypatch.setattr(trainer_module, "start_ui", lambda settings, root, reports: ui.append(root))
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(trainer_module, "start_ui", lambda settings, root, reports, digest: ui.append(root))
     published = {}
     monkeypatch.setattr(
         trainer_module, "publish_metadata", lambda section, values, **kwargs: published.update({section: values})
