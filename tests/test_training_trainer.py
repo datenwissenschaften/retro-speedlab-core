@@ -163,19 +163,21 @@ def test_clearing_the_live_feed_starts_a_new_generation_without_old_frames():
         feed.episode_frames(old, 1, 0)
 
 
-def test_full_and_successful_runs_stay_available_as_replays():
+def test_the_best_full_and_successful_runs_stay_available_as_replays():
     feed = LiveFeed()
     generation = feed.latest_episode()["generation"]
-    feed.record(b"jpeg", {"timesteps": 1, "attempt": 1, "level": "Level1"})
-    feed.finish_episode(1, 60.0, {**LOST, "full_run": True}, {})
-    feed.record(b"jpeg", {"timesteps": 2, "attempt": 1, "level": "Level1"})
-    feed.finish_episode(2, 60.0, {**LOST, "succeeded": True}, {})
-    for episode_id in range(3, MAX_REPLAYS + MAX_COMPLETED_EPISODES + 3):
-        feed.record(b"jpeg", {"timesteps": episode_id, "attempt": 1, "level": "Level1"})
-        feed.finish_episode(episode_id, 60.0, LOST, {})
+    scores = [5.0, 1.0, 9.0, 3.0, 7.0, 2.0, 8.0]
+    for episode_id, score in enumerate(scores, start=1):
+        feed.record(b"jpeg", {"timesteps": episode_id, "attempt": episode_id, "level": "Level1"})
+        feed.finish_episode(episode_id, 60.0, {**LOST, "score": score, "full_run": True}, {})
+    feed.record(b"jpeg", {"timesteps": 8, "attempt": 8, "level": "Level1"})
+    feed.finish_episode(8, 60.0, {**LOST, "score": 4.0, "succeeded": True}, {})
+    feed.record(b"jpeg", {"timesteps": 9, "attempt": 9, "level": "Level1"})
+    feed.finish_episode(9, 60.0, {**LOST, "score": 99.0}, {})
 
-    assert [replay["id"] for replay in feed.latest_episode()["replays"]] == [1, 2]
-    assert feed.episode_frames(generation, 1, 0)[0]["status"]["timesteps"] == 1
+    assert len(scores) > MAX_REPLAYS
+    assert [replay["id"] for replay in feed.latest_episode()["replays"]] == [3, 7, 5, 1, 8]
+    assert feed.episode_frames(generation, 1, 0)[0]["image"] == "anBlZw=="
 
 
 def test_trainer_rotates_through_the_levels_until_a_reset(tmp_path: Path, monkeypatch):

@@ -79,9 +79,8 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
   }
 
   const pickReplay = () => {
-    const others = replays.filter(replay => replay.id !== episode.id)
-    const pool = others.length ? others : replays
-    return pool[Math.floor(Math.random() * pool.length)]
+    const next = replays.findIndex(replay => replay.id === episode.id) + 1
+    return replays[next % replays.length]
   }
 
   const repeat = () => {

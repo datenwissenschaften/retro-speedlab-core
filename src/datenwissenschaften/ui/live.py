@@ -5,7 +5,7 @@ from typing import Any
 from uuid import uuid4
 
 MAX_COMPLETED_EPISODES = 2
-MAX_REPLAYS = 3
+MAX_REPLAYS = 5
 MAX_FRAMES_PER_REQUEST = 120
 
 
@@ -22,12 +22,12 @@ class LiveFeed:
         self._generation = uuid4().hex
         self._recording: list[dict[str, Any]] = []
         self._episodes: deque[dict[str, Any]] = deque(maxlen=MAX_COMPLETED_EPISODES)
-        self._replays: deque[dict[str, Any]] = deque(maxlen=MAX_REPLAYS)
+        self._replays: list[dict[str, Any]] = []
         self._summary: dict[str, Any] = {}
 
     def record(self, jpeg: bytes, status: dict[str, Any]) -> None:
         with self._lock:
-            self._recording.append({"image": base64.b64encode(jpeg).decode("ascii"), "status": status})
+            self._recording.append({"image": jpeg, "status": status})
 
     def last_status(self) -> dict[str, Any]:
         with self._lock:
@@ -39,7 +39,7 @@ class LiveFeed:
         with self._lock:
             if not self._recording:
                 raise RuntimeError("No frame has been recorded for this episode.")
-            return self._recording[-1]["image"]
+            return _base64(self._recording[-1]["image"])
 
     def add_events(self, events: list[dict[str, str]]) -> None:
         with self._lock:
@@ -56,8 +56,13 @@ class LiveFeed:
                 episode = {"id": episode_id, "frame_rate": frame_rate, "result": result, "frames": frames}
                 self._episodes.append(episode)
                 if result["full_run"] or result["succeeded"]:
-                    self._replays.append(episode)
+                    self._keep_best(episode)
             self._summary = summary
+
+    def _keep_best(self, episode: dict[str, Any]) -> None:
+        self._replays.append(episode)
+        self._replays.sort(key=lambda replay: replay["result"]["score"], reverse=True)
+        del self._replays[MAX_REPLAYS:]
 
     def latest_episode(self) -> dict[str, Any]:
         with self._lock:
@@ -76,8 +81,12 @@ class LiveFeed:
             for episode in (*self._episodes, *self._replays):
                 if episode["id"] == episode_id:
                     frames = episode["frames"][start : start + MAX_FRAMES_PER_REQUEST]
-                    return [{"image": frame["image"], "status": dict(frame["status"])} for frame in frames]
+                    return [{"image": _base64(frame["image"]), "status": dict(frame["status"])} for frame in frames]
         raise KeyError(episode_id)
+
+
+def _base64(jpeg: bytes) -> str:
+    return base64.b64encode(jpeg).decode("ascii")
 
 
 def _in_progress(status: dict[str, Any]) -> dict[str, Any]:
