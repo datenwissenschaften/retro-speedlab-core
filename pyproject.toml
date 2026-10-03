@@ -19,7 +19,6 @@ dependencies = [
     "pyyaml==6.0.3",
     "stable-retro==1.0.1",
     "torch==2.12.1",
-    "itsdangerous==2.2.0",
     "loguru==0.7.3",
     "laya==0.3.20",
     "bitsandbytes==0.50.2",
