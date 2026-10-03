@@ -1,7 +1,6 @@
 import json
 import math
 import subprocess
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -10,9 +9,9 @@ from loguru import logger
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
+from datenwissenschaften.training.video_render import render_video
 
 METADATA_SUFFIX = ".rollout.json"
-PLAYBACK_MODULE = "datenwissenschaften.training.video_playback"
 
 
 class BestVideoHook:
@@ -50,8 +49,7 @@ class BestVideoHook:
         metadata_path = video.with_suffix(METADATA_SUFFIX)
         try:
             video.unlink(missing_ok=True)
-            playback = [sys.executable, "-m", PLAYBACK_MODULE, "--roms-dir", str(self.context.config.paths.roms_path)]
-            subprocess.run([*playback, "--no-audio", str(source)], check=True, capture_output=True, text=True)
+            render_video(self.context.config.paths.roms_path, source)
             metadata_path.write_text(json.dumps(self._metadata(episode, source, video)), encoding="utf-8")
             logger.info(f"Recorded best episode for {episode.curriculum_state}: score={episode.score:g}")
         except subprocess.CalledProcessError as error:

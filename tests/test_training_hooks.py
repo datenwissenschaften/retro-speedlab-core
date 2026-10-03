@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,6 +16,7 @@ from datenwissenschaften.settings import load_config
 from datenwissenschaften.training import (
     checkpoint_hook,
     live_stream_hook,
+    report_upload_hook,
     story_book,
     system,
     telemetry_hook,
@@ -207,19 +209,19 @@ def test_video_hook_skips_missing_recordings_and_survives_render_failures(contex
 
 
 def _response(method: str, url: str, **kwargs) -> httpx.Response:
-    return httpx.Response(200, json={"signing_key": "secret"}, request=httpx.Request(method, url))
+    return httpx.Response(200, request=httpx.Request(method, url))
 
 
 def test_upload_hook_uploads_only_complete_winning_runs(context: RunContext, monkeypatch, tmp_path: Path):
     recording = tmp_path / "win.bk2"
-    recording.write_bytes(b"movie")
+    recording.with_suffix(".mp4").write_bytes(b"video")
     posts = []
     monkeypatch.setattr(upload_hook, "system_metadata", lambda: {"cpu": "fake"})
-    monkeypatch.setattr(upload_hook.httpx, "get", lambda url, **kwargs: _response("GET", url))
+    monkeypatch.setattr(upload_hook, "count_frames", lambda path: 600)
     monkeypatch.setattr(
         upload_hook.httpx, "post", lambda url, **kwargs: posts.append(kwargs["data"]) or _response("POST", url)
     )
-    hook = upload_hook.UploadHook(context, FakeAgent())
+    hook = upload_hook.UploadHook(context, FakeAgent(), 60.0)
     hook.settings = SimpleNamespace(url="https://upload.test", api_key="key")
 
     hook.on_step(_transition())
@@ -228,7 +230,10 @@ def test_upload_hook_uploads_only_complete_winning_runs(context: RunContext, mon
     hook.on_episode_end(_episode(str(recording), 1.0, False, True))
     hook.on_update()
 
-    assert posts == [{"game": "FakeGame-v0", "category": "Level1"}]
+    assert [(post["game"], post["level"], post["frames"], post["frame_rate"]) for post in posts] == [
+        ("FakeGame-v0", "Level1", "600", "60.0")
+    ]
+    assert json.loads(posts[0]["details"])["laya"] == {"checkpoint": "fake/laya"}
     assert hook.pending == []
 
 
@@ -236,24 +241,53 @@ def test_upload_hook_keeps_runs_when_the_server_fails(context: RunContext, monke
     def fail(url, **kwargs):
         raise httpx.ConnectError("offline")
 
-    monkeypatch.setattr(upload_hook.httpx, "get", fail)
-    hook = upload_hook.UploadHook(context, FakeAgent())
+    recording = tmp_path / "win.bk2"
+    recording.with_suffix(".mp4").write_bytes(b"video")
+    monkeypatch.setattr(upload_hook, "system_metadata", lambda: {"cpu": "fake"})
+    monkeypatch.setattr(upload_hook, "count_frames", lambda path: 600)
+    monkeypatch.setattr(upload_hook.httpx, "post", fail)
+    hook = upload_hook.UploadHook(context, FakeAgent(), 60.0)
     hook.settings = SimpleNamespace(url="https://upload.test", api_key="key")
 
-    hook.on_episode_end(_episode(str(tmp_path / "win.bk2"), 9.0, True, True))
+    hook.on_episode_end(_episode(str(recording), 9.0, True, True))
     hook.on_update()
 
     assert len(hook.pending) == 1
 
 
 def test_upload_hook_discards_runs_without_an_api_key(context: RunContext):
-    hook = upload_hook.UploadHook(context, FakeAgent())
+    hook = upload_hook.UploadHook(context, FakeAgent(), 60.0)
 
     hook.on_update()
     hook.on_episode_end(_episode("win.bk2", 9.0, True, True))
     hook.on_update()
 
     assert hook.pending == []
+
+
+def test_report_upload_hook_uploads_new_and_changed_short_reports(context: RunContext, monkeypatch):
+    reports_dir = context.config.paths.reports_dir
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    (reports_dir / "2026-10-02.md").write_text("# Without a short version", encoding="utf-8")
+    summary = reports_dir / "2026-10-03.summary.json"
+    summary.write_text(json.dumps({"name": "2026-10-03.md", "headline": "Day one", "lines": ["a"]}), encoding="utf-8")
+    puts = []
+    monkeypatch.setattr(
+        report_upload_hook.httpx,
+        "put",
+        lambda url, **kwargs: puts.append((url, kwargs["json"])) or _response("PUT", url),
+    )
+    hook = report_upload_hook.ReportUploadHook(context)
+    hook.settings = SimpleNamespace(url="https://upload.test", api_key="key")
+
+    hook.on_update()
+    hook.on_update()
+    summary.write_text(json.dumps({"name": "2026-10-03.md", "headline": "Day two", "lines": ["b"]}), encoding="utf-8")
+    os.utime(summary, (summary.stat().st_atime, summary.stat().st_mtime + 1))
+    hook.on_update()
+
+    url = "https://upload.test/reports/FakeGame-v0/2026-10-03.md"
+    assert puts == [(url, {"headline": "Day one", "lines": ["a"]}), (url, {"headline": "Day two", "lines": ["b"]})]
 
 
 def test_system_metadata_reports_hardware(monkeypatch):

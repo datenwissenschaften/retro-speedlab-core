@@ -16,7 +16,7 @@ laya:
 log_level: INFO
 
 upload:
-  url: https://speedlab.datenwissenschaften.com/api
+  url: https://api.retrospeedlab.com
   api_key: null
 
 ui:

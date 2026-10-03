@@ -46,7 +46,7 @@ that from `describe()` so it becomes part of the game state Laya reads, and
 from `detections()` so the stream draws the boxes on the replayed video.
 
 The reverse curriculum, automatic savestates, BK2 recordings, best-run videos,
-signed run uploads, file-backed telemetry, and the dashboard work around that
+uploads of beaten levels and lab reports, file-backed telemetry, and the dashboard work around that
 loop.
 
 ## Game packages

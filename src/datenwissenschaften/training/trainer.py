@@ -17,6 +17,7 @@ from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.hooks import TrainingHook
 from datenwissenschaften.training.identity import TrainingIdentity
 from datenwissenschaften.training.live_stream_hook import LiveStreamHook
+from datenwissenschaften.training.report_upload_hook import ReportUploadHook
 from datenwissenschaften.training.rotation import Rotation
 from datenwissenschaften.training.session import TrainingSession
 from datenwissenschaften.training.state_models import StateModels
@@ -97,13 +98,15 @@ class LayaTrainer:
         return StateModels(agent, self.context, self._phases())
 
     def _hooks(self, env: StateMachineGymWrapper, models: StateModels, teller: StoryTeller) -> list[TrainingHook]:
-        stream = [LiveStreamHook(env.unwrapped.em.get_screen_rate(), teller, self.context.savestate)]
+        frame_rate = env.unwrapped.em.get_screen_rate()
+        stream = [LiveStreamHook(frame_rate, teller, self.context.savestate)]
         return [
             *(stream if self.config.ui.twitch else []),
             TelemetryHook(self.context),
             CheckpointHook(models),
             BestVideoHook(self.context),
-            UploadHook(self.context, models.agent),
+            UploadHook(self.context, models.agent, frame_rate),
+            ReportUploadHook(self.context),
         ]
 
     def _start_ui(self, identity: TrainingIdentity, env: StateMachineGymWrapper, database: JsonDatabase) -> None:
