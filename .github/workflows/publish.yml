@@ -116,18 +116,20 @@ jobs:
 
           print(f"Current version in {PYPROJECT}: {current_str}")
 
-          current_str = bump_version(current_str, "patch")
-          print(f"Bumping patch version to {current_str}.")
-
+          bumped = False
           while pypi_version_exists(project_name, current_str):
               print(f"Version {current_str} already exists on PyPI. Bumping patch version...")
               current_str = bump_version(current_str, "patch")
+              bumped = True
 
-          set_version(current_str)
-          print(f"Updated {PYPROJECT} to {current_str}")
+          if bumped:
+              set_version(current_str)
+              print(f"Updated {PYPROJECT} to {current_str}")
+          else:
+              print(f"Publishing {current_str} as declared in {PYPROJECT}")
 
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write("bumped=true\n")
+              f.write(f"bumped={'true' if bumped else 'false'}\n")
               f.write(f"new_version={current_str}\n")
           EOF
 
