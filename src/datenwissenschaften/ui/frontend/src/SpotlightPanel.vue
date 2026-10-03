@@ -50,7 +50,7 @@ const slides = computed(() => [
   ...(props.recent.length ? ['recent'] : []),
   ...(props.danger.length ? ['danger'] : []),
 ])
-const reportDate = computed(() => report.value.name.replace(/\.md$/, ''))
+const reportDate = computed(() => report.value.name.replace(/\.md$/, '').replace(/T(\d{2})(\d{2})$/, ' · $1:$2 UTC'))
 const age = recordedAt => {
   const minutes = Math.round((Date.now() - new Date(recordedAt).getTime()) / MINUTE_MS)
   if (minutes < 1) return 'just now'
@@ -100,7 +100,7 @@ onBeforeUnmount(() => {
             <li v-for="line in report.lines" :key="line">{{ line }}</li>
           </ul>
         </div>
-        <span class="spotlight-note">Daily report · {{ reportDate }}</span>
+        <span class="spotlight-note">Lab report · {{ reportDate }}</span>
       </div>
       <div v-else-if="slide === 'recent'" key="recent" class="spotlight-slide">
         <span class="sight-title">Recent attempts</span>

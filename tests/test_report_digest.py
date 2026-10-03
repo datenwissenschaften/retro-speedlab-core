@@ -55,3 +55,12 @@ def test_a_report_changed_after_its_summary_is_summarized_again(tmp_path: Path):
 def test_without_a_report_there_is_no_summary(tmp_path: Path):
     with pytest.raises(FileNotFoundError):
         ReportDigest(tmp_path, CountingSummarizer()).latest()
+
+
+def test_a_timed_report_of_the_day_is_newer_than_the_dated_one(tmp_path: Path):
+    for name in ("2026-10-02T2130.md", "2026-10-03.md", "2026-10-03T0930.md"):
+        (tmp_path / name).write_text(name, encoding="utf-8")
+    summarizer = CountingSummarizer()
+
+    assert ReportDigest(tmp_path, summarizer).latest()["name"] == "2026-10-03T0930.md"
+    assert summarizer.reports == ["2026-10-03T0930.md"]
