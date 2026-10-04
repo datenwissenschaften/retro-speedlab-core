@@ -104,9 +104,12 @@ class CurriculumRun:
         self.publish()
         return mastered
 
+    def seed(self, state_name: str) -> Path:
+        return self.seeds_dir / f"{state_name}.state"
+
     def _seeded(self, curriculum: ReverseCurriculum) -> ReverseCurriculum:
         for state_name in self.state_names:
-            seed = self.seeds_dir / f"{state_name}.state"
+            seed = self.seed(state_name)
             if seed.is_file() and not curriculum.has_checkpoint(state_name):
                 if curriculum.save_checkpoint(state_name, seed.read_bytes(), 0.0):
                     logger.info(f"Seeded curriculum checkpoint for {state_name} from {seed}")

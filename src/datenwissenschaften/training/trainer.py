@@ -17,6 +17,7 @@ from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.curriculum_upload_hook import CurriculumUploadHook
 from datenwissenschaften.training.hooks import TrainingHook
 from datenwissenschaften.training.identity import TrainingIdentity
+from datenwissenschaften.training.knowledge import knowledge
 from datenwissenschaften.training.live_stream_hook import LiveStreamHook
 from datenwissenschaften.training.report_upload_hook import ReportUploadHook
 from datenwissenschaften.training.session import TrainingSession
@@ -70,6 +71,7 @@ class LayaTrainer:
         publish_metadata("model", model_metadata(models), replace=True)
         story = StoryBook(database, self.config.training.game_identity, self.context.savestate, self._phases())
         demonstrations = load_demonstrations(env, self.config.paths.demonstrations_dir)
+        publish_metadata("knowledge", knowledge(env, self.config.laya.checkpoint, demonstrations), replace=True)
         deadline = time.monotonic() + seconds
         try:
             hooks = self._hooks(env, models, StoryTeller(story))

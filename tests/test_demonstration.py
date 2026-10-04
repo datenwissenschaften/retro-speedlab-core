@@ -7,6 +7,7 @@ from fakes import fake_environment
 
 from datenwissenschaften.environment import demonstration
 from datenwissenschaften.environment.demonstration import load_demonstrations, movie_buttons, replay
+from datenwissenschaften.training.knowledge import knowledge
 
 SCRIPT = [(3, 0), (3, 5), (3, 5), (3, 5), (3, 5)]
 BUTTONS = np.array([[[0, 1]], [[0, 0]], [[1, 0]], [[1, 1]]], dtype=np.int8).reshape(-1, 2)
@@ -79,3 +80,17 @@ def test_movie_buttons_skip_the_reset_frame_and_require_a_power_on_movie_of_the_
         movie_buttons(tmp_path / "run.bk2", emulator)
     with pytest.raises(ValueError, match="power-on"):
         movie_buttons(tmp_path / "run.bk2", emulator)
+
+
+def test_knowledge_lists_what_laya_learns_from_in_every_state(tmp_path: Path):
+    env = fake_environment(tmp_path, SCRIPT)
+    (tmp_path / "seeds").mkdir()
+    (tmp_path / "seeds" / "Boss.state").write_bytes(b"seed")
+
+    view = knowledge(env, "fake/laya", replay(fake_environment(tmp_path, SCRIPT), BUTTONS))
+
+    assert (view["checkpoint"], view["actions"]) == ("fake/laya", 2)
+    assert view["states"] == [
+        {"name": "Survive", "question": "Which move survives?", "seeded": False, "demonstrations": 1},
+        {"name": "Boss", "question": "Which move beats the boss?", "seeded": True, "demonstrations": 2},
+    ]

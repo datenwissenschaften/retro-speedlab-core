@@ -8,6 +8,7 @@ import yaml from 'highlight.js/lib/languages/yaml'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { LAB_SOURCES, layaInputs } from './knowledge.js'
 
 hljs.registerLanguage('dockerfile', dockerfile)
 hljs.registerLanguage('python', python)
@@ -184,6 +185,9 @@ const latestTrainingState = computed(() => activeSummary.value.latest_training_s
 const latestDuration = computed(() => activeSummary.value.latest_full_run_duration_seconds ?? null)
 const model = computed(() => snapshot.value.metadata?.model || {})
 const laya = computed(() => model.value.laya || {})
+const knowledge = computed(() => snapshot.value.metadata?.knowledge)
+const inputs = computed(() => layaInputs(knowledge.value, laya.value))
+const stateSources = state => [state.seeded ? 'seeded from power-on' : 'no seed', `${state.demonstrations} demonstrated moves`].join(' · ')
 const environment = computed(() => snapshot.value.metadata?.environment || {})
 const run = computed(() => snapshot.value.metadata?.run || {})
 const server = computed(() => snapshot.value.server || {})
@@ -321,6 +325,25 @@ const label = key => key.replaceAll('_', ' ')
         </div>
         <video controls preload="metadata" :src="`/api/rollout-video?path=${encodeURIComponent(bestFullRunVideo.path)}`"></video>
       </article>
+    </section>
+
+    <section class="observatory-section">
+      <div class="section-heading">
+        <div><p class="eyebrow">KNOWLEDGE</p><h2>Where Laya's knowledge comes from</h2><p>The lab turns published sources and its own emulator measurements into states, questions, rewards, start points and demonstrations. Laya only learns from those, never from a website.</p></div>
+      </div>
+      <div class="details-grid system-grid two-column">
+      <article class="panel detail-card">
+        <div class="card-heading"><div><p class="eyebrow">THE LAB</p><h2>Sources, best first</h2><p class="card-description">A higher source wins when two disagree; the emulator wins over all of them.</p></div><span class="chip">{{ LAB_SOURCES.length }} kinds</span></div>
+        <dl><template v-for="(source, index) in LAB_SOURCES" :key="source.name"><dt>{{ index + 1 }}. {{ source.name }}</dt><dd>{{ source.detail }}</dd></template></dl>
+      </article>
+      <article class="panel detail-card full-height">
+        <div class="card-heading"><div><p class="eyebrow">LAYA</p><h2>What Laya learns from</h2><p class="card-description">Imitation of the demonstrations stops once a state is mastered; then only the reward counts.</p></div><span class="chip" :class="{ muted: !inputs.length }">{{ inputs.length ? 'Live' : 'Loading' }}</span></div>
+        <dl>
+          <template v-for="input in inputs" :key="input.name"><dt>{{ input.name }}</dt><dd>{{ input.value }}</dd></template>
+          <template v-for="state in knowledge?.states || []" :key="state.name"><dt>{{ state.name }}</dt><dd>{{ stateSources(state) }}</dd></template>
+        </dl>
+      </article>
+      </div>
     </section>
 
     <section class="observatory-section">

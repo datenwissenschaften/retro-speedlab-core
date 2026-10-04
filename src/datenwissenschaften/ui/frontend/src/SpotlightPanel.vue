@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { dangerNote, dangerTitle } from './attempts.js'
+import { LAB_SOURCES } from './knowledge.js'
 import { fmt, percent, words } from './naming.js'
 
 const props = defineProps({
@@ -9,6 +10,7 @@ const props = defineProps({
   failures: { type: Number, required: true },
   recent: { type: Array, required: true },
   refresh: { type: Number, required: true },
+  inputs: { type: Array, required: true },
 })
 
 const SLIDE_MS = 20000
@@ -49,6 +51,7 @@ const slides = computed(() => [
   'best',
   ...(props.recent.length ? ['recent'] : []),
   ...(props.danger.length ? ['danger'] : []),
+  ...(props.inputs.length ? ['knowledge'] : []),
 ])
 const reportDate = computed(() => report.value.name.replace(/\.md$/, '').replace(/T(\d{2})(\d{2})$/, ' · $1:$2 UTC'))
 const age = recordedAt => {
@@ -113,6 +116,16 @@ onBeforeUnmount(() => {
           </li>
         </ol>
         <span class="spotlight-note">Reward per attempt · ★ best so far</span>
+      </div>
+      <div v-else-if="slide === 'knowledge'" key="knowledge" class="spotlight-slide">
+        <span class="sight-title">How Laya learns</span>
+        <div class="knowledge-flow">
+          <p class="knowledge-sources"><b>The lab reads</b>{{ LAB_SOURCES.map(source => source.name).join(' · ') }}</p>
+          <dl class="knowledge-inputs">
+            <template v-for="input in inputs" :key="input.name"><dt>{{ input.name }}</dt><dd>{{ input.value }}</dd></template>
+          </dl>
+        </div>
+        <span class="spotlight-note">Sources → lab → Laya</span>
       </div>
       <div v-else-if="slide === 'danger'" key="danger" class="spotlight-slide">
         <span class="sight-title">Danger spots</span>

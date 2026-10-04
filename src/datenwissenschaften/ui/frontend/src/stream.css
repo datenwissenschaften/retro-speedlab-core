@@ -220,6 +220,12 @@
 .lab-lines li:nth-child(2) { animation-delay: 1.2s; }
 .lab-lines li:nth-child(3) { animation-delay: 1.8s; }
 @keyframes lab-in { from { opacity: 0; transform: translateY(6px); } }
+.knowledge-flow { display: grid; align-content: center; gap: 12px; min-height: 0; }
+.knowledge-sources { display: grid; gap: 4px; color: var(--text-muted); font-size: 0.64rem; line-height: 1.45; text-align: center; }
+.knowledge-sources b { color: var(--secondary); font-size: 0.58rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.knowledge-inputs { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; font-size: 0.64rem; }
+.knowledge-inputs dt { color: var(--text-subtle); text-transform: uppercase; letter-spacing: 0.04em; }
+.knowledge-inputs dd { color: var(--text-strong); overflow-wrap: anywhere; }
 .spotlight-note { color: var(--text-subtle); font-size: 0.6rem; letter-spacing: 0.06em; text-align: center; text-transform: uppercase; }
 .path-node.mastered .path-dot { border-color: #7dff9a; color: #7dff9a; box-shadow: 0 0 14px rgba(125, 255, 154, 0.45); }
 

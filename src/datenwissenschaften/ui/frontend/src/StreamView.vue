@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ProgressPath from './ProgressPath.vue'
 import { createArrivalTracker, holdsBest, inProgressLine, recentAttempts, status } from './attempts.js'
+import { layaInputs } from './knowledge.js'
 import { fmt, gameTitle, percent, words } from './naming.js'
 import { createObsControl, STREAM_TIME_ZONE } from './obsControl.js'
 import { createReplayPlayer } from './replayPlayer.js'
@@ -143,6 +144,7 @@ const replayStatus = computed(() => status(connected.value, replayEpisode.value)
 const progressLine = computed(() => connected.value ? inProgressLine(replayEpisode.value, inProgress.value) : null)
 const replayIsBest = computed(() => replayEpisode.value !== null && holdsBest(replayEpisode.value, levelBest(replayEpisode.value.result.level)))
 const learningFor = computed(() => snapshot.value.started_at ? elapsed(snapshot.value.started_at, now.value) : '—')
+const inputs = computed(() => layaInputs(snapshot.value.metadata?.knowledge, snapshot.value.metadata?.model?.laya))
 const agentName = computed(() => snapshot.value.metadata?.model?.display_name || '—')
 const areasReached = computed(() => story.value.phases.filter(item => item.reached).length)
 const probabilities = computed(() => Object.entries(live.value.probabilities || {}))
@@ -194,7 +196,7 @@ watch(() => live.value.ram, (current, previous) => {
           </dl>
         </aside>
 
-        <SpotlightPanel :danger="story.danger" :failures="story.failures || 0" :level="level" :recent="recent" :refresh="bestRefresh" />
+        <SpotlightPanel :danger="story.danger" :failures="story.failures || 0" :level="level" :recent="recent" :refresh="bestRefresh" :inputs="inputs" />
       </div>
 
       <div class="stream-screen">
