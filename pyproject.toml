@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "datenwissenschaften"
-version = "3.0.1"
+version = "3.0.2"
 description = "Core library for Retro Speedlab: retro game agents built entirely on the Laya decision model."
 readme = "README.md"
 authors = [
