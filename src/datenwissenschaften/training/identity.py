@@ -64,8 +64,7 @@ class TrainingIdentity:
     def _forget(self, env: StateMachineGymWrapper) -> None:
         env.reset_training_memory()
         training = self.context.config.training
-        for savestate in training.savestates:
-            self.database.delete(story_key(level_identity(training.game_identity, savestate)))
+        self.database.delete(story_key(level_identity(training.game_identity, self.context.savestate)))
 
     @staticmethod
     def _release(engine: str | None) -> tuple[str, ...] | None:

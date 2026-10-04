@@ -305,7 +305,7 @@ watch(() => live.value.ram, (current, previous) => {
       </aside>
 
       <div class="stream-bottom">
-        <ProgressPath :savestates="run.savestates || []" :curricula="snapshot.metadata?.curricula || {}" :current="level" />
+        <ProgressPath :curriculum="snapshot.metadata?.curricula?.[level] || {}" :playing="live.training_state || ''" />
         <section class="site-card">
           <span class="sight-title">Experiment</span>
           <strong class="site-url">Learning for {{ learningFor }}</strong>

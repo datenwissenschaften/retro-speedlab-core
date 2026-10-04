@@ -1,16 +1,14 @@
 paths:
   roms: roms
-  savestates: savestates
   models: working/models
   recordings: working/recordings
   cache: working/cache
   database: working/database.json
   reports: reports
+  curriculum: curriculum
 
 training:
   game: Airstriker-Genesis-v0
-  savestates: [Level1]
-  rotation_minutes: 120
   fingerprint: null
 
 laya:

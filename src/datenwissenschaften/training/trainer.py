@@ -4,8 +4,7 @@ from pathlib import Path
 import torch
 
 from datenwissenschaften.accelerator import configure_accelerator
-from datenwissenschaften.environment.curriculum_run import CurriculumRun
-from datenwissenschaften.environment.factory import curriculum_root, make_environment, state_names
+from datenwissenschaften.environment.factory import FULL_GAME, make_environment
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.laya.agent import LayaAgent
 from datenwissenschaften.laya.network import LayaNetwork
@@ -14,11 +13,11 @@ from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.training.checkpoint_hook import CheckpointHook, model_metadata
 from datenwissenschaften.training.context import RunContext
+from datenwissenschaften.training.curriculum_upload_hook import CurriculumUploadHook
 from datenwissenschaften.training.hooks import TrainingHook
 from datenwissenschaften.training.identity import TrainingIdentity
 from datenwissenschaften.training.live_stream_hook import LiveStreamHook
 from datenwissenschaften.training.report_upload_hook import ReportUploadHook
-from datenwissenschaften.training.rotation import Rotation
 from datenwissenschaften.training.session import TrainingSession
 from datenwissenschaften.training.state_models import StateModels
 from datenwissenschaften.training.story_book import StoryBook
@@ -32,34 +31,30 @@ from datenwissenschaften.ui.server import start_ui
 from datenwissenschaften.ui.summaries import report_digest
 from datenwissenschaften.ui.telemetry import configure_history, level_full_run_wins, publish_metadata
 
+SESSION_SECONDS = 2 * 60 * 60
+BEATEN_FULL_RUN_WINS = 8
+
 
 class LayaTrainer:
     def __init__(self, wrapper_cls: type[StateMachineGymWrapper], config_path: Path) -> None:
         self.config = load_config(config_path)
         setup_logging(self.config.log_level)
-        self.context = RunContext(self.config, self.config.training.savestates[0])
+        self.context = RunContext(self.config, FULL_GAME)
         self.wrapper_cls = wrapper_cls
         self.ui_started = False
         self.speedrun = False
 
     def train(self) -> None:
         database = JsonDatabase(self.config.paths.database_path)
-        training = self.config.training
-        configure_history(training.game_identity, database)
-        rotation = Rotation(
-            database, training.game_identity, training.savestates, training.rotation_minutes, level_full_run_wins
-        )
+        configure_history(self.config.training.game_identity, database)
         while True:
-            savestate, seconds, speedrun = rotation.next()
-            self.context = RunContext(self.config, savestate)
-            env = make_environment(self.wrapper_cls, self.config, savestate)
-            env.speedrun = self.speedrun = speedrun
+            env = make_environment(self.wrapper_cls, self.config)
+            env.speedrun = self.speedrun = level_full_run_wins(FULL_GAME) >= BEATEN_FULL_RUN_WINS
             identity = TrainingIdentity(self.context, database)
             identity.require_compatible(env)
             self._start_ui(identity, env, database)
-            self._publish_levels(database)
             env.curriculum.publish()
-            request = self._train_level(env, database, seconds)
+            request = self._train_level(env, database, SESSION_SECONDS)
             env.close()
             torch.cuda.empty_cache()
             if request is not None:
@@ -78,12 +73,6 @@ class LayaTrainer:
             return TrainingSession(env, models, self._hooks(env, models, StoryTeller(story)), deadline).run()
         finally:
             models.close()
-
-    def _publish_levels(self, database: JsonDatabase) -> None:
-        training = self.config.training
-        for savestate in training.savestates:
-            StoryBook(database, training.game_identity, savestate, self._phases())
-            CurriculumRun(curriculum_root(self.config, savestate), state_names(self.wrapper_cls), savestate)
 
     def _phases(self) -> tuple[str, ...]:
         classes = (self.wrapper_cls.start_state_cls, *self.wrapper_cls.state_classes)
@@ -107,6 +96,7 @@ class LayaTrainer:
             BestVideoHook(self.context),
             UploadHook(self.context, models.agent, frame_rate),
             ReportUploadHook(self.context),
+            CurriculumUploadHook(self.context, env.curriculum),
         ]
 
     def _start_ui(self, identity: TrainingIdentity, env: StateMachineGymWrapper, database: JsonDatabase) -> None:
@@ -133,7 +123,6 @@ class LayaTrainer:
             {
                 "game": self.context.game,
                 "savestate": self.context.savestate,
-                "savestates": list(self.config.training.savestates),
                 "speedrun": self.speedrun,
             },
         )

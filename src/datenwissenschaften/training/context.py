@@ -21,11 +21,11 @@ class RunContext:
 
     @property
     def record_dir(self) -> Path:
-        return self.record_root / self.game / self.savestate
+        return self.record_root / self.game
 
     @property
     def model_dir(self) -> Path:
-        return self.config.paths.models_dir / self.config.training.game_identity / self.savestate
+        return self.config.paths.models_dir / self.config.training.game_identity
 
     def model_path(self, state_name: str) -> Path:
         return self.model_dir / state_name / MODEL_FILENAME

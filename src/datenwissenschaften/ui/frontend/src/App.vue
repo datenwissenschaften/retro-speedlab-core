@@ -153,10 +153,8 @@ const masteredStateCount = computed(() => curriculumRows.value.filter(row => row
 const currentStateProgress = computed(() => currentCurriculumState.value
   ? Math.min(100, currentCurriculumState.value.wins / currentCurriculumState.value.target * 100)
   : 0)
-const availableSavestates = computed(() => [...new Set([
-  ...(run.value.savestates || []),
-  ...Object.keys(savestateSummaries.value),
-])].filter(Boolean).sort((left, right) => left.localeCompare(right)))
+const availableSavestates = computed(() => Object.keys(savestateSummaries.value).filter(Boolean)
+  .sort((left, right) => left.localeCompare(right)))
 const activeSummary = computed(() => selectedSavestate.value
   ? savestateSummaries.value[selectedSavestate.value] || {}
   : summary.value)

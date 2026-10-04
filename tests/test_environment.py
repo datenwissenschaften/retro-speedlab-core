@@ -1,3 +1,4 @@
+import gzip
 import json
 from pathlib import Path
 
@@ -92,7 +93,7 @@ def test_reset_resumes_from_the_active_curriculum_checkpoint(tmp_path: Path):
 
 
 def test_a_new_checkpoint_remembers_the_score_that_reached_it(tmp_path: Path):
-    run = CurriculumRun(tmp_path, ("Survive", "Boss"), "Level1")
+    run = CurriculumRun(tmp_path, ("Survive", "Boss"), "Level1", tmp_path / "seeds")
     run.begin_episode()
     run.add_reward(3.0, False)
 
@@ -102,7 +103,7 @@ def test_a_new_checkpoint_remembers_the_score_that_reached_it(tmp_path: Path):
 
 
 def test_falling_back_to_an_earlier_state_is_no_curriculum_success(tmp_path: Path):
-    run = CurriculumRun(tmp_path, ("Survive", "Boss"), "Level1")
+    run = CurriculumRun(tmp_path, ("Survive", "Boss"), "Level1", tmp_path / "seeds")
     run.curriculum.save_checkpoint("Boss", b"boss", 0.0)
     run.begin_episode()
     run.start_state = "Boss"
@@ -126,7 +127,7 @@ def test_every_action_needs_a_description(tmp_path: Path):
     with pytest.raises(ValueError, match="description"):
         Undescribed(
             FakeEmulator(tmp_path, [(3, 0)]),
-            CurriculumRun(tmp_path, ("Survive",), "Level1"),
+            CurriculumRun(tmp_path, ("Survive",), "Level1", tmp_path / "seeds"),
             Landmarks(tmp_path / "landmarks.json"),
             "Level1",
         )
@@ -139,7 +140,7 @@ def test_actions_must_be_button_sequences(tmp_path: Path):
     with pytest.raises(ValueError, match="frames"):
         Flat(
             FakeEmulator(tmp_path, [(3, 0)]),
-            CurriculumRun(tmp_path, ("Survive",), "Level1"),
+            CurriculumRun(tmp_path, ("Survive",), "Level1", tmp_path / "seeds"),
             Landmarks(tmp_path / "landmarks.json"),
             "Level1",
         )
@@ -161,25 +162,38 @@ def test_recording_is_mandatory(tmp_path: Path):
         active_movie_path(FakeEmulator(tmp_path, [(3, 0)]))
 
 
-def test_factory_records_into_the_game_and_savestate_folder(tmp_path: Path, monkeypatch):
+def test_factory_starts_the_game_at_power_on_with_every_button(tmp_path: Path, monkeypatch):
     calls = {}
     monkeypatch.setattr(factory, "import_roms", lambda roms: calls.setdefault("roms", roms))
-    monkeypatch.setattr(factory, "import_savestates", lambda game, folder: calls.setdefault("savestates", folder))
 
-    def make(game, state, render_mode, record):
-        calls.update(game=game, state=state, record=record)
+    def make(game, state, render_mode, record, use_restricted_actions):
+        calls.update(game=game, state=state, record=record, actions=use_restricted_actions)
         return FakeEmulator(Path(record), [(3, 0)])
 
     monkeypatch.setattr(factory.retro, "make", make)
     config = load_config(write_config(tmp_path))
 
-    env = factory.make_environment(FakeWrapper, config, "Level2")
+    env = factory.make_environment(FakeWrapper, config)
 
     assert calls["roms"] == config.paths.roms_path
-    assert calls["savestates"] == config.paths.savestates_dir
-    assert (calls["game"], calls["state"]) == ("FakeGame-v0", "Level2")
-    assert calls["record"] == str(config.paths.record_dir / "FakeGame-v0" / "Level2")
+    assert (calls["game"], calls["state"]) == ("FakeGame-v0", factory.retro.State.NONE)
+    assert calls["actions"] == factory.retro.Actions.ALL
+    assert calls["record"] == str(config.paths.record_dir / "FakeGame-v0")
     assert env.curriculum.state_names == ("Survive", "Boss")
+
+
+def test_the_agents_seeds_become_curriculum_checkpoints_until_the_engine_has_its_own(tmp_path: Path):
+    seeds = tmp_path / "seeds"
+    seeds.mkdir()
+    (seeds / "Boss.state").write_bytes(gzip.compress(b"boss room"))
+    (seeds / "Unknown.state").write_bytes(gzip.compress(b"ignored"))
+
+    run = CurriculumRun(tmp_path / "curriculum", ("Survive", "Boss"), "Level1", seeds)
+
+    assert run.curriculum.checkpoint("Boss") == b"boss room"
+    assert not run.curriculum.has_checkpoint("Survive")
+    run.reset_memory()
+    assert run.curriculum.checkpoint("Boss") == b"boss room"
 
 
 def test_what_a_state_sees_becomes_part_of_layas_text(tmp_path: Path):
@@ -200,7 +214,7 @@ def test_what_a_state_sees_becomes_part_of_layas_text(tmp_path: Path):
 
     env = SeeingWrapper(
         FakeEmulator(tmp_path, [(3, 0), (3, 1)]),
-        CurriculumRun(tmp_path, ("Seeing", "Boss"), "Level1"),
+        CurriculumRun(tmp_path, ("Seeing", "Boss"), "Level1", tmp_path / "seeds"),
         Landmarks(tmp_path / "landmarks.json"),
         "Level1",
     )

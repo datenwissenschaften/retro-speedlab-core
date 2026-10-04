@@ -12,17 +12,15 @@ def _document() -> dict[str, Any]:
     return {
         "paths": {
             "roms": "roms",
-            "savestates": "savestates",
             "models": "models",
             "recordings": "recordings",
             "cache": "cache",
             "database": "database.json",
             "reports": "agent/reports",
+            "curriculum": "curriculum",
         },
         "training": {
             "game": "TestGame",
-            "savestates": ["Level1", "Level2"],
-            "rotation_minutes": 60,
             "fingerprint": None,
         },
         "laya": {"checkpoint": "convaiinnovations/laya"},
@@ -51,8 +49,6 @@ def test_complete_config_loads(tmp_path: Path):
 
     assert config.training.game == "TestGame"
     assert config.training.game_identity == "TestGame"
-    assert config.training.savestates == ("Level1", "Level2")
-    assert config.training.rotation_minutes == 60
     assert config.training.fingerprint is None
     assert config.laya.checkpoint == "convaiinnovations/laya"
     assert config.ui.port == 18080
@@ -63,7 +59,7 @@ def test_paths_resolve_relative_to_the_config_file(tmp_path: Path):
     config = load_config(_write(tmp_path, _document()))
 
     assert config.paths.roms_path == (tmp_path / "roms").resolve()
-    assert config.paths.savestates_dir == (tmp_path / "savestates").resolve()
+    assert config.paths.curriculum_dir == (tmp_path / "curriculum").resolve()
     assert config.paths.record_dir == (tmp_path / "recordings").resolve()
     assert config.paths.database_path == (tmp_path / "database.json").resolve()
 
@@ -89,23 +85,6 @@ def test_invalid_ui_port_is_rejected(tmp_path: Path, port: Any):
     document["ui"]["port"] = port
 
     with pytest.raises(RuntimeError, match="ui.port"):
-        load_config(_write(tmp_path, document))
-
-
-@pytest.mark.parametrize("savestates", [[], [" "], "Level1"])
-def test_savestates_must_be_a_list_of_names(tmp_path: Path, savestates: Any):
-    document = _document()
-    document["training"]["savestates"] = savestates
-
-    with pytest.raises(RuntimeError, match="training.savestates"):
-        load_config(_write(tmp_path, document))
-
-
-def test_rotation_needs_positive_minutes(tmp_path: Path):
-    document = _document()
-    document["training"]["rotation_minutes"] = 0
-
-    with pytest.raises(RuntimeError, match="training.rotation_minutes"):
         load_config(_write(tmp_path, document))
 
 

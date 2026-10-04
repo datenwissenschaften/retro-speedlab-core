@@ -2,45 +2,31 @@
 import { words } from './naming.js'
 
 const props = defineProps({
-  savestates: { type: Array, required: true },
-  curricula: { type: Object, required: true },
-  current: { type: String, required: true },
+  curriculum: { type: Object, required: true },
+  playing: { type: String, required: true },
 })
 
-const phases = savestate => Object.values(props.curricula[savestate] || {})
-const learning = savestate => phases(savestate).find(phase => !phase.mastered)
-const mastered = savestate => phases(savestate).length > 0 && !learning(savestate)
-const winWidth = savestate => {
-  const all = phases(savestate)
-  if (!all.length) return '0%'
-  const open = learning(savestate)
-  const done = all.filter(phase => phase.mastered).length + (open ? open.wins / open.win_target : 0)
-  return `${Math.round((done / all.length) * 100)}%`
-}
-const note = savestate => {
-  if (mastered(savestate)) return 'mastered'
-  const status = savestate === props.current ? 'learning' : 'not active'
-  const open = learning(savestate)
-  if (!open) return status
-  const all = phases(savestate)
-  const part = all.length > 1 ? ` · part ${all.indexOf(open) + 1}/${all.length}` : ''
-  return `${status} · ${open.wins} / ${open.win_target} wins${part}`
+const winWidth = phase => `${Math.round(Math.min(1, phase.wins / phase.win_target) * 100)}%`
+const note = phase => {
+  if (phase.mastered) return 'mastered'
+  const start = phase.has_checkpoint ? 'checkpoint ready' : 'no checkpoint yet'
+  return phase.active ? `practising · ${phase.wins} / ${phase.win_target} wins` : start
 }
 </script>
 
 <template>
   <section class="path-panel">
-    <span class="path-title">Progress</span>
+    <span class="path-title">Curriculum · this attempt starts at {{ playing ? words(playing) : 'power-on' }}</span>
     <ol class="path-track">
       <li
-        v-for="(savestate, index) in savestates"
-        :key="savestate"
-        :class="['path-node', { reached: savestate === current || mastered(savestate), current: savestate === current, mastered: mastered(savestate) }]"
+        v-for="(phase, name, index) in curriculum"
+        :key="name"
+        :class="['path-node', { reached: phase.active || phase.mastered, current: phase.active, mastered: phase.mastered }]"
       >
-        <span class="path-dot">{{ mastered(savestate) ? '✓' : index + 1 }}</span>
-        <strong class="path-label">{{ words(savestate) }}</strong>
-        <span class="path-skill"><span :style="{ width: winWidth(savestate) }"></span></span>
-        <small class="path-note">{{ note(savestate) }}</small>
+        <span class="path-dot">{{ phase.mastered ? '✓' : index + 1 }}</span>
+        <strong class="path-label">{{ words(name) }}</strong>
+        <span class="path-skill"><span :style="{ width: winWidth(phase) }"></span></span>
+        <small class="path-note">{{ note(phase) }}</small>
       </li>
     </ol>
   </section>

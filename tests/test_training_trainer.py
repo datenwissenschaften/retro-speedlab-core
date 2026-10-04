@@ -8,13 +8,10 @@ from datenwissenschaften.laya import network as network_module
 from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.training import identity as identity_module
-from datenwissenschaften.training import rotation as rotation_module
 from datenwissenschaften.training import trainer as trainer_module
 from datenwissenschaften.training import video_playback
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.identity import MODEL_LAYOUT, TrainingIdentity, engine_version
-from datenwissenschaften.training.rotation import BEATEN_FULL_RUN_WINS
-from datenwissenschaften.ui import telemetry as telemetry_module
 from datenwissenschaften.ui.live import MAX_COMPLETED_EPISODES, MAX_FRAMES_PER_REQUEST, MAX_REPLAYS, LiveFeed
 
 LOST = {"score": 1.0, "won": False, "new_best": False, "full_run": False, "succeeded": False}
@@ -72,7 +69,7 @@ def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_pa
     agents, ui = [], []
     monkeypatch.setattr(network_module.laya, "load", fake_laya_load)
     monkeypatch.setattr(trainer_module, "configure_accelerator", lambda: "cpu")
-    monkeypatch.setattr(trainer_module, "make_environment", lambda wrapper, config, savestate: env)
+    monkeypatch.setattr(trainer_module, "make_environment", lambda wrapper, config: env)
     monkeypatch.setattr(identity_module, "perform_model_reset", lambda request: None)
     monkeypatch.setattr(trainer_module, "configure_history", lambda *args, **kwargs: ui.append("history"))
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
@@ -181,40 +178,30 @@ def test_the_best_full_and_successful_runs_stay_available_as_replays():
     assert feed.episode_frames(generation, 1, 0)[0]["image"] == "anBlZw=="
 
 
-def test_trainer_rotates_through_the_levels_until_a_reset(tmp_path: Path, monkeypatch):
+def test_trainer_plays_the_full_game_and_speedruns_it_once_beaten(tmp_path: Path, monkeypatch):
     config_path = write_config(tmp_path)
-    config_path.write_text(config_path.read_text().replace("[Level1]", "[Level1, Level2]"), encoding="utf-8")
-    levels, outcomes = [], iter([None, None, "reset"])
+    sessions, outcomes, wins = [], iter([None, "reset"]), iter([0, trainer_module.BEATEN_FULL_RUN_WINS])
     monkeypatch.setattr(network_module.laya, "load", fake_laya_load)
     monkeypatch.setattr(trainer_module, "configure_accelerator", lambda: "cpu")
     monkeypatch.setattr(identity_module, "perform_model_reset", lambda request: None)
+    monkeypatch.setattr(
+        trainer_module, "make_environment", lambda wrapper, config: fake_environment(tmp_path, [(3, 0)])
+    )
 
-    def make(wrapper, config, savestate):
-        levels.append(savestate)
-        return fake_environment(tmp_path / savestate, [(3, 0)])
+    def run(session):
+        sessions.append(session.env.speedrun)
+        return next(outcomes)
 
     def stop(request):
         raise StopTraining
 
-    monkeypatch.setattr(trainer_module, "make_environment", make)
-    published = {}
-    monkeypatch.setattr(
-        telemetry_module._store,
-        "publish_metadata",
-        lambda section, values, **kwargs: published.setdefault(section, {}).update(values),
-    )
-    monkeypatch.setattr(trainer_module.TrainingSession, "run", lambda session: next(outcomes))
-    clock = iter(range(0, 100 * 3600, 3600))
-    monkeypatch.setattr(rotation_module.time, "time", lambda: next(clock))
-    monkeypatch.setattr(trainer_module, "level_full_run_wins", lambda savestate: BEATEN_FULL_RUN_WINS)
+    monkeypatch.setattr(trainer_module.TrainingSession, "run", run)
+    monkeypatch.setattr(trainer_module, "level_full_run_wins", lambda level: next(wins))
     monkeypatch.setattr(trainer_module, "perform_model_reset", stop)
     trainer = trainer_module.LayaTrainer(FakeWrapper, config_path)
 
     with pytest.raises(StopTraining):
         trainer.train()
 
-    assert levels == ["Level1", "Level2", "Level1"]
-    assert trainer.speedrun is True
-    assert set(published["stories"]) == {"Level1", "Level2"}
-    assert set(published["curricula"]) == {"Level1", "Level2"}
-    assert trainer.context.model_dir.name == "Level1"
+    assert sessions == [False, True]
+    assert trainer.context.model_dir.name == "FakeGame-v0"

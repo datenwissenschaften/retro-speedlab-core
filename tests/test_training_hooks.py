@@ -10,11 +10,13 @@ import numpy as np
 import pytest
 from fakes import write_config
 
+from datenwissenschaften.environment.curriculum_run import CurriculumRun
 from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.training import (
     checkpoint_hook,
+    curriculum_upload_hook,
     live_stream_hook,
     report_upload_hook,
     story_book,
@@ -84,12 +86,9 @@ def _transition() -> Transition:
     return Transition(7, OBSERVATION, Decision(1, {"left": 0.3, "right": 0.7}, 0.66), FRAMES, 2.0, False, info)
 
 
-def test_context_places_the_model_per_game_and_savestate(context: RunContext):
-    assert (
-        context.model_path("Survive")
-        == context.config.paths.models_dir / "FakeGame-v0" / "Level1" / "Survive" / "laya.pt"
-    )
-    assert context.record_dir == context.config.paths.record_dir / "FakeGame-v0" / "Level1"
+def test_context_places_the_model_and_recordings_per_game(context: RunContext):
+    assert context.model_path("Survive") == context.config.paths.models_dir / "FakeGame-v0" / "Survive" / "laya.pt"
+    assert context.record_dir == context.config.paths.record_dir / "FakeGame-v0"
 
 
 def test_telemetry_hook_publishes_finished_episodes(context: RunContext, monkeypatch):
@@ -310,3 +309,32 @@ def test_system_metadata_without_nvidia_smi(monkeypatch):
     metadata = system.system_metadata()
 
     assert metadata["gpu"]["nvidia_smi"] == []
+
+
+def test_curriculum_upload_hook_sends_the_curriculum_once_per_change(tmp_path: Path, context: RunContext, monkeypatch):
+    run = CurriculumRun(tmp_path / "curriculum", ("Menu", "Level1"), "FullGame", tmp_path / "seeds")
+    puts = []
+    monkeypatch.setattr(
+        curriculum_upload_hook.httpx,
+        "put",
+        lambda url, **kwargs: puts.append((url, kwargs["json"])) or _response("PUT", url),
+    )
+    hook = curriculum_upload_hook.CurriculumUploadHook(context, run)
+    hook.settings = SimpleNamespace(url="https://upload.test", api_key="key")
+
+    hook.on_update()
+    hook.on_update()
+    run.curriculum.record_success("Menu", 10)
+    hook.on_update()
+
+    assert [url for url, _ in puts] == ["https://upload.test/curricula/FakeGame-v0"] * 2
+    first, second = (payload["states"] for _, payload in puts)
+    assert first[0] == {
+        "name": "Menu",
+        "wins": 0,
+        "win_target": 8,
+        "mastered": False,
+        "active": True,
+        "has_checkpoint": False,
+    }
+    assert second[0]["wins"] == 1

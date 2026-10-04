@@ -11,20 +11,18 @@ MAX_PORT = 65_535
 @dataclass(frozen=True)
 class RetroSpeedlabPaths:
     roms_path: Path
-    savestates_dir: Path
     models_dir: Path
     record_dir: Path
     cache_dir: Path
     database_path: Path
     reports_dir: Path
+    curriculum_dir: Path
 
 
 @dataclass(frozen=True)
 class TrainingSettings:
     game: str
     game_identity: str
-    savestates: tuple[str, ...]
-    rotation_minutes: int
     fingerprint: str | None
 
 
@@ -72,20 +70,18 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
     return RetroSpeedlabConfig(
         paths=RetroSpeedlabPaths(
             roms_path=_path(document.paths.roms, base_dir),
-            savestates_dir=_path(document.paths.savestates, base_dir),
             models_dir=_path(document.paths.models, base_dir),
             record_dir=_path(document.paths.recordings, base_dir),
             cache_dir=_path(document.paths.cache, base_dir),
             database_path=_path(document.paths.database, base_dir),
             reports_dir=_path(document.paths.reports, base_dir),
+            curriculum_dir=_path(document.paths.curriculum, base_dir),
         ),
         training=TrainingSettings(
             game=_text(training.game, "training.game"),
             game_identity=_text(training.game_identity, "training.game_identity")
             if "game_identity" in training
             else _text(training.game, "training.game"),
-            savestates=_texts(training.savestates, "training.savestates"),
-            rotation_minutes=_positive_int(training.rotation_minutes, "training.rotation_minutes"),
             fingerprint=_optional_text(training.fingerprint, "training.fingerprint"),
         ),
         laya=LayaSettings(checkpoint=_text(document.laya.checkpoint, "laya.checkpoint")),

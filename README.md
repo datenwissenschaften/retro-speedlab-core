@@ -23,10 +23,11 @@ knowledge into a learning agent.
   own checkpoint, loaded and prefetched as the state machine moves on
 - **Fits a consumer GPU**: bf16 (or fp16 with gradient scaling), gradient
   checkpointing and 8-bit AdamW train every weight in about 6 GB
-- **Reverse curriculum** with automatic savestates: once a phase is mastered,
-  attempts start where the next phase begins
-- **Level rotation**: levels train in order until beaten, then take timed turns
-  as speedruns
+- **Power-on start like a real speedrun**: every attempt boots the game at its
+  title screen with every button, levels are states of one full-game run
+- **Curriculum** with automatic savestates: once a phase is mastered,
+  attempts start where the next phase begins; the lab can seed a phase with a
+  savestate it played to from power-on
 - **Vision helpers** that turn template and color detections into text facts
   and boxes on the stream
 - `.bk2` recording of every attempt, MP4 rendering of the best attempts, and
@@ -114,7 +115,7 @@ bounded to `[1e-2, 1e3]`.
 ## One Laya per state
 
 `StateModels` keeps one checkpoint per state under
-`models/<game>/<savestate>/<State>/laya.pt`. A state transition ends that
+`models/<game>/<State>/laya.pt`. A state transition ends that
 model's trajectory, loads the next state's checkpoint (a state without one
 starts from the pretrained Laya), and prefetches the following state in the
 background. Checkpoints hold all Laya weights, the optimizer, the trust region
@@ -139,10 +140,13 @@ of the first unmastered state, so Laya practises the hard part instead of
 replaying the easy one. Mastery is never lost; a checkpoint that keeps failing
 is rebuilt from the nearest earlier mastered checkpoint.
 
-`Rotation` trains the configured `training.savestates` in order until each has
-eight wins from the very first frame. Once all are beaten, levels take turns of
-`training.rotation_minutes` as speedruns, and the current turn survives
-restarts.
+There are no configured savestates: every attempt that does not start from a
+curriculum checkpoint boots the game at power-on, so the menu (one player) is
+the first state and every level is a later state of the same run. A
+`<State>.state` file (gzip, like Stable Retro states) in `paths.curriculum`
+seeds that state's checkpoint until the engine saved its own. Once the full
+game is won eight times from power-on, every attempt is a speedrun with an
+extra cost per frame.
 
 ## Vision
 
@@ -235,10 +239,8 @@ raise a `RuntimeError` when the configuration is loaded.
 
 | Key | Meaning |
 |-----|---------|
-| `paths.*` | ROMs, savestates, models, recordings, cache, the JSON database and the lab reports |
+| `paths.*` | ROMs, models, recordings, cache, the JSON database, the lab reports and the curriculum seeds |
 | `training.game` | Stable Retro game id |
-| `training.savestates` | Levels in training order |
-| `training.rotation_minutes` | Length of a speedrun turn once every level is beaten |
 | `training.fingerprint` | Changing it resets the game's models and curriculum |
 | `laya.checkpoint` | Laya model on the Hugging Face Hub or a local directory |
 | `upload.url`, `upload.api_key` | Retro Speedlab API; `null` disables uploads |

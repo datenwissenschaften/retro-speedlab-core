@@ -1,3 +1,4 @@
+import gzip
 from pathlib import Path
 
 from loguru import logger
@@ -7,11 +8,12 @@ from datenwissenschaften.ui.telemetry import publish_metadata
 
 
 class CurriculumRun:
-    def __init__(self, root: Path, state_names: tuple[str, ...], level: str) -> None:
+    def __init__(self, root: Path, state_names: tuple[str, ...], level: str, seeds_dir: Path) -> None:
         self.root = root
         self.level = level
         self.state_names = state_names
-        self.curriculum = ReverseCurriculum(root, state_names)
+        self.seeds_dir = seeds_dir
+        self.curriculum = self._seeded(ReverseCurriculum(root, state_names))
         self.start_state = state_names[0]
         self.outcome_recorded = False
         self.episode_steps = 0
@@ -20,7 +22,7 @@ class CurriculumRun:
         self.publish()
 
     def reset_memory(self) -> None:
-        self.curriculum = ReverseCurriculum(self.root, self.state_names)
+        self.curriculum = self._seeded(ReverseCurriculum(self.root, self.state_names))
         self.publish()
 
     def begin_episode(self) -> str | None:
@@ -102,3 +104,11 @@ class CurriculumRun:
             logger.info(f"Curriculum win for {self.start_state}: {wins}/{self.curriculum.win_target(self.start_state)}")
         self.publish()
         return mastered
+
+    def _seeded(self, curriculum: ReverseCurriculum) -> ReverseCurriculum:
+        for state_name in self.state_names:
+            seed = self.seeds_dir / f"{state_name}.state"
+            if seed.is_file() and not curriculum.has_checkpoint(state_name):
+                if curriculum.save_checkpoint(state_name, gzip.decompress(seed.read_bytes()), 0.0):
+                    logger.info(f"Seeded curriculum checkpoint for {state_name} from {seed}")
+        return curriculum
