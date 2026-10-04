@@ -1,6 +1,5 @@
 import re
 from collections import Counter
-from datetime import date
 from typing import Any
 
 from loguru import logger
@@ -33,8 +32,6 @@ def empty_story() -> dict[str, Any]:
     return {
         "format": STORY_FORMAT,
         "reached": {},
-        "day": date.today().isoformat(),
-        "failures_today": {},
         "failures": [],
         "images": {},
     }
@@ -64,14 +61,9 @@ class StoryBook:
     def reach(self, phase: str, attempt: int) -> None:
         self.data["reached"][phase] = attempt
 
-    def finish(self, phase: str, succeeded: bool, location: tuple[int, int] | None, image: str) -> int:
-        if succeeded:
-            return 0
-        self._remember_danger(phase, location, image)
-        today = date.today().isoformat()
-        if self.data["day"] != today:
-            self.data["day"], self.data["failures_today"] = today, {}
-        return self._increment(self.data["failures_today"], phase)
+    def finish(self, phase: str, succeeded: bool, location: tuple[int, int] | None, image: str) -> None:
+        if not succeeded:
+            self._remember_danger(phase, location, image)
 
     def save(self) -> None:
         self.database.set(self.key, self.data)
@@ -114,8 +106,3 @@ class StoryBook:
     def _ranked_spots(self) -> list[tuple[str, int]]:
         counts = Counter(spot for spot in self.data["failures"] if spot in self.data["images"])
         return counts.most_common()
-
-    @staticmethod
-    def _increment(counts: dict[str, int], key: str) -> int:
-        counts[key] = (counts[key] if key in counts else 0) + 1
-        return counts[key]

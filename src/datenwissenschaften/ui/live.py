@@ -41,12 +41,6 @@ class LiveFeed:
                 raise RuntimeError("No frame has been recorded for this episode.")
             return _base64(self._recording[-1]["image"])
 
-    def add_events(self, events: list[dict[str, str]]) -> None:
-        with self._lock:
-            if self._recording:
-                status = self._recording[-1]["status"]
-                status["events"] = [*status["events"], *events]
-
     def finish_episode(
         self, episode_id: int, frame_rate: float, result: dict[str, Any], summary: dict[str, Any]
     ) -> None:

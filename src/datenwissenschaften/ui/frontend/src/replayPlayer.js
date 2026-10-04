@@ -146,9 +146,8 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
     decodeAhead(index)
     const bitmap = bitmaps.get(index)
     if (index === shown || !bitmap) return
-    const passed = replaying ? [] : frames.slice(shown + 1, index + 1).map(frame => frame.status)
     shown = index
-    onFrame({ bitmap, status: frames[index].status, passed, progress: index / episode.frame_count })
+    onFrame({ bitmap, status: frames[index].status, progress: index / episode.frame_count })
   }
 
   return {

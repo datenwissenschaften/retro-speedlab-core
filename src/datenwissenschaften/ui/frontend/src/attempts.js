@@ -15,15 +15,6 @@ export const createArrivalTracker = () => {
 const alignedScores = (episode, recentScores) =>
   recentScores?.length && recentScores.at(-1) === episode.result.score ? recentScores : null
 
-export const arrivalOutcome = (episode, recentScores) => {
-  const { result } = episode
-  if (result.won) return { kind: 'won' }
-  if (result.new_best) return { kind: 'best' }
-  const scores = alignedScores(episode, recentScores)
-  if (scores && scores.length > 1 && result.score > scores.at(-2)) return { kind: 'improved', previous: scores.at(-2) }
-  return { kind: 'attempt' }
-}
-
 export const recentAttempts = (episode, recentScores, levelBest, count) => {
   const scores = episode ? alignedScores(episode, recentScores) : null
   if (!scores) return []
@@ -39,36 +30,10 @@ export const recentAttempts = (episode, recentScores, levelBest, count) => {
   })).reverse()
 }
 
-export const newlyMastered = (before, after) => {
-  if (!before || !after) return []
-  return Object.entries(after).flatMap(([savestate, phases]) => Object.entries(phases)
-    .filter(([phase, progress]) => progress.mastered && before[savestate]?.[phase]?.mastered === false)
-    .map(([phase, progress]) => ({ savestate, phase, phases: Object.keys(phases).length, wins: progress.wins, winTarget: progress.win_target })))
-}
-
-const reward = score => `reward ${score.toFixed(1)}`
-
 export const holdsBest = (episode, levelBest) => levelBest != null && episode.result.score >= levelBest
 
-export const arrivalBanner = (episode, recentScores) => {
-  const outcome = arrivalOutcome(episode, recentScores)
-  const { attempt, score } = episode.result
-  if (outcome.kind === 'won') return { kind: 'won', title: '★ Attempt won', detail: `#${attempt} · ${reward(score)}` }
-  if (outcome.kind === 'best') return { kind: 'best', title: '★ New best attempt', detail: `#${attempt} · ${reward(score)}` }
-  const detail = outcome.kind === 'improved' ? `${reward(score)} · up from ${outcome.previous.toFixed(1)}` : reward(score)
-  return { kind: 'arrival', title: `New attempt · #${attempt}`, detail }
-}
-
-export const resultBanner = (episode, levelBest) => {
-  const { attempt, score, won } = episode.result
-  if (won) return { kind: 'won', title: '★ Attempt won', detail: `#${attempt} · ${reward(score)}` }
-  if (holdsBest(episode, levelBest)) return { kind: 'best', title: `Result · #${attempt}`, detail: `${reward(score)} · ★ best so far` }
-  return { kind: 'result', title: `Result · #${attempt}`, detail: reward(score) }
-}
-
-export const status = (connected, banner, replayed) => {
+export const status = (connected, replayed) => {
   if (!connected) return 'Offline'
-  if (banner?.arrival) return 'New'
   return replayed ? 'Replay' : 'Waiting'
 }
 

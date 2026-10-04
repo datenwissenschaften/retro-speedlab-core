@@ -1,27 +1,21 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ProgressPath from './ProgressPath.vue'
-import { arrivalBanner, createArrivalTracker, holdsBest, inProgressLine, newlyMastered, recentAttempts, resultBanner, status } from './attempts.js'
+import { createArrivalTracker, holdsBest, inProgressLine, recentAttempts, status } from './attempts.js'
 import { fmt, gameTitle, percent, words } from './naming.js'
 import { createObsControl, STREAM_TIME_ZONE } from './obsControl.js'
 import { createReplayPlayer } from './replayPlayer.js'
 import { elapsed } from './runtime.js'
 import SpotlightPanel from './SpotlightPanel.vue'
-import StoryTicker from './StoryTicker.vue'
 import './stream.css'
 
 const STAGE_WIDTH = 1280
 const STAGE_HEIGHT = 720
 const SNAPSHOT_INTERVAL_MS = 1500
-const TOAST_MS = 4500
-const TICKER_SIZE = 3
-const TICKER_MS = 8000
-const MAX_TICKER_BACKLOG = 6
 const RELOAD_DEADLINE_MS = 90000
 const RELOAD_SETTLE_MS = 15000
 const RELOAD_RETRY_MS = 5000
 const CLOCK_INTERVAL_MS = 1000
-const BANNER_MS = 6000
 const RECENT_ATTEMPTS = 8
 const clock = new Intl.DateTimeFormat('en-GB', { timeZone: STREAM_TIME_ZONE, dateStyle: 'medium', timeStyle: 'medium' })
 
@@ -30,7 +24,6 @@ const screen = ref(null)
 const replayEpisode = ref(null)
 const latestEpisode = ref(null)
 const recentScores = ref([])
-const banner = ref(null)
 const inProgress = ref(null)
 const bestRefresh = ref(0)
 const waiting = ref(true)
@@ -38,17 +31,10 @@ const replayProgress = ref(0)
 const snapshot = ref({ metadata: {}, summary: {} })
 const connected = ref(false)
 const scale = ref(1)
-const toast = ref(null)
 const now = ref(new Date())
 const changedFields = ref(new Set())
-const tickerEvents = ref([])
-const tickerQueue = []
-let lastStep = null
-let eventKey = 0
 let snapshotTimer
 let clockTimer
-let toastTimer
-let bannerTimer
 const arrived = createArrivalTracker()
 let reloadTimer
 let loadedRelease = null
@@ -64,44 +50,6 @@ const readable = value => {
   }
   return String(value)
 }
-const show = (next, arrival) => {
-  banner.value = { ...next, arrival, key: Date.now() }
-  window.clearTimeout(bannerTimer)
-  bannerTimer = window.setTimeout(() => { banner.value = null }, BANNER_MS)
-}
-const showArrival = episode => {
-  const next = arrivalBanner(episode, recentScores.value)
-  if (next.kind !== 'arrival') bestRefresh.value += 1
-  show(next, true)
-}
-const announce = (title, detail) => {
-  toast.value = { title, detail, key: Date.now() }
-  window.clearTimeout(toastTimer)
-  toastTimer = window.setTimeout(() => { toast.value = null }, TOAST_MS)
-}
-
-const showQueued = () => {
-  while (tickerEvents.value.length < TICKER_SIZE && tickerQueue.length) {
-    const entry = tickerQueue.shift()
-    tickerEvents.value = [...tickerEvents.value, entry]
-    window.setTimeout(() => {
-      tickerEvents.value = tickerEvents.value.filter(other => other.key !== entry.key)
-      showQueued()
-    }, TICKER_MS)
-  }
-}
-const tell = item => {
-  tickerQueue.push({ ...item, key: eventKey += 1 })
-  tickerQueue.splice(0, Math.max(0, tickerQueue.length - MAX_TICKER_BACKLOG))
-  showQueued()
-  if (item.kind === 'milestone') announce(item.text, item.detail)
-}
-const tellStep = status => {
-  if (status.step === lastStep) return
-  lastStep = status.step
-  status.events.forEach(tell)
-}
-
 const drawFrame = frame => {
   const canvas = screen.value
   if (canvas.width !== frame.bitmap.width) {
@@ -111,7 +59,6 @@ const drawFrame = frame => {
   canvas.getContext('2d').drawImage(frame.bitmap, 0, 0)
   live.value = frame.status
   replayProgress.value = frame.progress
-  frame.passed.forEach(tellStep)
 }
 const pause = milliseconds => new Promise(resolve => { window.setTimeout(resolve, milliseconds) })
 const pageServed = async () => {
@@ -136,16 +83,13 @@ const player = createReplayPlayer({
   onEpisode: (episode, replay, generation) => {
     replayEpisode.value = episode
     waiting.value = false
-    if (arrived(generation, episode, replay)) showArrival(episode)
+    if (arrived(generation, episode, replay) && (episode.result.won || episode.result.new_best)) bestRefresh.value += 1
   },
   onWaiting: () => {
     waiting.value = true
     reloadIfPending()
   },
-  onEpisodeEnd: episode => {
-    show(resultBanner(episode, levelBest(episode.result.level)), false)
-    reloadIfPending()
-  },
+  onEpisodeEnd: reloadIfPending,
   onLatest: (episode, summary, running) => {
     latestEpisode.value = episode
     recentScores.value = summary.recent_scores || []
@@ -184,7 +128,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   player.stop(); obsControl.stop()
   window.removeEventListener('resize', fit)
-  window.clearInterval(snapshotTimer); window.clearInterval(clockTimer); window.clearTimeout(toastTimer); window.clearTimeout(bannerTimer); window.clearTimeout(reloadTimer)
+  window.clearInterval(snapshotTimer); window.clearInterval(clockTimer); window.clearTimeout(reloadTimer)
 })
 
 const release = computed(() => snapshot.value.server?.release || null)
@@ -195,7 +139,7 @@ const summary = computed(() => snapshot.value.summary?.by_savestate?.[level.valu
 const story = computed(() => snapshot.value.metadata?.stories?.[level.value] || { phases: [], danger: [] })
 const levelBest = savestate => snapshot.value.summary?.by_savestate?.[savestate]?.best_fitness ?? null
 const recent = computed(() => recentAttempts(latestEpisode.value, recentScores.value, levelBest(latestEpisode.value?.result.level), RECENT_ATTEMPTS))
-const replayStatus = computed(() => status(connected.value, banner.value, replayEpisode.value))
+const replayStatus = computed(() => status(connected.value, replayEpisode.value))
 const progressLine = computed(() => connected.value ? inProgressLine(replayEpisode.value, inProgress.value) : null)
 const replayIsBest = computed(() => replayEpisode.value !== null && holdsBest(replayEpisode.value, levelBest(replayEpisode.value.result.level)))
 const learningFor = computed(() => snapshot.value.started_at ? elapsed(snapshot.value.started_at, now.value) : '—')
@@ -219,12 +163,6 @@ watch(release, current => {
   reloadTimer = window.setTimeout(reload, RELOAD_DEADLINE_MS)
 })
 
-watch(() => snapshot.value.metadata?.curricula, (current, previous) => {
-  newlyMastered(previous, current).forEach(({ savestate, phase, phases, wins, winTarget }) => {
-    announce(`${phases > 1 ? `${words(savestate)} · ${words(phase)}` : words(savestate)} mastered`, `${wins} / ${winTarget} wins`)
-  })
-})
-
 watch(() => live.value.ram, (current, previous) => {
   if (!current || !previous) return
   changedFields.value = new Set(Object.keys(current).filter(key => JSON.stringify(current[key]) !== JSON.stringify(previous[key])))
@@ -238,7 +176,7 @@ watch(() => live.value.ram, (current, previous) => {
         <aside class="run-info-panel">
           <div class="run-info-brand">
             <img class="run-info-logo" src="/logo.png" alt="Retro Speedlab" />
-            <span :class="['run-info-kicker', { fresh: banner?.arrival }]">{{ replayStatus }}</span>
+            <span class="run-info-kicker">{{ replayStatus }}</span>
           </div>
           <div class="run-info-medal">
             <span class="run-info-medal-icon">🧠</span>
@@ -261,13 +199,6 @@ watch(() => live.value.ram, (current, previous) => {
 
       <div class="stream-screen">
         <canvas ref="screen" class="stream-video" aria-label="Replayed gameplay"></canvas>
-        <StoryTicker :events="tickerEvents" />
-        <Transition name="fade">
-          <div v-if="banner" :key="banner.key" :class="['arrival-banner', banner.kind]">
-            <strong>{{ banner.title }}</strong>
-            <span>{{ banner.detail }}</span>
-          </div>
-        </Transition>
         <Transition name="fade">
           <div v-if="snapshot.server && !twitch" class="stream-waiting">
             <span class="stream-waiting-kicker">Stream off</span>
@@ -313,10 +244,6 @@ watch(() => live.value.ram, (current, previous) => {
           <time class="site-clock">{{ clock.format(now) }}</time>
         </section>
       </div>
-
-      <Transition name="toast">
-        <div v-if="toast" :key="toast.key" class="stream-toast"><strong>{{ toast.title }}</strong><span>{{ toast.detail }}</span></div>
-      </Transition>
     </div>
   </div>
 </template>

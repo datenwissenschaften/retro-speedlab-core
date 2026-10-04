@@ -29,10 +29,10 @@ class LiveStreamHook:
 
     def on_step(self, transition: Transition) -> None:
         self.episode_reward += transition.reward
+        self.teller.observe(transition, self.attempt)
         self.step += 1
         status = {
             "step": self.step,
-            "events": self.teller.observe(transition, self.attempt),
             "timesteps": transition.timesteps,
             "episode": self.episode,
             "attempt": self.attempt,
@@ -53,8 +53,7 @@ class LiveStreamHook:
         self.recent_scores.append(episode.score)
         previous_best = best_fitness(self.savestate)
         new_best = previous_best is not None and episode.score > previous_best
-        endings = self.teller.finish(episode, new_best, live_feed.last_image())
-        live_feed.add_events(endings)
+        self.teller.finish(episode, live_feed.last_image())
         result = {
             "score": episode.score,
             "won": episode.won,

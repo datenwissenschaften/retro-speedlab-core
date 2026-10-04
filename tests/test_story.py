@@ -9,7 +9,7 @@ from datenwissenschaften.training import story_book
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
 from datenwissenschaften.training.story_book import DANGER_CELL, StoryBook, label, level_identity, story_key
-from datenwissenschaften.training.story_teller import QUIET_STEPS, StoryTeller
+from datenwissenschaften.training.story_teller import StoryTeller
 
 PHASES = ("FindDoor", "OpenDoor")
 
@@ -44,38 +44,15 @@ def test_labels_read_like_words():
     assert (label("FindOpenDoor"), label("nibbleys_eaten")) == ("Find Open Door", "Nibbleys Eaten")
 
 
-def test_first_visit_of_a_phase_is_a_milestone_and_later_ones_are_progress(tmp_path: Path, published):
-    teller = StoryTeller(StoryBook(JsonDatabase(tmp_path / "db.json"), "Game", "Level1", PHASES))
+def test_every_phase_remembers_the_attempt_that_first_reached_it(tmp_path: Path, published):
+    book = StoryBook(JsonDatabase(tmp_path / "db.json"), "Game", "Level1", PHASES)
+    teller = StoryTeller(book)
 
-    teller.observe(_transition({"weight": 1}, (0, 0), "FindDoor", None), 1)
-    first = teller.observe(_transition({"weight": 1}, (0, 0), "OpenDoor", ("FindDoor", "OpenDoor")), 1)
-    again = teller.observe(_transition({"weight": 1}, (0, 0), "OpenDoor", ("FindDoor", "OpenDoor")), 2)
+    teller.observe(_transition({}, (0, 0), "FindDoor", None), 1)
+    teller.observe(_transition({}, (0, 0), "OpenDoor", ("FindDoor", "OpenDoor")), 2)
+    teller.observe(_transition({}, (0, 0), "OpenDoor", ("FindDoor", "OpenDoor")), 3)
 
-    assert first == [{"kind": "milestone", "text": "New area: Open Door", "detail": "First time, attempt #1"}]
-    assert again[0]["kind"] == "good"
-
-
-def test_falling_back_to_an_earlier_phase_is_told_as_a_setback(tmp_path: Path, published):
-    teller = StoryTeller(StoryBook(JsonDatabase(tmp_path / "db.json"), "Game", "Level1", PHASES))
-    teller.observe(_transition({"weight": 1}, (0, 0), "OpenDoor", None), 1)
-
-    back = teller.observe(_transition({"weight": 1}, (0, 0), "FindDoor", ("OpenDoor", "FindDoor")), 1)
-
-    assert back == [{"kind": "bad", "text": "Back to Find Door", "detail": "Lost progress in Open Door"}]
-
-
-def test_only_quiet_facts_become_events(tmp_path: Path, published):
-    teller = StoryTeller(StoryBook(JsonDatabase(tmp_path / "db.json"), "Game", "Level1", PHASES))
-    teller.observe(_transition({"weight": 1, "time": 90, "door": False}, (0, 0), "FindDoor", None), 1)
-
-    changed = teller.observe(_transition({"weight": 2, "time": 89, "door": True}, (0, 0), "FindDoor", None), 1)
-    ticking = teller.observe(_transition({"weight": 2, "time": 88, "door": True}, (0, 0), "FindDoor", None), 1)
-
-    assert [event["text"] for event in changed] == ["Weight up to 2", "Time down to 89", "Door: yes"]
-    assert ticking == []
-    for _ in range(QUIET_STEPS):
-        teller.observe(_transition({"weight": 2, "time": 88, "door": True}, (0, 0), "FindDoor", None), 1)
-    assert teller.observe(_transition({"weight": 2, "time": 87, "door": True}, (0, 0), "FindDoor", None), 1)
+    assert [phase["first_attempt"] for phase in book.view()["phases"]] == [1, 2]
 
 
 def test_failures_are_counted_and_persisted(tmp_path: Path, published):
@@ -83,13 +60,11 @@ def test_failures_are_counted_and_persisted(tmp_path: Path, published):
     teller = StoryTeller(StoryBook(database, "Game", "Level1", PHASES))
     teller.observe(_transition({}, (40, 20), "FindDoor", None), 1)
 
-    first = teller.finish(_episode("FindDoor", False), False, "jpeg-1")
+    teller.finish(_episode("FindDoor", False), "jpeg-1")
     teller.observe(_transition({}, (40, 20), "FindDoor", None), 2)
-    second = teller.finish(_episode("FindDoor", True), True, "jpeg-2")
+    teller.finish(_episode("FindDoor", True), "jpeg-2")
 
     view = StoryBook(database, "Game", "Level1", PHASES).view()
-    assert first == [{"kind": "bad", "text": "Attempt over in Find Door", "detail": "#1 today"}]
-    assert second == [{"kind": "good", "text": "New best reward!", "detail": "reward 0.0"}]
     assert view["phases"][0] == {
         "name": "FindDoor",
         "label": "Find Door",
