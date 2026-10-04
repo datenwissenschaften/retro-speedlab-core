@@ -1,4 +1,3 @@
-import gzip
 from pathlib import Path
 
 from loguru import logger
@@ -109,6 +108,6 @@ class CurriculumRun:
         for state_name in self.state_names:
             seed = self.seeds_dir / f"{state_name}.state"
             if seed.is_file() and not curriculum.has_checkpoint(state_name):
-                if curriculum.save_checkpoint(state_name, gzip.decompress(seed.read_bytes()), 0.0):
+                if curriculum.save_checkpoint(state_name, seed.read_bytes(), 0.0):
                     logger.info(f"Seeded curriculum checkpoint for {state_name} from {seed}")
         return curriculum

@@ -1,4 +1,3 @@
-import gzip
 import json
 from pathlib import Path
 
@@ -185,8 +184,8 @@ def test_factory_starts_the_game_at_power_on_with_every_button(tmp_path: Path, m
 def test_the_agents_seeds_become_curriculum_checkpoints_until_the_engine_has_its_own(tmp_path: Path):
     seeds = tmp_path / "seeds"
     seeds.mkdir()
-    (seeds / "Boss.state").write_bytes(gzip.compress(b"boss room"))
-    (seeds / "Unknown.state").write_bytes(gzip.compress(b"ignored"))
+    (seeds / "Boss.state").write_bytes(b"boss room")
+    (seeds / "Unknown.state").write_bytes(b"ignored")
 
     run = CurriculumRun(tmp_path / "curriculum", ("Survive", "Boss"), "Level1", seeds)
 
