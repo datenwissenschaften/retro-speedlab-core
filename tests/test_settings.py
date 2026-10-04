@@ -18,7 +18,6 @@ def _document() -> dict[str, Any]:
             "cache": "cache",
             "database": "database.json",
             "reports": "agent/reports",
-            "hints": "HINT.md",
         },
         "training": {
             "game": "TestGame",
@@ -67,7 +66,6 @@ def test_paths_resolve_relative_to_the_config_file(tmp_path: Path):
     assert config.paths.savestates_dir == (tmp_path / "savestates").resolve()
     assert config.paths.record_dir == (tmp_path / "recordings").resolve()
     assert config.paths.database_path == (tmp_path / "database.json").resolve()
-    assert config.paths.hints_file == (tmp_path / "HINT.md").resolve()
 
 
 def test_explicit_game_identity_wins(tmp_path: Path):

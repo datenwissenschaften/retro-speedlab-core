@@ -6,7 +6,6 @@ paths:
   cache: working/cache
   database: working/database.json
   reports: reports
-  hints: HINT.md
 
 training:
   game: Airstriker-Genesis-v0

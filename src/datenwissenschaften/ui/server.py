@@ -4,7 +4,6 @@ import json
 import mimetypes
 import secrets
 import threading
-from collections.abc import Callable
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.metadata import PackageNotFoundError, version
@@ -20,7 +19,7 @@ from datenwissenschaften.ui.control import control_metadata, request_model_reset
 from datenwissenschaften.ui.live import live_feed
 from datenwissenschaften.ui.persona import persona_tag
 from datenwissenschaften.ui.reports import list_reports, read_report
-from datenwissenschaften.ui.summaries import LabSummaries
+from datenwissenschaften.ui.summaries import ReportDigest
 from datenwissenschaften.ui.telemetry import get_store
 
 
@@ -135,16 +134,14 @@ def rollout_video_path(record_root: Path, relative_path: str) -> Path:
 
 
 class DashboardServer:
-    def __init__(
-        self, settings: UISettings, record_root: Path, reports_dir: Path, summaries: LabSummaries | None
-    ) -> None:
+    def __init__(self, settings: UISettings, record_root: Path, reports_dir: Path, digest: ReportDigest | None) -> None:
         self.settings = settings
         self._httpd = ThreadingHTTPServer((settings.host, settings.port), _DashboardHandler)
         self._httpd.csrf_token = secrets.token_urlsafe(32)
         self._httpd.ui_settings = settings
         self._httpd.record_root = record_root
         self._httpd.reports_dir = reports_dir
-        self._httpd.summaries = summaries
+        self._httpd.digest = digest
         self._thread = threading.Thread(target=self._httpd.serve_forever, name="training-ui", daemon=True)
 
     def start(self) -> None:
@@ -160,7 +157,7 @@ _server_lock = threading.Lock()
 
 
 def start_ui(
-    settings: UISettings, record_root: Path, reports_dir: Path, summaries: LabSummaries | None
+    settings: UISettings, record_root: Path, reports_dir: Path, digest: ReportDigest | None
 ) -> DashboardServer | None:
     global _server
     if not settings.enabled:
@@ -170,7 +167,7 @@ def start_ui(
         if _server is not None:
             return _server
         try:
-            _server = DashboardServer(settings, record_root, reports_dir, summaries)
+            _server = DashboardServer(settings, record_root, reports_dir, digest)
             _server.start()
         except OSError as error:
             logger.error(f"Could not start training UI on {settings.host}:{settings.port}: {error}")
@@ -254,10 +251,7 @@ class _DashboardHandler(BaseHTTPRequestHandler):
                 self.send_error(HTTPStatus.NOT_FOUND, "Report not found")
             return
         if path == "/api/report-summary":
-            self._send_summary(lambda summaries: summaries.latest_report(), "No daily report yet")
-            return
-        if path == "/api/hint-summary":
-            self._send_summary(lambda summaries: summaries.hint(), "No developer hints yet")
+            self._send_report_summary()
             return
         if path == "/api/rollout-videos":
             self._send_json({"videos": rollout_videos(self.server.record_root)})
@@ -302,17 +296,17 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         logger.warning(f"Model reset requested from training UI for {game}")
         self._send_json({"status": "reset_pending", "game": game}, status=HTTPStatus.ACCEPTED)
 
-    def _send_summary(self, summary: Callable[[LabSummaries], dict], missing: str) -> None:
-        if self.server.summaries is None:
-            self.send_error(HTTPStatus.NOT_FOUND, "Summaries are off")
+    def _send_report_summary(self) -> None:
+        if self.server.digest is None:
+            self.send_error(HTTPStatus.NOT_FOUND, "Report summaries are off")
             return
         try:
-            self._send_json(summary(self.server.summaries))
+            self._send_json(self.server.digest.latest())
         except FileNotFoundError:
-            self.send_error(HTTPStatus.NOT_FOUND, missing)
+            self.send_error(HTTPStatus.NOT_FOUND, "No daily report yet")
         except (httpx.HTTPError, KeyError, IndexError, ValueError) as error:
-            logger.warning(f"No summary: {error}")
-            self.send_error(HTTPStatus.SERVICE_UNAVAILABLE, "Summary unavailable")
+            logger.warning(f"No report summary: {error}")
+            self.send_error(HTTPStatus.SERVICE_UNAVAILABLE, "Report summary unavailable")
 
     def log_message(self, format: str, *args) -> None:
         pass

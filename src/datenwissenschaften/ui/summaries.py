@@ -1,7 +1,6 @@
 import json
 import os
 import threading
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -26,12 +25,6 @@ REPORT_INSTRUCTIONS = (
     "and error. Read today's lab report and write exactly four lines for the viewers. Line 1: a catchy headline "
     "of at most six words. Lines 2 to 4: one short, lively sentence each, at most 14 words: what changed today, "
     "how Laya is doing, and what to watch for next. " + CARD_RULES + "; call the changes today's update."
-)
-HINT_INSTRUCTIONS = (
-    "You write the developer hints card on a live stream where Laya, an AI, teaches itself to play {game} by "
-    "trial and error. Read the developer's hints for the lab and write exactly four lines for the viewers. Line 1: "
-    "a catchy headline of at most six words. Lines 2 to 4: one short, lively sentence each, at most 14 words: the "
-    "most important hints in plain game terms, for example what wins a level or what to avoid. " + CARD_RULES + "."
 )
 
 
@@ -64,10 +57,6 @@ class Summarizer:
         return lines[:SUMMARY_LINES]
 
 
-def summary_path(source: Path) -> Path:
-    return source.with_suffix(SUMMARY_SUFFIX)
-
-
 class CachedSummary:
     def __init__(self, summarizer: Summarizer) -> None:
         self.summarizer = summarizer
@@ -76,7 +65,7 @@ class CachedSummary:
     def of(self, source: Path) -> dict[str, Any]:
         if not source.is_file():
             raise FileNotFoundError(source)
-        summary = summary_path(source)
+        summary = source.with_suffix(SUMMARY_SUFFIX)
         with self._lock:
             if not summary.is_file() or summary.stat().st_mtime < source.stat().st_mtime:
                 headline, *lines = self.summarizer.summarize(source.read_text(encoding="utf-8"))
@@ -85,32 +74,22 @@ class CachedSummary:
             return json.loads(summary.read_text(encoding="utf-8"))
 
 
-@dataclass(frozen=True)
-class LabSummaries:
-    reports_dir: Path
-    hints_file: Path
-    reports: CachedSummary
-    hints: CachedSummary
+class ReportDigest:
+    def __init__(self, reports_dir: Path, summary: CachedSummary) -> None:
+        self.reports_dir = reports_dir
+        self.summary = summary
 
-    def latest_report(self) -> dict[str, Any]:
+    def latest(self) -> dict[str, Any]:
         reports = list_reports(self.reports_dir)
         if not reports:
             raise FileNotFoundError(self.reports_dir)
-        return self.reports.of(self.reports_dir / str(reports[0]["name"]))
-
-    def hint(self) -> dict[str, Any]:
-        return self.hints.of(self.hints_file)
+        return self.summary.of(self.reports_dir / str(reports[0]["name"]))
 
 
-def lab_summaries(settings: UISettings, game: str, reports_dir: Path, hints_file: Path) -> LabSummaries | None:
+def report_digest(settings: UISettings, game: str, reports_dir: Path) -> ReportDigest | None:
     if not settings.twitch:
         return None
     if OPENROUTER_KEY not in os.environ:
         raise RuntimeError(f"twitch.enabled is on but {OPENROUTER_KEY} is not set.")
-    api_key = os.environ[OPENROUTER_KEY]
-    return LabSummaries(
-        reports_dir=reports_dir,
-        hints_file=hints_file,
-        reports=CachedSummary(Summarizer(REPORT_INSTRUCTIONS.format(game=game), settings.summary_models, api_key)),
-        hints=CachedSummary(Summarizer(HINT_INSTRUCTIONS.format(game=game), settings.summary_models, api_key)),
-    )
+    summarizer = Summarizer(REPORT_INSTRUCTIONS.format(game=game), settings.summary_models, os.environ[OPENROUTER_KEY])
+    return ReportDigest(reports_dir, CachedSummary(summarizer))
