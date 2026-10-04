@@ -1,5 +1,6 @@
 import json
 import string
+from time import monotonic
 from typing import Any, Generic, TypeVar
 
 import gymnasium as gym
@@ -17,6 +18,7 @@ T = TypeVar("T", bound=RamInfo)
 MAX_TEXT_LENGTH = 8_192
 ACTION_TABLE_DIMENSIONS = 3
 SPEEDRUN_FRAME_COST = 0.005
+MAX_STATE_SECONDS = 180.0
 TEXT_SPACE = gym.spaces.Text(max_length=MAX_TEXT_LENGTH, charset=string.printable)
 
 Observation = dict[str, str]
@@ -42,6 +44,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         self.initial_savestate = initial_savestate
         self._episode_info: dict[str, Any] = {}
         self.frames: list[np.ndarray] = []
+        self.state_started = monotonic()
         self.speedrun = False
 
     def reset(self, **kwargs: Any) -> tuple[Observation, dict[str, Any]]:
@@ -57,6 +60,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         ram = self._read_ram()
         state_type = None if checkpoint_state is None else self._state_class(checkpoint_state)
         self.state_machine.reset(ram, frame, state_type)
+        self.state_started = monotonic()
         self._episode_info = {
             "started_from_initial_savestate": checkpoint_state is None,
             "episode_start_state": checkpoint_state or self.initial_savestate,
@@ -81,9 +85,11 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
             truncated = env_truncated or state_truncated
             transition = self.state_machine.last_transition
             if transition is not None:
+                self.state_started = monotonic()
                 emulator_state = bytes(self.env.unwrapped.em.get_state())
                 succeeded, mastered = self.curriculum.transition(*transition, emulator_state, reward)
                 terminated = terminated or succeeded
+            truncated = truncated or monotonic() - self.state_started >= MAX_STATE_SECONDS
             if transition is not None or terminated or truncated:
                 break
 

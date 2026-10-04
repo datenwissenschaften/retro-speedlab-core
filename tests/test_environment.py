@@ -7,10 +7,10 @@ import pytest
 from fakes import FakeEmulator, FakeWrapper, fake_environment, write_config
 
 from datenwissenschaften.curriculum import ReverseCurriculum
-from datenwissenschaften.environment import factory
+from datenwissenschaften.environment import factory, wrapper
 from datenwissenschaften.environment.curriculum_run import CurriculumRun
 from datenwissenschaften.environment.recording import active_movie_path
-from datenwissenschaften.environment.wrapper import SPEEDRUN_FRAME_COST
+from datenwissenschaften.environment.wrapper import MAX_STATE_SECONDS, SPEEDRUN_FRAME_COST
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.states.landmarks import Landmarks
 
@@ -251,3 +251,27 @@ def test_stable_retros_done_condition_never_ends_an_attempt(tmp_path: Path):
 
     assert not terminated
     assert not truncated
+
+
+def test_a_curriculum_state_ends_after_three_real_minutes(tmp_path: Path, monkeypatch):
+    env = fake_environment(tmp_path, [(3, 0)])
+    monkeypatch.setattr(wrapper, "monotonic", lambda: 0.0)
+    env.reset()
+
+    early = env.step(0)[3]
+    monkeypatch.setattr(wrapper, "monotonic", lambda: MAX_STATE_SECONDS)
+    late = env.step(0)[3]
+
+    assert (early, late) == (False, True)
+
+
+def test_entering_the_next_state_restarts_its_clock(tmp_path: Path, monkeypatch):
+    env = fake_environment(tmp_path, [(3, 0), (3, 5)])
+    monkeypatch.setattr(wrapper, "monotonic", lambda: 0.0)
+    env.reset()
+    monkeypatch.setattr(wrapper, "monotonic", lambda: MAX_STATE_SECONDS)
+
+    _, _, _, truncated, info = env.step(0)
+
+    assert info["state_transition"] == ("Survive", "Boss")
+    assert (truncated, env.state_started) == (False, MAX_STATE_SECONDS)
