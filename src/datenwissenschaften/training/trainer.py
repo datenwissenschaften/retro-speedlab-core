@@ -4,6 +4,7 @@ from pathlib import Path
 import torch
 
 from datenwissenschaften.accelerator import configure_accelerator
+from datenwissenschaften.environment.demonstration import load_demonstrations
 from datenwissenschaften.environment.factory import POWER_ON, make_environment
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.laya.agent import LayaAgent
@@ -68,9 +69,11 @@ class LayaTrainer:
         self._publish_run()
         publish_metadata("model", model_metadata(models), replace=True)
         story = StoryBook(database, self.config.training.game_identity, self.context.savestate, self._phases())
+        demonstrations = load_demonstrations(env, self.config.paths.demonstrations_dir)
         deadline = time.monotonic() + seconds
         try:
-            return TrainingSession(env, models, self._hooks(env, models, StoryTeller(story)), deadline).run()
+            hooks = self._hooks(env, models, StoryTeller(story))
+            return TrainingSession(env, models, hooks, deadline, demonstrations).run()
         finally:
             models.close()
 

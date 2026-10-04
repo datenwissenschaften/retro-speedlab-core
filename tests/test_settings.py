@@ -18,6 +18,7 @@ def _document() -> dict[str, Any]:
             "database": "database.json",
             "reports": "agent/reports",
             "curriculum": "curriculum",
+            "demonstrations": "demonstrations",
         },
         "training": {
             "game": "TestGame",
@@ -60,6 +61,7 @@ def test_paths_resolve_relative_to_the_config_file(tmp_path: Path):
 
     assert config.paths.roms_path == (tmp_path / "roms").resolve()
     assert config.paths.curriculum_dir == (tmp_path / "curriculum").resolve()
+    assert config.paths.demonstrations_dir == (tmp_path / "demonstrations").resolve()
     assert config.paths.record_dir == (tmp_path / "recordings").resolve()
     assert config.paths.database_path == (tmp_path / "database.json").resolve()
 

@@ -123,6 +123,12 @@ class FakeEmulator(gym.Env):
     def get_ram(self) -> np.ndarray:
         return np.asarray(self.script[self.position], dtype=np.uint8)
 
+    def stop_record(self) -> None:
+        self.movie_path = None
+
+    def auto_record(self, path: str) -> None:
+        self.movie_path = path
+
     def render(self) -> np.ndarray:
         return np.zeros((4, 4, 3), np.uint8)
 
@@ -147,7 +153,8 @@ def write_config(tmp_path: Path) -> Path:
         "\n".join(
             [
                 "paths: {roms: roms, models: models, recordings: recordings, cache: cache,"
-                " database: database.json, reports: reports, curriculum: curriculum}",
+                " database: database.json, reports: reports, curriculum: curriculum,"
+                " demonstrations: demonstrations}",
                 "training: {game: FakeGame-v0, fingerprint: null}",
                 "laya: {checkpoint: fake/laya}",
                 "upload: {url: 'https://upload.test', api_key: null}",

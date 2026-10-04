@@ -4,6 +4,7 @@ from typing import Any
 import torch
 
 from datenwissenschaften.laya.decision import Decision
+from datenwissenschaften.laya.imitation import DemonstrationStep
 from datenwissenschaften.laya.learning import GroupRelativeLearner
 from datenwissenschaften.laya.network import LayaNetwork
 from datenwissenschaften.laya.rollout import Rollout
@@ -29,8 +30,8 @@ class LayaAgent:
         options = dict(zip(self.network.question.options, probabilities.tolist(), strict=True))
         return Decision(action, options, float(behavior[action]))
 
-    def learn(self, rollout: Rollout) -> None:
-        self.last_update = self.learner.update(rollout)
+    def learn(self, rollout: Rollout, demonstrations: list[DemonstrationStep]) -> None:
+        self.last_update = self.learner.update(rollout, demonstrations)
         self.num_timesteps += len(rollout)
 
     def restart(self) -> None:

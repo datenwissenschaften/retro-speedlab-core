@@ -57,7 +57,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
             restore_emulator_state(emulator, self.curriculum.checkpoint(checkpoint_state))
             frame, *_ = self.env.step(np.zeros_like(self.action_table[0][0]))
             self.frames = [frame]
-        ram = self._read_ram()
+        ram = self.read_ram()
         state_type = None if checkpoint_state is None else self._state_class(checkpoint_state)
         self.state_machine.reset(ram, frame, state_type)
         self.state_started = monotonic()
@@ -67,18 +67,18 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
             "episode_start_score": self.curriculum.episode_score,
             "episode_bk2_path": active_movie_path(emulator),
         }
-        return self._observation(ram), {**self._step_view(), **self._episode_info}
+        return self.observation(ram), {**self._step_view(), **self._episode_info}
 
     def step(self, action: int) -> tuple[Observation, float, bool, bool, dict[str, Any]]:
         reward, terminated, truncated = 0.0, False, False
         transition: tuple[str, str] | None = None
         succeeded, mastered = False, False
         self.frames = []
-        for buttons in self.action_table[action]:
+        for buttons in self.current_action_table()[action]:
             self.curriculum.count_step()
             frame, _, _, env_truncated, _ = self.env.step(buttons)
             self.frames.append(frame)
-            ram = self._read_ram()
+            ram = self.read_ram()
             state_reward, state_terminated, state_truncated = self.state_machine.step(ram, frame)
             reward += state_reward - (SPEEDRUN_FRAME_COST if self.speedrun else 0.0)
             terminated = state_terminated
@@ -105,7 +105,10 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
             "location": ram.location(),
             **self._episode_info,
         }
-        return self._observation(ram), reward, terminated, truncated, info
+        return self.observation(ram), reward, terminated, truncated, info
+
+    def current_action_table(self) -> np.ndarray:
+        return self.action_table
 
     def _step_view(self) -> dict[str, Any]:
         return {"state": self.state_machine.state_name, "detections": self.state_machine.current_state.detections()}
@@ -114,11 +117,11 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         self.curriculum.reset_memory()
         self.state_machine.landmarks.forget()
 
-    def _observation(self, ram: T) -> Observation:
+    def observation(self, ram: T) -> Observation:
         state = {**ram.describe(), **self.state_machine.current_state.describe()}
         return {"state": json.dumps(state), "question": self.state_machine.question}
 
-    def _read_ram(self) -> T:
+    def read_ram(self) -> T:
         return self.ram_info_cls.from_ram(self.env.unwrapped.get_ram())
 
     def _state_class(self, state_name: str) -> type[State[T]]:

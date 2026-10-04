@@ -9,6 +9,7 @@ from datenwissenschaften.laya import learning as learning_module
 from datenwissenschaften.laya import network as network_module
 from datenwissenschaften.laya.agent import LayaAgent
 from datenwissenschaften.laya.decision import Decision
+from datenwissenschaften.laya.imitation import DemonstrationStep
 from datenwissenschaften.laya.learning import MAX_BACKTRACKS
 from datenwissenschaften.laya.network import LayaNetwork
 from datenwissenschaften.laya.question import LayaQuestion
@@ -98,7 +99,7 @@ def test_agent_learning_changes_every_trainable_part(network: LayaNetwork):
             step == 9,
         )
 
-    agent.learn(rollout)
+    agent.learn(rollout, [])
 
     assert agent.num_timesteps == len(rollout)
     after = list(network.parameters())
@@ -106,6 +107,8 @@ def test_agent_learning_changes_every_trainable_part(network: LayaNetwork):
     assert set(agent.last_update) == {
         "policy_loss",
         "entropy",
+        "imitation_loss",
+        "demonstration_decisions",
         "step_kl",
         "kl",
         "learning_rate_scale",
@@ -158,7 +161,7 @@ def test_float16_learning_scales_gradients_and_stays_finite(monkeypatch):
             OBSERVATION["state"], QUESTION, Decision(step % 2, {"left": 0.5, "right": 0.5}, 0.5), 1.0, step == 5
         )
 
-    agent.learn(rollout)
+    agent.learn(rollout, [])
 
     assert agent.learner.scaler.is_enabled()
     assert agent.metadata()["precision"] == "float16"
@@ -215,3 +218,13 @@ def test_weight_snapshot_blends_back_toward_the_captured_weights():
     snapshot.blend(0.25)
 
     assert torch.equal(parameter.detach(), torch.full((3,), 1.0))
+
+
+def test_learning_reports_how_far_laya_is_from_the_demonstrations(network: LayaNetwork):
+    agent = LayaAgent(network, (QUESTION,))
+    demonstrations = [DemonstrationStep(OBSERVATION["state"], QUESTION, 1)] * 4
+
+    agent.learn(_rollout(8), demonstrations)
+
+    assert agent.last_update["imitation_loss"] == pytest.approx(math.log(len(ACTIONS)), abs=0.1)
+    assert agent.last_update["demonstration_decisions"] == len(demonstrations)

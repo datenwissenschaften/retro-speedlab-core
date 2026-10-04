@@ -3,6 +3,7 @@ from typing import Any
 import bitsandbytes as bnb
 import torch
 
+from datenwissenschaften.laya.imitation import DemonstrationStep, imitate
 from datenwissenschaften.laya.network import LayaNetwork
 from datenwissenschaften.laya.precision import minibatch_size
 from datenwissenschaften.laya.rollout import Rollout
@@ -35,10 +36,10 @@ class GroupRelativeLearner:
         self.scaler = torch.amp.GradScaler(network.device.type, enabled=network.dtype == torch.float16)
         self.snapshot = WeightSnapshot(list(network.parameters()))
 
-    def update(self, rollout: Rollout) -> dict[str, float]:
+    def update(self, rollout: Rollout, demonstrations: list[DemonstrationStep]) -> dict[str, float]:
         previous = torch.as_tensor(rollout.probabilities, device=self.network.device).clamp_min(PROBABILITY_FLOOR)
         self.snapshot.capture()
-        policy_loss, entropy = self._step(rollout, previous)
+        policy_loss, entropy, imitation_loss = self._step(rollout, previous, demonstrations)
         step_kl = self._measure_kl(rollout, previous)
         kl = self._backtrack(rollout, previous, step_kl)
         self.trust_region.adapt(step_kl)
@@ -47,6 +48,8 @@ class GroupRelativeLearner:
         return {
             "policy_loss": policy_loss,
             "entropy": entropy,
+            "imitation_loss": imitation_loss,
+            "demonstration_decisions": len(demonstrations),
             "step_kl": step_kl,
             "kl": kl,
             "learning_rate_scale": self.trust_region.learning_rate_scale,
@@ -75,7 +78,9 @@ class GroupRelativeLearner:
         self.trust_region.load_state_dict(state["trust_region"])
         self.scaler.load_state_dict(state["scaler"])
 
-    def _step(self, rollout: Rollout, previous: torch.Tensor) -> tuple[float, float]:
+    def _step(
+        self, rollout: Rollout, previous: torch.Tensor, demonstrations: list[DemonstrationStep]
+    ) -> tuple[float, float, float]:
         actions = torch.as_tensor(rollout.actions, device=self.network.device)
         sampled = torch.as_tensor(rollout.behavior_probabilities, device=self.network.device)
         importance = previous.gather(1, actions[:, None]).squeeze(1) / sampled
@@ -94,12 +99,13 @@ class GroupRelativeLearner:
             self.scaler.scale(loss).backward()
             policy_loss_total += policy_loss.item()
             entropy_total += entropy.sum().item()
+        imitation_loss = imitate(self.network, self.scaler, demonstrations, self.minibatch_size)
         self.scaler.unscale_(self.optimizer)
         torch.nn.utils.clip_grad_norm_(self.network.parameters(), MAX_GRADIENT_NORM)
         self.scaler.step(self.optimizer)
         self.scaler.update()
         self.network.eval()
-        return policy_loss_total / count, entropy_total / count
+        return policy_loss_total / count, entropy_total / count, imitation_loss
 
     @torch.no_grad()
     def _measure_kl(self, rollout: Rollout, previous: torch.Tensor) -> float:

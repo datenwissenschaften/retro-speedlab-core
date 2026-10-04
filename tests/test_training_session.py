@@ -3,6 +3,7 @@ from pathlib import Path
 from fakes import fake_environment, write_config
 
 from datenwissenschaften.laya.decision import Decision
+from datenwissenschaften.laya.imitation import DemonstrationStep
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.training import session as session_module
 from datenwissenschaften.training.context import RunContext
@@ -22,13 +23,15 @@ class RecordingAgent:
         self.num_timesteps = 0
         self.rollouts: list[int] = []
         self.explorations: list[float] = []
+        self.demonstrations: list[int] = []
 
     def act(self, observation: dict[str, str], exploration: float) -> Decision:
         self.explorations.append(exploration)
         return Decision(1, {"left": 0.2, "right": 0.8}, 0.74)
 
-    def learn(self, rollout) -> None:
+    def learn(self, rollout, demonstrations) -> None:
         self.rollouts.append(len(rollout))
+        self.demonstrations.append(len(demonstrations))
         self.num_timesteps += len(rollout)
 
 
@@ -55,7 +58,7 @@ def test_session_plays_learns_and_stops_on_a_reset_request(tmp_path: Path, monke
     agent, hook = RecordingAgent(), RecordingHook()
     models = StateModels(agent, RunContext(load_config(write_config(tmp_path)), "Level1"), ("Survive", "Boss"))
 
-    result = TrainingSession(env, models, [hook], float("inf")).run()
+    result = TrainingSession(env, models, [hook], float("inf"), {}).run()
 
     assert result == "reset"
     assert agent.num_timesteps == ROLLOUT_STEPS
@@ -79,7 +82,7 @@ def test_mastered_states_explore_less(tmp_path: Path):
     for _ in range(env.curriculum.curriculum.WIN_TARGET):
         env.curriculum.curriculum.record_success("Survive", 1)
 
-    session = TrainingSession(env, models, [], float("inf"))
+    session = TrainingSession(env, models, [], float("inf"), {})
 
     assert session._exploration("Survive") == EXPLORATION_ONCE_MASTERED
     assert session._exploration("Boss") == EXPLORATION_WHILE_LEARNING
@@ -92,7 +95,22 @@ def test_session_hands_over_to_the_next_level_after_an_episode_past_the_deadline
     context = RunContext(load_config(write_config(tmp_path)), "Level1")
     models = StateModels(RecordingAgent(), context, ("Survive", "Boss"))
 
-    result = TrainingSession(env, models, [hook], 0.0).run()
+    result = TrainingSession(env, models, [hook], 0.0, {}).run()
 
     assert result is None
     assert len(hook.episodes) == 1
+
+
+def test_only_unmastered_states_learn_from_their_demonstrations(tmp_path: Path):
+    env = fake_environment(tmp_path, [(3, 0)])
+    context = RunContext(load_config(write_config(tmp_path)), "Level1")
+    models = StateModels(RecordingAgent(), context, ("Survive", "Boss"))
+    step = DemonstrationStep("{}", "Which move survives?", 1)
+    for _ in range(env.curriculum.curriculum.WIN_TARGET):
+        env.curriculum.curriculum.record_success("Survive", 1)
+
+    session = TrainingSession(env, models, [], float("inf"), {"Survive": [step], "Boss": [step]})
+
+    assert session._demonstrations("Survive") == []
+    assert session._demonstrations("Boss") == [step]
+    assert TrainingSession(env, models, [], float("inf"), {})._demonstrations("Boss") == []

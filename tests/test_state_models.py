@@ -27,7 +27,7 @@ class SwappingAgent:
     def restart(self) -> None:
         self.weights = "pretrained"
 
-    def learn(self, rollout) -> None:
+    def learn(self, rollout, demonstrations) -> None:
         self.learned.append(len(rollout))
 
 
@@ -41,7 +41,7 @@ def test_every_state_trains_and_keeps_its_own_model(tmp_path: Path):
     models.save()
     models.activate("Boss")
     boss_weights = agent.weights
-    models.learn()
+    models.learn([])
     models.activate("Survive")
 
     assert boss_weights == "pretrained"

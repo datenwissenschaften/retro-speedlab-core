@@ -17,6 +17,7 @@ class RetroSpeedlabPaths:
     database_path: Path
     reports_dir: Path
     curriculum_dir: Path
+    demonstrations_dir: Path
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             database_path=_path(document.paths.database, base_dir),
             reports_dir=_path(document.paths.reports, base_dir),
             curriculum_dir=_path(document.paths.curriculum, base_dir),
+            demonstrations_dir=_path(document.paths.demonstrations, base_dir),
         ),
         training=TrainingSettings(
             game=_text(training.game, "training.game"),

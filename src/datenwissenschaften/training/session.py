@@ -1,6 +1,8 @@
 import time
 
+from datenwissenschaften.environment.demonstration import Demonstrations
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
+from datenwissenschaften.laya.imitation import DemonstrationStep
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import TrainingHook, Transition
 from datenwissenschaften.training.state_models import StateModels
@@ -13,12 +15,18 @@ EXPLORATION_ONCE_MASTERED = 0.05
 
 class TrainingSession:
     def __init__(
-        self, env: StateMachineGymWrapper, models: StateModels, hooks: list[TrainingHook], deadline: float
+        self,
+        env: StateMachineGymWrapper,
+        models: StateModels,
+        hooks: list[TrainingHook],
+        deadline: float,
+        demonstrations: Demonstrations,
     ) -> None:
         self.env = env
         self.deadline = deadline
         self.models = models
         self.hooks = hooks
+        self.demonstrations = demonstrations
         self.episodes = 0
 
     def run(self) -> ModelResetRequest | None:
@@ -49,10 +57,15 @@ class TrainingSession:
                 episode, started_at = EpisodeRecord.start(self.episodes, info), time.monotonic()
             observation = next_observation
             if len(rollout) >= ROLLOUT_STEPS:
-                self.models.learn()
+                self.models.learn(self._demonstrations(self.models.require_active()))
                 for hook in self.hooks:
                     hook.on_update()
         return request
+
+    def _demonstrations(self, state_name: str) -> list[DemonstrationStep]:
+        if state_name not in self.demonstrations or self.env.curriculum.curriculum.is_mastered(state_name):
+            return []
+        return self.demonstrations[state_name]
 
     def _exploration(self, state_name: str) -> float:
         mastered = self.env.curriculum.curriculum.is_mastered(state_name)

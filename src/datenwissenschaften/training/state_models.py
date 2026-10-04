@@ -3,6 +3,7 @@ from concurrent.futures import Future
 from loguru import logger
 
 from datenwissenschaften.laya.agent import LayaAgent
+from datenwissenschaften.laya.imitation import DemonstrationStep
 from datenwissenschaften.laya.rollout import Rollout
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.model_store import Checkpoint, ModelStore
@@ -39,8 +40,8 @@ class StateModels:
         self._prefetch_following(state_name)
         logger.debug(f"Laya model for {state_name} active at {self.agent.num_timesteps:,} trained decisions")
 
-    def learn(self) -> None:
-        self.agent.learn(self.rollout)
+    def learn(self, demonstrations: list[DemonstrationStep]) -> None:
+        self.agent.learn(self.rollout, demonstrations)
         self.rollouts[self.require_active()] = Rollout()
 
     def save(self) -> None:

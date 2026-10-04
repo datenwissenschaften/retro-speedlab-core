@@ -6,6 +6,7 @@ paths:
   database: working/database.json
   reports: reports
   curriculum: curriculum
+  demonstrations: demonstrations
 
 training:
   game: Airstriker-Genesis-v0
