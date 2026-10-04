@@ -17,20 +17,21 @@ MAX_TOKENS = 300
 SUMMARY_LINES = 4
 SUMMARY_SUFFIX = ".summary.json"
 DECORATION = " \t-*•#>\"'`"
-CARD_FORMAT = (
-    "Write exactly four lines for the viewers. Line 1: a catchy headline of at most six words. Lines 2 to 4: one "
-    "short, lively sentence each, at most 14 words. Plain text only, without markdown, bullets, numbering, emojis "
-    "or quotes. Never mention Claude, coding agents, commits, releases, tests, RAM addresses or hex numbers."
+CARD_RULES = (
+    "Plain text only, without markdown, bullets, numbering, emojis or quotes. Never mention Claude, coding agents, "
+    "commits, releases, tests, RAM addresses or hex numbers"
 )
 REPORT_INSTRUCTIONS = (
     "You write the lab update card on a live stream where Laya, an AI, teaches itself to play {game} by trial "
-    "and error. Read today's lab report. " + CARD_FORMAT + " Lines 2 to 4 say what changed today, how Laya is "
-    "doing, and what to watch for next; call the changes today's update."
+    "and error. Read today's lab report and write exactly four lines for the viewers. Line 1: a catchy headline "
+    "of at most six words. Lines 2 to 4: one short, lively sentence each, at most 14 words: what changed today, "
+    "how Laya is doing, and what to watch for next. " + CARD_RULES + "; call the changes today's update."
 )
 HINT_INSTRUCTIONS = (
     "You write the developer hints card on a live stream where Laya, an AI, teaches itself to play {game} by "
-    "trial and error. Read the hints the developer gave the lab about the game. " + CARD_FORMAT + " Lines 2 to 4 "
-    "say in plain game terms what the developer told the lab, for example what wins a level or what to avoid."
+    "trial and error. Read the developer's hints for the lab and write exactly four lines for the viewers. Line 1: "
+    "a catchy headline of at most six words. Lines 2 to 4: one short, lively sentence each, at most 14 words: the "
+    "most important hints in plain game terms, for example what wins a level or what to avoid. " + CARD_RULES + "."
 )
 
 
