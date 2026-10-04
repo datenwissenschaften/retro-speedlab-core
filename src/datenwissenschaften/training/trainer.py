@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 
 from datenwissenschaften.accelerator import configure_accelerator
-from datenwissenschaften.environment.factory import FULL_GAME, make_environment
+from datenwissenschaften.environment.factory import POWER_ON, make_environment
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.laya.agent import LayaAgent
 from datenwissenschaften.laya.network import LayaNetwork
@@ -39,7 +39,7 @@ class LayaTrainer:
     def __init__(self, wrapper_cls: type[StateMachineGymWrapper], config_path: Path) -> None:
         self.config = load_config(config_path)
         setup_logging(self.config.log_level)
-        self.context = RunContext(self.config, FULL_GAME)
+        self.context = RunContext(self.config, POWER_ON)
         self.wrapper_cls = wrapper_cls
         self.ui_started = False
         self.speedrun = False
@@ -49,7 +49,7 @@ class LayaTrainer:
         configure_history(self.config.training.game_identity, database)
         while True:
             env = make_environment(self.wrapper_cls, self.config)
-            env.speedrun = self.speedrun = level_full_run_wins(FULL_GAME) >= BEATEN_FULL_RUN_WINS
+            env.speedrun = self.speedrun = level_full_run_wins(POWER_ON) >= BEATEN_FULL_RUN_WINS
             identity = TrainingIdentity(self.context, database)
             identity.require_compatible(env)
             self._start_ui(identity, env, database)

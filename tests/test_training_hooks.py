@@ -312,7 +312,7 @@ def test_system_metadata_without_nvidia_smi(monkeypatch):
 
 
 def test_curriculum_upload_hook_sends_the_curriculum_once_per_change(tmp_path: Path, context: RunContext, monkeypatch):
-    run = CurriculumRun(tmp_path / "curriculum", ("Menu", "Level1"), "FullGame", tmp_path / "seeds")
+    run = CurriculumRun(tmp_path / "curriculum", ("Menu", "Level1"), "PowerOn", tmp_path / "seeds")
     puts = []
     monkeypatch.setattr(
         curriculum_upload_hook.httpx,
