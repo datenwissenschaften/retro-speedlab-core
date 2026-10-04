@@ -178,6 +178,8 @@ def test_factory_starts_the_game_at_power_on_with_every_button(tmp_path: Path, m
     assert (calls["game"], calls["state"]) == ("FakeGame-v0", factory.retro.State.NONE)
     assert calls["actions"] == factory.retro.Actions.ALL
     assert calls["record"] == str(config.paths.record_dir / "FakeGame-v0")
+    assert env.unwrapped.initial_state == env.unwrapped.em.get_state()
+    assert env.unwrapped.statename == "PowerOn"
     assert env.curriculum.state_names == ("Survive", "Boss")
 
 
@@ -236,3 +238,16 @@ def test_speedrun_mode_charges_every_frame(tmp_path: Path):
     _, speedrun, *_ = env.step(0)
 
     assert speedrun == pytest.approx(normal - SPEEDRUN_FRAME_COST * env.action_table.shape[1])
+
+
+def test_stable_retros_done_condition_never_ends_an_attempt(tmp_path: Path):
+    env = fake_environment(tmp_path, [(3, 0), (3, 1)])
+    env.reset()
+    emulator = env.unwrapped
+    step = emulator.step
+    emulator.step = lambda action: (*step(action)[:2], True, False, {})
+
+    _, _, terminated, truncated, _ = env.step(0)
+
+    assert not terminated
+    assert not truncated

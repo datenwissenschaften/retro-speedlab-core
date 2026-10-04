@@ -142,7 +142,9 @@ is rebuilt from the nearest earlier mastered checkpoint.
 
 There are no configured savestates: every attempt that does not start from a
 curriculum checkpoint boots the game at power-on, so the menu (one player) is
-the first state and every level is a later state of the same run. A
+the first state and every level is a later state of the same run. Stable
+Retro's own done conditions are ignored, because they misfire on the title
+screen: only the game's states end an attempt (game over). A
 `<State>.state` file (the raw bytes of `em.get_state()`) in `paths.curriculum`
 seeds that state's checkpoint until the engine saved its own. Once the full
 game is won eight times from power-on, every attempt is a speedrun with an

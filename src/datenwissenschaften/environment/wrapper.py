@@ -72,12 +72,12 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         self.frames = []
         for buttons in self.action_table[action]:
             self.curriculum.count_step()
-            frame, _, env_terminated, env_truncated, _ = self.env.step(buttons)
+            frame, _, _, env_truncated, _ = self.env.step(buttons)
             self.frames.append(frame)
             ram = self._read_ram()
             state_reward, state_terminated, state_truncated = self.state_machine.step(ram, frame)
             reward += state_reward - (SPEEDRUN_FRAME_COST if self.speedrun else 0.0)
-            terminated = env_terminated or state_terminated
+            terminated = state_terminated
             truncated = env_truncated or state_truncated
             transition = self.state_machine.last_transition
             if transition is not None:

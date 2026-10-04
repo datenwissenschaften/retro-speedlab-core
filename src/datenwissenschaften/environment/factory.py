@@ -10,6 +10,7 @@ from datenwissenschaften.states.landmarks import Landmarks
 
 LANDMARKS_FILE = "landmarks.json"
 FULL_GAME = "FullGame"
+POWER_ON = "PowerOn"
 
 
 def make_environment(wrapper_cls: type[StateMachineGymWrapper], config: RetroSpeedlabConfig) -> StateMachineGymWrapper:
@@ -24,6 +25,9 @@ def make_environment(wrapper_cls: type[StateMachineGymWrapper], config: RetroSpe
         record=str(record_dir),
         use_restricted_actions=retro.Actions.ALL,
     )
+    emulator = env.unwrapped
+    emulator.initial_state = emulator.em.get_state()
+    emulator.statename = POWER_ON
     root = curriculum_root(config)
     curriculum = CurriculumRun(root, state_names(wrapper_cls), FULL_GAME, config.paths.curriculum_dir)
     return wrapper_cls(env, curriculum, Landmarks(root / LANDMARKS_FILE), FULL_GAME)
