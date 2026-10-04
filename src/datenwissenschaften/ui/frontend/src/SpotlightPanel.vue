@@ -18,6 +18,7 @@ const MINUTE_MS = 60000
 const FRESH_MS = 8000
 const videos = ref([])
 const report = ref(null)
+const hints = ref(null)
 const slide = ref('report')
 const fresh = ref(false)
 let slideTimer
@@ -34,22 +35,28 @@ const loadVideos = async () => {
   }
 }
 
-const loadReport = async () => {
+const loadSummary = async (url, target) => {
   try {
-    const response = await fetch('/api/report-summary', { cache: 'no-store' })
-    if (response.ok) report.value = await response.json()
+    const response = await fetch(url, { cache: 'no-store' })
+    if (response.ok) target.value = await response.json()
   } catch {
-    report.value = null
+    target.value = null
   }
+}
+const loadSummaries = () => {
+  loadSummary('/api/report-summary', report)
+  loadSummary('/api/hint-summary', hints)
 }
 
 const best = computed(() => videos.value.filter(video => video.savestate === props.level).reduce((top, video) => (!top || video.score > top.score ? video : top), null))
 const slides = computed(() => [
   ...(report.value ? ['report'] : []),
   'best',
+  ...(hints.value ? ['hints'] : []),
   ...(props.recent.length ? ['recent'] : []),
   ...(props.danger.length ? ['danger'] : []),
 ])
+const card = computed(() => (slide.value === 'report' ? report.value : hints.value))
 const reportDate = computed(() => report.value.name.replace(/\.md$/, '').replace(/T(\d{2})(\d{2})$/, ' · $1:$2 UTC'))
 const age = recordedAt => {
   const minutes = Math.round((Date.now() - new Date(recordedAt).getTime()) / MINUTE_MS)
@@ -76,9 +83,9 @@ const nextSlide = () => {
 
 onMounted(() => {
   loadVideos()
-  loadReport()
+  loadSummaries()
   videoTimer = window.setInterval(loadVideos, VIDEO_REFRESH_MS)
-  reportTimer = window.setInterval(loadReport, REPORT_REFRESH_MS)
+  reportTimer = window.setInterval(loadSummaries, REPORT_REFRESH_MS)
   slideTimer = window.setInterval(nextSlide, SLIDE_MS)
 })
 onBeforeUnmount(() => {
@@ -92,15 +99,15 @@ onBeforeUnmount(() => {
 <template>
   <section :class="['spotlight-panel', { fresh }]">
     <Transition name="fade" mode="out-in">
-      <div v-if="slide === 'report' && report" key="report" class="spotlight-slide">
-        <span class="sight-title">Today in the lab</span>
+      <div v-if="(slide === 'report' || slide === 'hints') && card" :key="slide" class="spotlight-slide">
+        <span class="sight-title">{{ slide === 'report' ? 'Today in the lab' : 'Developer hints' }}</span>
         <div class="lab-report">
-          <strong class="lab-headline">{{ report.headline }}</strong>
+          <strong class="lab-headline">{{ card.headline }}</strong>
           <ul class="lab-lines">
-            <li v-for="line in report.lines" :key="line">{{ line }}</li>
+            <li v-for="line in card.lines" :key="line">{{ line }}</li>
           </ul>
         </div>
-        <span class="spotlight-note">Lab report · {{ reportDate }}</span>
+        <span class="spotlight-note">{{ slide === 'report' ? `Lab report · ${reportDate}` : 'Hints from the developer to the lab' }}</span>
       </div>
       <div v-else-if="slide === 'recent'" key="recent" class="spotlight-slide">
         <span class="sight-title">Recent attempts</span>

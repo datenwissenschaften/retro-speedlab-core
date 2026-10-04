@@ -290,6 +290,25 @@ def test_report_upload_hook_uploads_new_and_changed_short_reports(context: RunCo
     assert puts == [(url, {"headline": "Day one", "lines": ["a"]}), (url, {"headline": "Day two", "lines": ["b"]})]
 
 
+def test_report_upload_hook_uploads_the_hint_summary(context: RunContext, monkeypatch):
+    hints = context.config.paths.hints_file.with_suffix(".summary.json")
+    hints.parent.mkdir(parents=True, exist_ok=True)
+    hints.write_text(json.dumps({"name": "HINT.md", "headline": "Weigh in", "lines": ["a"]}), encoding="utf-8")
+    puts = []
+    monkeypatch.setattr(
+        report_upload_hook.httpx,
+        "put",
+        lambda url, **kwargs: puts.append((url, kwargs["json"])) or _response("PUT", url),
+    )
+    hook = report_upload_hook.ReportUploadHook(context)
+    hook.settings = SimpleNamespace(url="https://upload.test", api_key="key")
+
+    hook.on_update()
+    hook.on_update()
+
+    assert puts == [("https://upload.test/hints/FakeGame-v0", {"headline": "Weigh in", "lines": ["a"]})]
+
+
 def test_system_metadata_reports_hardware(monkeypatch):
     monkeypatch.setattr(system.shutil, "which", lambda name: "/usr/bin/nvidia-smi")
     monkeypatch.setattr(

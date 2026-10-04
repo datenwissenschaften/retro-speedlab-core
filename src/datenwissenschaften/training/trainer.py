@@ -28,8 +28,8 @@ from datenwissenschaften.training.upload_hook import UploadHook
 from datenwissenschaften.training.video_hook import BestVideoHook
 from datenwissenschaften.ui.control import ModelResetRequest, configure_training_control, perform_model_reset
 from datenwissenschaften.ui.live import live_feed
-from datenwissenschaften.ui.report_digest import report_digest
 from datenwissenschaften.ui.server import start_ui
+from datenwissenschaften.ui.summaries import lab_summaries
 from datenwissenschaften.ui.telemetry import configure_history, level_full_run_wins, publish_metadata
 
 
@@ -123,8 +123,9 @@ class LayaTrainer:
         )
         if self.ui_started:
             return
-        reports_dir = self.config.paths.reports_dir
-        start_ui(ui, self.context.record_root, reports_dir, report_digest(ui, self.context.game, reports_dir))
+        paths = self.config.paths
+        summaries = lab_summaries(ui, self.context.game, paths.reports_dir, paths.hints_file)
+        start_ui(ui, self.context.record_root, paths.reports_dir, summaries)
         self.ui_started = True
 
     def _publish_run(self) -> None:

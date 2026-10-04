@@ -254,7 +254,6 @@ watch(() => live.value.ram, (current, previous) => {
             <div class="run-info-row"><dt>Level</dt><dd>{{ levelTitle || '—' }}</dd></div>
             <div class="run-info-row"><dt>Agent</dt><dd>{{ agentName }}</dd></div>
           </dl>
-          <span class="run-info-premise">Learning on its own · no objective given</span>
         </aside>
 
         <SpotlightPanel :danger="story.danger" :failures="story.failures || 0" :level="level" :recent="recent" :refresh="bestRefresh" />

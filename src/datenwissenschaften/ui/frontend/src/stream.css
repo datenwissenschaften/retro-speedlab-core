@@ -126,7 +126,6 @@
 .run-info-medal-icon { font-size: 1.5rem; line-height: 1; filter: drop-shadow(0 0 10px rgba(255, 79, 163, 0.35)); }
 .run-info-medal-label { display: block; color: var(--text-subtle); font-size: 0.58rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
 .run-info-medal-title { display: block; margin-top: 2px; color: var(--text-strong); font-size: 0.86rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
-.run-info-premise { display: block; margin-top: 8px; color: var(--text-muted); font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em; text-align: center; text-transform: uppercase; }
 .replay-badge { display: inline-block; margin-top: 4px; padding: 2px 6px; color: var(--bg); background: var(--secondary); border-radius: 4px; font-size: 0.56rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
 .replay-track { display: block; height: 4px; margin-top: 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
 .replay-track span { display: block; height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); }
