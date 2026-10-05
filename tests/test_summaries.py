@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from datenwissenschaften.ui import summaries
 from datenwissenschaften.ui.summaries import CachedSummary, ReportDigest
 
 SUMMARY = [
@@ -68,3 +69,50 @@ def test_a_timed_report_of_the_day_is_newer_than_the_dated_one(tmp_path: Path):
 
     assert digest_of(tmp_path, summarizer).latest()["name"] == "2026-10-03T0930.md"
     assert summarizer.reports == ["2026-10-03T0930.md"]
+
+
+class FakeResponse:
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+    def raise_for_status(self) -> None:
+        pass
+
+    def json(self) -> dict:
+        return {"choices": [{"message": {"content": self.content}}]}
+
+
+def replying(monkeypatch, *contents: str) -> list[str]:
+    replies, asked = iter(contents), []
+
+    def post(url, **kwargs):
+        asked.append(url)
+        return FakeResponse(next(replies))
+
+    monkeypatch.setattr(summaries.httpx, "post", post)
+    monkeypatch.setattr(summaries.Summarizer.summarize.retry, "sleep", lambda seconds: None)
+    return asked
+
+
+def test_a_headline_with_two_lines_is_enough(monkeypatch):
+    asked = replying(monkeypatch, "Laya starts\nMenu mastered\nWatch the pibbleys")
+
+    lines = summaries.Summarizer("rules", ("model",), "key").summarize("report")
+
+    assert lines == ["Laya starts", "Menu mastered", "Watch the pibbleys"]
+    assert len(asked) == 1
+
+
+def test_a_too_short_summary_is_asked_again(monkeypatch):
+    asked = replying(monkeypatch, "Only a headline", "\n".join(SUMMARY))
+
+    assert summaries.Summarizer("rules", ("model",), "key").summarize("report") == SUMMARY
+    assert len(asked) == 2
+
+
+def test_the_summary_gives_up_after_its_attempts(monkeypatch):
+    asked = replying(monkeypatch, *["Only a headline"] * summaries.SUMMARY_ATTEMPTS)
+
+    with pytest.raises(ValueError, match="summary lines"):
+        summaries.Summarizer("rules", ("model",), "key").summarize("report")
+    assert len(asked) == summaries.SUMMARY_ATTEMPTS

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from datenwissenschaften.settings import UISettings
 from datenwissenschaften.ui.reports import list_reports
@@ -14,6 +15,9 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 TIMEOUT_SECONDS = 60
 MAX_TOKENS = 300
 SUMMARY_LINES = 4
+MIN_SUMMARY_LINES = 3
+SUMMARY_ATTEMPTS = 3
+RETRY_WAIT_SECONDS = 2
 SUMMARY_SUFFIX = ".summary.json"
 DECORATION = " \t-*•#>\"'`"
 CARD_RULES = (
@@ -34,6 +38,12 @@ class Summarizer:
         self.models = models
         self.api_key = api_key
 
+    @retry(
+        retry=retry_if_exception_type((ValueError, httpx.HTTPError)),
+        stop=stop_after_attempt(SUMMARY_ATTEMPTS),
+        wait=wait_exponential(multiplier=RETRY_WAIT_SECONDS),
+        reraise=True,
+    )
     def summarize(self, text: str) -> list[str]:
         response = httpx.post(
             OPENROUTER_URL,
@@ -52,7 +62,7 @@ class Summarizer:
         response.raise_for_status()
         content = str(response.json()["choices"][0]["message"]["content"])
         lines = [line.strip(DECORATION) for line in content.splitlines() if line.strip(DECORATION)]
-        if len(lines) < SUMMARY_LINES:
+        if len(lines) < MIN_SUMMARY_LINES:
             raise ValueError(f"Expected {SUMMARY_LINES} summary lines, got: {content!r}")
         return lines[:SUMMARY_LINES]
 
