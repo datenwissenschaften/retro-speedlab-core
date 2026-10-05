@@ -2,8 +2,7 @@ import { fmt } from './naming.js'
 
 export const LAB_SOURCES = [
   { name: 'Demonstrations', detail: 'Play recorded from power-on: people and the lab’s own successful runs' },
-  { name: 'Tool-assisted movies', detail: 'TASVideos runs that replay in sync in the emulator' },
-  { name: 'Speedrun videos', detail: 'Routes and tricks from real-time runs and longplays' },
+  { name: 'Videos', detail: 'Speedruns, tool-assisted runs and longplays: the route, reproduced and recorded by the lab' },
   { name: 'Guides and RAM maps', detail: 'Walkthroughs, manuals and Data Crystal' },
 ]
 

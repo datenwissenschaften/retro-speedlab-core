@@ -11,6 +11,7 @@ MAX_PORT = 65_535
 @dataclass(frozen=True)
 class RetroSpeedlabPaths:
     roms_path: Path
+    integrations_dir: Path
     models_dir: Path
     record_dir: Path
     cache_dir: Path
@@ -71,6 +72,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
     return RetroSpeedlabConfig(
         paths=RetroSpeedlabPaths(
             roms_path=_path(document.paths.roms, base_dir),
+            integrations_dir=_path(document.paths.integrations, base_dir),
             models_dir=_path(document.paths.models, base_dir),
             record_dir=_path(document.paths.recordings, base_dir),
             cache_dir=_path(document.paths.cache, base_dir),

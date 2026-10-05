@@ -49,7 +49,7 @@ class BestVideoHook:
         metadata_path = video.with_suffix(METADATA_SUFFIX)
         try:
             video.unlink(missing_ok=True)
-            render_video(self.context.config.paths.roms_path, source)
+            render_video(self.context.config.paths, source)
             metadata_path.write_text(json.dumps(self._metadata(episode, source, video)), encoding="utf-8")
             logger.info(f"Recorded best episode for {episode.curriculum_state}: score={episode.score:g}")
         except subprocess.CalledProcessError as error:

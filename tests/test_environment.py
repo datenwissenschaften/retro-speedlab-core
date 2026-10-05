@@ -163,7 +163,7 @@ def test_recording_is_mandatory(tmp_path: Path):
 
 def test_factory_starts_the_game_at_power_on_with_every_button(tmp_path: Path, monkeypatch):
     calls = {}
-    monkeypatch.setattr(factory, "import_roms", lambda roms: calls.setdefault("roms", roms))
+    monkeypatch.setattr(factory, "import_roms", lambda *paths: calls.setdefault("roms", paths))
 
     def make(game, state, render_mode, record, use_restricted_actions):
         calls.update(game=game, state=state, record=record, actions=use_restricted_actions)
@@ -174,7 +174,7 @@ def test_factory_starts_the_game_at_power_on_with_every_button(tmp_path: Path, m
 
     env = factory.make_environment(FakeWrapper, config)
 
-    assert calls["roms"] == config.paths.roms_path
+    assert calls["roms"] == (config.paths.roms_path, config.paths.integrations_dir)
     assert (calls["game"], calls["state"]) == ("FakeGame-v0", factory.retro.State.NONE)
     assert calls["actions"] == factory.retro.Actions.ALL
     assert calls["record"] == str(config.paths.record_dir / "FakeGame-v0")

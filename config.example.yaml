@@ -1,5 +1,6 @@
 paths:
   roms: roms
+  integrations: integrations
   models: working/models
   recordings: working/recordings
   cache: working/cache

@@ -10,6 +10,7 @@ from datenwissenschaften.roms import import_roms
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--roms-dir", type=Path, required=True)
+    parser.add_argument("--integrations-dir", type=Path, required=True)
     parser.add_argument("--no-audio", action="store_true")
     parser.add_argument("movies", nargs="+")
     args = parser.parse_args()
@@ -20,7 +21,7 @@ def main() -> None:
     args.viewer = None
     args.ending = None
 
-    import_roms(args.roms_dir)
+    import_roms(args.roms_dir, args.integrations_dir)
     original_make = retro.make
 
     def make_headless(*args, **kwargs):

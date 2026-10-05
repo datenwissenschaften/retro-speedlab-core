@@ -152,7 +152,7 @@ def write_config(tmp_path: Path) -> Path:
     config_path.write_text(
         "\n".join(
             [
-                "paths: {roms: roms, models: models, recordings: recordings, cache: cache,"
+                "paths: {roms: roms, integrations: integrations, models: models, recordings: recordings, cache: cache,"
                 " database: database.json, reports: reports, curriculum: curriculum,"
                 " demonstrations: demonstrations}",
                 "training: {game: FakeGame-v0, fingerprint: null}",

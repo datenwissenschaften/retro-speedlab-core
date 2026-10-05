@@ -61,7 +61,7 @@ class UploadHook:
 
     def _upload(self, episode: EpisodeRecord, api_key: str) -> None:
         recording = Path(episode.bk2_path)
-        video = render_video(self.context.config.paths.roms_path, recording)
+        video = render_video(self.context.config.paths, recording)
         with video.open("rb") as video_file:
             response = httpx.post(
                 f"{self.settings.url}/runs",

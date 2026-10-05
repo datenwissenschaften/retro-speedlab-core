@@ -14,7 +14,7 @@ POWER_ON = "PowerOn"
 
 def make_environment(wrapper_cls: type[StateMachineGymWrapper], config: RetroSpeedlabConfig) -> StateMachineGymWrapper:
     training = config.training
-    import_roms(config.paths.roms_path)
+    import_roms(config.paths.roms_path, config.paths.integrations_dir)
     record_dir = config.paths.record_dir / training.game
     record_dir.mkdir(parents=True, exist_ok=True)
     env = retro.make(

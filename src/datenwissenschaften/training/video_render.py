@@ -4,14 +4,26 @@ from pathlib import Path
 
 import stable_retro as retro
 
+from datenwissenschaften.settings import RetroSpeedlabPaths
+
 PLAYBACK_MODULE = "datenwissenschaften.training.video_playback"
 
 
-def render_video(roms_path: Path, recording: Path) -> Path:
+def render_video(paths: RetroSpeedlabPaths, recording: Path) -> Path:
     video = recording.with_suffix(".mp4")
     if video.is_file():
         return video
-    playback = [sys.executable, "-m", PLAYBACK_MODULE, "--roms-dir", str(roms_path), "--no-audio", str(recording)]
+    playback = [
+        sys.executable,
+        "-m",
+        PLAYBACK_MODULE,
+        "--roms-dir",
+        str(paths.roms_path),
+        "--integrations-dir",
+        str(paths.integrations_dir),
+        "--no-audio",
+        str(recording),
+    ]
     subprocess.run(playback, check=True, capture_output=True, text=True)
     return video
 
