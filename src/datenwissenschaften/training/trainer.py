@@ -18,6 +18,7 @@ from datenwissenschaften.training.curriculum_upload_hook import CurriculumUpload
 from datenwissenschaften.training.hooks import TrainingHook
 from datenwissenschaften.training.identity import TrainingIdentity
 from datenwissenschaften.training.knowledge import knowledge
+from datenwissenschaften.training.lab_run import LabRun
 from datenwissenschaften.training.live_stream_hook import LiveStreamHook
 from datenwissenschaften.training.report_upload_hook import ReportUploadHook
 from datenwissenschaften.training.session import TrainingSession
@@ -75,7 +76,8 @@ class LayaTrainer:
         deadline = time.monotonic() + seconds
         try:
             hooks = self._hooks(env, models, StoryTeller(story))
-            return TrainingSession(env, models, hooks, deadline, demonstrations).run()
+            lab_run = LabRun(self.config.paths.lab_run_marker)
+            return TrainingSession(env, models, hooks, deadline, demonstrations, lab_run).run()
         finally:
             models.close()
 

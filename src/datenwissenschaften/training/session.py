@@ -5,6 +5,7 @@ from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.laya.imitation import DemonstrationStep
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import TrainingHook, Transition
+from datenwissenschaften.training.lab_run import LabRun
 from datenwissenschaften.training.state_models import StateModels
 from datenwissenschaften.ui.control import ModelResetRequest, consume_model_reset
 
@@ -21,15 +22,19 @@ class TrainingSession:
         hooks: list[TrainingHook],
         deadline: float,
         demonstrations: Demonstrations,
+        lab_run: LabRun,
     ) -> None:
         self.env = env
         self.deadline = deadline
         self.models = models
         self.hooks = hooks
         self.demonstrations = demonstrations
+        self.lab_run = lab_run
         self.episodes = 0
 
     def run(self) -> ModelResetRequest | None:
+        if (request := self.lab_run.wait()) is not None:
+            return request
         observation, info = self.env.reset()
         episode, started_at = EpisodeRecord.start(self.episodes, info), time.monotonic()
         while (request := consume_model_reset()) is None:
@@ -53,6 +58,8 @@ class TrainingSession:
                 self.episodes += 1
                 if time.monotonic() >= self.deadline:
                     return None
+                if (request := self.lab_run.wait()) is not None:
+                    return request
                 next_observation, info = self.env.reset()
                 episode, started_at = EpisodeRecord.start(self.episodes, info), time.monotonic()
             observation = next_observation

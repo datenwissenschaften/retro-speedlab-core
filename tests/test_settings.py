@@ -20,6 +20,7 @@ def _document() -> dict[str, Any]:
             "reports": "agent/reports",
             "curriculum": "curriculum",
             "demonstrations": "demonstrations",
+            "lab_run": "lab-run",
         },
         "training": {
             "game": "TestGame",

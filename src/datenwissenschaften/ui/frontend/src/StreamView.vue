@@ -6,7 +6,7 @@ import { layaInputs } from './knowledge.js'
 import { fmt, gameTitle, percent, words } from './naming.js'
 import { createObsControl, STREAM_TIME_ZONE } from './obsControl.js'
 import { createReplayPlayer } from './replayPlayer.js'
-import { elapsed } from './runtime.js'
+import { elapsed, minutesLeft } from './runtime.js'
 import SpotlightPanel from './SpotlightPanel.vue'
 import './stream.css'
 
@@ -18,6 +18,14 @@ const RELOAD_SETTLE_MS = 15000
 const RELOAD_RETRY_MS = 5000
 const CLOCK_INTERVAL_MS = 1000
 const RECENT_ATTEMPTS = 8
+const LAB_LINE_MS = 7000
+const LAB_LINES = [
+  'Reading walkthroughs and watching speedruns of the game',
+  'Measuring the game’s memory, frame by frame',
+  'Writing new goals and rewards for Laya',
+  'Testing every change before Laya gets it',
+  'Laya rests now and trains on the upgraded game next',
+]
 const clock = new Intl.DateTimeFormat('en-GB', { timeZone: STREAM_TIME_ZONE, dateStyle: 'medium', timeStyle: 'medium' })
 
 const live = ref({})
@@ -36,6 +44,8 @@ const now = ref(new Date())
 const changedFields = ref(new Set())
 let snapshotTimer
 let clockTimer
+let labLineTimer
+const labLine = ref(0)
 const arrived = createArrivalTracker()
 let reloadTimer
 let loadedRelease = null
@@ -113,6 +123,7 @@ const stageStyle = computed(() => ({
 }))
 
 const twitch = computed(() => snapshot.value.server?.twitch === true)
+const labRun = computed(() => snapshot.value.metadata?.lab_run?.active ? snapshot.value.metadata.lab_run : null)
 let streaming = false
 watch(twitch, enabled => {
   if (!enabled || streaming) return
@@ -125,11 +136,12 @@ onMounted(() => {
   window.addEventListener('resize', fit)
   snapshotTimer = window.setInterval(loadSnapshot, SNAPSHOT_INTERVAL_MS)
   clockTimer = window.setInterval(() => { now.value = new Date() }, CLOCK_INTERVAL_MS)
+  labLineTimer = window.setInterval(() => { labLine.value = (labLine.value + 1) % LAB_LINES.length }, LAB_LINE_MS)
 })
 onBeforeUnmount(() => {
   player.stop(); obsControl.stop()
   window.removeEventListener('resize', fit)
-  window.clearInterval(snapshotTimer); window.clearInterval(clockTimer); window.clearTimeout(reloadTimer)
+  window.clearInterval(snapshotTimer); window.clearInterval(clockTimer); window.clearInterval(labLineTimer); window.clearTimeout(reloadTimer)
 })
 
 const release = computed(() => snapshot.value.server?.release || null)
@@ -206,6 +218,12 @@ watch(() => live.value.ram, (current, previous) => {
             <span class="stream-waiting-kicker">Stream off</span>
             <strong class="stream-waiting-title">Twitch is disabled</strong>
             <span class="stream-waiting-copy">Set twitch.enabled to true in config.yaml to stream the experiment.</span>
+          </div>
+          <div v-else-if="labRun" class="stream-waiting lab-run">
+            <span class="stream-waiting-kicker">Lab run in progress</span>
+            <strong class="stream-waiting-title">The lab is upgrading the game<span class="stream-waiting-dots"><i>.</i><i>.</i><i>.</i></span></strong>
+            <Transition name="fade" mode="out-in"><span :key="labLine" class="stream-waiting-copy lab-run-line">{{ LAB_LINES[labLine] }}</span></Transition>
+            <span class="stream-waiting-copy">{{ agentName }} pauses training until the upgrade is done · back in about {{ minutesLeft(labRun.until, now) }} min</span>
           </div>
           <div v-else-if="waiting" class="stream-waiting">
             <span class="stream-waiting-kicker">Next replay loading</span>

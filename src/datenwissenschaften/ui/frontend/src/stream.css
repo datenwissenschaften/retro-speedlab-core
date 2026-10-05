@@ -252,6 +252,7 @@
 .stream-waiting-dots i:nth-child(2) { animation-delay: 0.2s; }
 .stream-waiting-dots i:nth-child(3) { animation-delay: 0.4s; }
 .stream-waiting-copy { max-width: 400px; color: var(--text-muted); font-size: 0.8rem; line-height: 1.5; }
+.lab-run-line { min-height: 2.6em; color: var(--secondary); font-size: 1rem; font-weight: 700; }
 .stream-waiting-stats { display: flex; gap: 10px; margin-top: 8px; }
 .stream-waiting-stats div { min-width: 140px; padding: 10px 12px; background: var(--surface-alt); border: 2px solid var(--border-strong); border-radius: var(--radius); }
 .stream-waiting-stats dt { color: var(--text-subtle); font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }

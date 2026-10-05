@@ -8,6 +8,7 @@ paths:
   reports: reports
   curriculum: curriculum
   demonstrations: demonstrations
+  lab_run: ../.lab-run
 
 training:
   game: Airstriker-Genesis-v0

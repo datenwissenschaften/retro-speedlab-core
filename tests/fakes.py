@@ -154,7 +154,7 @@ def write_config(tmp_path: Path) -> Path:
             [
                 "paths: {roms: roms, integrations: integrations, models: models, recordings: recordings, cache: cache,"
                 " database: database.json, reports: reports, curriculum: curriculum,"
-                " demonstrations: demonstrations}",
+                " demonstrations: demonstrations, lab_run: lab-run}",
                 "training: {game: FakeGame-v0, fingerprint: null}",
                 "laya: {checkpoint: fake/laya}",
                 "upload: {url: 'https://upload.test', api_key: null}",

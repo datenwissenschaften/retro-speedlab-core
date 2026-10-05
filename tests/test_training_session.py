@@ -9,6 +9,7 @@ from datenwissenschaften.training import session as session_module
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
+from datenwissenschaften.training.lab_run import LabRun
 from datenwissenschaften.training.session import (
     EXPLORATION_ONCE_MASTERED,
     EXPLORATION_WHILE_LEARNING,
@@ -16,6 +17,8 @@ from datenwissenschaften.training.session import (
     TrainingSession,
 )
 from datenwissenschaften.training.state_models import StateModels
+
+IDLE_LAB = LabRun(Path("no-lab-run"))
 
 
 class RecordingAgent:
@@ -58,7 +61,7 @@ def test_session_plays_learns_and_stops_on_a_reset_request(tmp_path: Path, monke
     agent, hook = RecordingAgent(), RecordingHook()
     models = StateModels(agent, RunContext(load_config(write_config(tmp_path)), "Level1"), ("Survive", "Boss"))
 
-    result = TrainingSession(env, models, [hook], float("inf"), {}).run()
+    result = TrainingSession(env, models, [hook], float("inf"), {}, IDLE_LAB).run()
 
     assert result == "reset"
     assert agent.num_timesteps == ROLLOUT_STEPS
@@ -82,7 +85,7 @@ def test_mastered_states_explore_less(tmp_path: Path):
     for _ in range(env.curriculum.curriculum.WIN_TARGET):
         env.curriculum.curriculum.record_success("Survive", 1)
 
-    session = TrainingSession(env, models, [], float("inf"), {})
+    session = TrainingSession(env, models, [], float("inf"), {}, IDLE_LAB)
 
     assert session._exploration("Survive") == EXPLORATION_ONCE_MASTERED
     assert session._exploration("Boss") == EXPLORATION_WHILE_LEARNING
@@ -95,7 +98,7 @@ def test_session_hands_over_to_the_next_level_after_an_episode_past_the_deadline
     context = RunContext(load_config(write_config(tmp_path)), "Level1")
     models = StateModels(RecordingAgent(), context, ("Survive", "Boss"))
 
-    result = TrainingSession(env, models, [hook], 0.0, {}).run()
+    result = TrainingSession(env, models, [hook], 0.0, {}, IDLE_LAB).run()
 
     assert result is None
     assert len(hook.episodes) == 1
@@ -109,8 +112,8 @@ def test_only_unmastered_states_learn_from_their_demonstrations(tmp_path: Path):
     for _ in range(env.curriculum.curriculum.WIN_TARGET):
         env.curriculum.curriculum.record_success("Survive", 1)
 
-    session = TrainingSession(env, models, [], float("inf"), {"Survive": [step], "Boss": [step]})
+    session = TrainingSession(env, models, [], float("inf"), {"Survive": [step], "Boss": [step]}, IDLE_LAB)
 
     assert session._demonstrations("Survive") == []
     assert session._demonstrations("Boss") == [step]
-    assert TrainingSession(env, models, [], float("inf"), {})._demonstrations("Boss") == []
+    assert TrainingSession(env, models, [], float("inf"), {}, IDLE_LAB)._demonstrations("Boss") == []

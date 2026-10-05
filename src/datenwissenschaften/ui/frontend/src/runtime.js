@@ -10,3 +10,5 @@ export const elapsed = (startedAt, now) => {
   if (hours) return `${hours}h ${minutes % MINUTES_PER_HOUR}m`
   return `${minutes}m`
 }
+
+export const minutesLeft = (until, now) => Math.max(1, Math.ceil((new Date(until).getTime() - now.getTime()) / MINUTE_MS))
