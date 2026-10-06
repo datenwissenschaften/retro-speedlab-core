@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 import fakes
@@ -179,7 +180,7 @@ def test_factory_starts_the_game_at_power_on_with_every_button(tmp_path: Path, m
     assert calls["actions"] == factory.retro.Actions.ALL
     assert calls["record"] == str(config.paths.record_dir / "FakeGame-v0")
     assert env.unwrapped.initial_state == env.unwrapped.em.get_state()
-    assert env.unwrapped.statename == "PowerOn"
+    assert re.fullmatch(r"PowerOn-\d{8}T\d{6}", env.unwrapped.statename)
     assert env.curriculum.state_names == ("Survive", "Boss")
 
 

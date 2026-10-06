@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 import stable_retro as retro
@@ -10,6 +11,7 @@ from datenwissenschaften.states.landmarks import Landmarks
 
 LANDMARKS_FILE = "landmarks.json"
 POWER_ON = "PowerOn"
+SESSION_STAMP = "%Y%m%dT%H%M%S"
 
 
 def make_environment(wrapper_cls: type[StateMachineGymWrapper], config: RetroSpeedlabConfig) -> StateMachineGymWrapper:
@@ -26,7 +28,7 @@ def make_environment(wrapper_cls: type[StateMachineGymWrapper], config: RetroSpe
     )
     emulator = env.unwrapped
     emulator.initial_state = emulator.em.get_state()
-    emulator.statename = POWER_ON
+    emulator.statename = f"{POWER_ON}-{datetime.now(UTC):{SESSION_STAMP}}"
     root = curriculum_root(config)
     curriculum = CurriculumRun(root, state_names(wrapper_cls), POWER_ON, config.paths.curriculum_dir)
     return wrapper_cls(env, curriculum, Landmarks(root / LANDMARKS_FILE), POWER_ON)
