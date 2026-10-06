@@ -202,3 +202,21 @@ def test_trainer_plays_the_full_game_and_speedruns_it_once_beaten(tmp_path: Path
 
     assert sessions == [False, True]
     assert trainer.context.model_dir.name == "FakeGame-v0"
+
+
+def test_the_best_replays_survive_a_restart_on_disk_and_go_with_a_reset(tmp_path: Path):
+    feed = LiveFeed()
+    feed.keep_replays_in(tmp_path / "replays")
+    for episode_id, (curriculum, score) in enumerate([("Play", 2.0), ("Grow", 1.0), ("Play", 5.0)], start=1):
+        feed.record(b"jpeg", {"timesteps": episode_id, "attempt": episode_id, "level": "Level1"})
+        feed.finish_episode(episode_id, 60.0, {**LOST, "score": score, "curriculum": curriculum}, {})
+
+    restarted = LiveFeed()
+    restarted.keep_replays_in(tmp_path / "replays")
+    generation = restarted.latest_episode()["generation"]
+
+    replays = [(replay["result"]["curriculum"], replay["id"]) for replay in restarted.latest_episode()["replays"]]
+    assert sorted(replays) == [("Grow", 2), ("Play", 3)]
+    assert restarted.episode_frames(generation, 3, 0)[0]["image"] == "anBlZw=="
+    restarted.clear()
+    assert list((tmp_path / "replays").iterdir()) == []

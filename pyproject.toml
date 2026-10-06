@@ -25,6 +25,7 @@ dependencies = [
     "httpx==0.28.1",
     "python-box==7.4.1",
     "tenacity==9.1.4",
+    "msgspec==0.22.0",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

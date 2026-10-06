@@ -50,6 +50,7 @@ class LayaTrainer:
     def train(self) -> None:
         database = JsonDatabase(self.config.paths.database_path)
         configure_history(self.config.training.game_identity, database)
+        live_feed.keep_replays_in(self.config.paths.cache_dir / "replays" / self.config.training.game_identity)
         while True:
             env = make_environment(self.wrapper_cls, self.config)
             env.speedrun = self.speedrun = level_full_run_wins(POWER_ON) >= BEATEN_FULL_RUN_WINS

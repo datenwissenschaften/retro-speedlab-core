@@ -1,21 +1,37 @@
 import base64
 import threading
 from collections import deque
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+import msgspec
+
 MAX_COMPLETED_EPISODES = 4
 MAX_FRAMES_PER_REQUEST = 120
+REPLAY_SUFFIX = ".replay"
 
 
 class LiveFeed:
     def __init__(self) -> None:
         self._lock = threading.Lock()
+        self._replay_dir: Path | None = None
         self._start_generation()
+
+    def keep_replays_in(self, directory: Path) -> None:
+        with self._lock:
+            self._replay_dir = directory
+            directory.mkdir(parents=True, exist_ok=True)
+            for path in sorted(directory.glob(f"*{REPLAY_SUFFIX}")):
+                episode = msgspec.msgpack.decode(path.read_bytes())
+                self._replays[episode["result"]["curriculum"]] = episode
 
     def clear(self) -> None:
         with self._lock:
             self._start_generation()
+            if self._replay_dir is not None:
+                for path in self._replay_dir.glob(f"*{REPLAY_SUFFIX}"):
+                    path.unlink()
 
     def _start_generation(self) -> None:
         self._generation = uuid4().hex
@@ -55,6 +71,16 @@ class LiveFeed:
         curriculum = episode["result"]["curriculum"]
         if curriculum not in self._replays or episode["result"]["score"] > self._replays[curriculum]["result"]["score"]:
             self._replays[curriculum] = episode
+            self._save(curriculum, episode)
+
+    def _save(self, curriculum: str, episode: dict[str, Any]) -> None:
+        if self._replay_dir is None:
+            return
+        self._replay_dir.mkdir(parents=True, exist_ok=True)
+        path = self._replay_dir / f"{curriculum}{REPLAY_SUFFIX}"
+        partial = path.with_suffix(".partial")
+        partial.write_bytes(msgspec.msgpack.encode(episode))
+        partial.replace(path)
 
     def latest_episode(self) -> dict[str, Any]:
         with self._lock:
