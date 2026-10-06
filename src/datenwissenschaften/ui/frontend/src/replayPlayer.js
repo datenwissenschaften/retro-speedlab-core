@@ -1,11 +1,4 @@
 const POLL_INTERVAL_MS = 1000
-const PREROLL_SECONDS = 2
-const DECODE_AHEAD_FRAMES = 60
-
-const decode = async image => {
-  const bytes = Uint8Array.from(atob(image), character => character.charCodeAt(0))
-  return createImageBitmap(new Blob([bytes], { type: 'image/jpeg' }))
-}
 
 const fetchJson = async url => {
   const response = await fetch(url, { cache: 'no-store' })
@@ -13,20 +6,22 @@ const fetchJson = async url => {
   return response.json()
 }
 
-export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting, onLatest, onConnection }) => {
+const fetchBlob = async url => {
+  const response = await fetch(url, { cache: 'no-store' })
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  return response.blob()
+}
+
+export const createReplayPlayer = ({ video, onFrame, onEpisode, onEpisodeEnd, onWaiting, onLatest, onConnection }) => {
   let generation = null
   let latest = null
   let replays = []
   let shownLiveId = null
   let episode = null
-  let frames = []
-  let frameCount = 0
-  let bitmaps = new Map()
-  let startedAt = null
-  let shown = -1
+  let statuses = []
+  let source = null
   let replaying = false
   let timer
-  let animation
 
   const poll = async () => {
     try {
@@ -42,14 +37,13 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
     }
   }
 
-  const closeBitmaps = () => {
-    bitmaps.forEach(bitmap => bitmap?.close())
-    bitmaps = new Map()
-  }
-
   const release = () => {
-    closeBitmaps()
-    frames = []
+    const element = video()
+    element.pause()
+    element.removeAttribute('src')
+    if (source) URL.revokeObjectURL(source)
+    source = null
+    statuses = []
   }
 
   const startGeneration = next => {
@@ -61,18 +55,46 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
     if (interrupted) onWaiting()
   }
 
-  const begin = (next, replay) => {
+  const begin = async (next, replay) => {
     release()
     episode = next
-    frameCount = next.frame_count
-    startedAt = null
-    shown = -1
     replaying = replay
-    onEpisode(next, replay, generation)
-    download(next)
+    try {
+      const loaded = []
+      while (loaded.length < next.frame_count) {
+        const payload = await fetchJson(`/api/live/statuses?generation=${generation}&episode=${next.id}&start=${loaded.length}`)
+        loaded.push(...payload.statuses)
+      }
+      const blob = await fetchBlob(`/api/live/video?generation=${generation}&episode=${next.id}`)
+      if (episode !== next) return
+      statuses = loaded
+      source = URL.createObjectURL(blob)
+      onEpisode(next, replay, generation)
+      play()
+    } catch {
+      if (episode !== next) return
+      episode = null
+      onWaiting()
+    }
+  }
+
+  const play = () => {
+    const element = video()
+    element.src = source
+    element.currentTime = 0
+    element.requestVideoFrameCallback(showFrame)
+    element.play()
+  }
+
+  const showFrame = (now, metadata) => {
+    if (!episode || !statuses.length) return
+    const index = Math.min(statuses.length - 1, Math.round(metadata.mediaTime * episode.frame_rate))
+    onFrame({ status: statuses[index], progress: index / statuses.length })
+    video().requestVideoFrameCallback(showFrame)
   }
 
   const finish = () => {
+    if (!episode) return
     onEpisodeEnd(episode)
     if (!replaying) shownLiveId = episode.id
     if (latest && latest.id !== shownLiveId) begin(latest, false)
@@ -86,84 +108,20 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
   }
 
   const repeat = () => {
-    closeBitmaps()
-    startedAt = null
-    shown = -1
     replaying = true
     onEpisode(episode, true, generation)
-  }
-
-  const download = async target => {
-    const source = generation
-    try {
-      while (episode === target && frames.length < target.frame_count) {
-        const payload = await fetchJson(`/api/live/frames?generation=${source}&episode=${target.id}&start=${frames.length}`)
-        if (episode !== target) return
-        frames.push(...payload.frames)
-      }
-    } catch {
-      if (episode !== target) return
-      if (frames.length) {
-        frameCount = frames.length
-        return
-      }
-      episode = null
-      onWaiting()
-    }
-  }
-
-  const decodeAhead = index => {
-    const target = bitmaps
-    for (let ahead = index; ahead < Math.min(frames.length, index + DECODE_AHEAD_FRAMES); ahead += 1) {
-      if (target.has(ahead)) continue
-      target.set(ahead, null)
-      decode(frames[ahead].image).then(bitmap => {
-        if (bitmaps === target && target.get(ahead) === null) target.set(ahead, bitmap)
-        else bitmap.close()
-      })
-    }
-    for (const [past, bitmap] of bitmaps) {
-      if (past >= index) continue
-      bitmap?.close()
-      bitmaps.delete(past)
-    }
-  }
-
-  const ready = () => frames.length >= Math.min(frameCount, PREROLL_SECONDS * episode.frame_rate)
-
-  const tick = time => {
-    animation = requestAnimationFrame(tick)
-    if (!episode) return
-    if (startedAt === null) {
-      decodeAhead(0)
-      if (ready() && bitmaps.get(0)) startedAt = time
-      return
-    }
-    const index = Math.floor((time - startedAt) / 1000 * episode.frame_rate)
-    if (index >= frameCount) {
-      finish()
-      return
-    }
-    if (index >= frames.length) {
-      startedAt += time - startedAt - shown / episode.frame_rate * 1000
-      return
-    }
-    decodeAhead(index)
-    const bitmap = bitmaps.get(index)
-    if (index === shown || !bitmap) return
-    shown = index
-    onFrame({ bitmap, status: frames[index].status, progress: index / frameCount })
+    play()
   }
 
   return {
     start() {
+      video().addEventListener('ended', finish)
       poll()
       timer = window.setInterval(poll, POLL_INTERVAL_MS)
-      animation = requestAnimationFrame(tick)
     },
     stop() {
       window.clearInterval(timer)
-      cancelAnimationFrame(animation)
+      video().removeEventListener('ended', finish)
       release()
     },
   }

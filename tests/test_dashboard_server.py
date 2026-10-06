@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from datenwissenschaften.settings import UISettings
+from datenwissenschaften.ui import live as live_module
 from datenwissenschaften.ui import server as server_module
 from datenwissenschaften.ui.live import LiveFeed
 from datenwissenschaften.ui.persona import persona_tag
@@ -183,7 +184,12 @@ def test_health_endpoint_returns_ok(monkeypatch):
     assert json.loads(response.body) == {"status": "ok"}
 
 
-def test_live_endpoints_serve_the_latest_finished_episode_in_chunks(monkeypatch):
+@pytest.fixture(autouse=True)
+def fake_video(monkeypatch):
+    monkeypatch.setattr(live_module, "encode_video", lambda jpegs, frame_rate: b"mp4:" + b"".join(jpegs))
+
+
+def test_live_endpoints_serve_the_latest_attempt_as_a_video_with_its_decisions(monkeypatch):
     feed = LiveFeed()
     feed.record(b"one", {"timesteps": 1})
     feed.record(b"two", {"timesteps": 2})
@@ -194,9 +200,10 @@ def test_live_endpoints_serve_the_latest_finished_episode_in_chunks(monkeypatch)
     with _running_server(monkeypatch) as server:
         latest = json.loads(_get(server, "/api/live/episode").body)
         generation = latest["generation"]
-        frames = json.loads(_get(server, f"/api/live/frames?generation={generation}&episode=7&start=1").body)
-        missing = _get(server, f"/api/live/frames?generation={generation}&episode=99&start=0")
-        outdated = _get(server, "/api/live/frames?generation=old&episode=7&start=0")
+        statuses = json.loads(_get(server, f"/api/live/statuses?generation={generation}&episode=7&start=1").body)
+        video = _get(server, f"/api/live/video?generation={generation}&episode=7")
+        missing = _get(server, f"/api/live/video?generation={generation}&episode=99")
+        outdated = _get(server, "/api/live/statuses?generation=old&episode=7&start=0")
 
     assert latest["episode"] == {
         "id": 7,
@@ -206,7 +213,8 @@ def test_live_endpoints_serve_the_latest_finished_episode_in_chunks(monkeypatch)
     }
     assert [replay["id"] for replay in latest["replays"]] == [7]
     assert latest["in_progress"] is None
-    assert [frame["status"]["timesteps"] for frame in frames["frames"]] == [2]
+    assert [status["timesteps"] for status in statuses["statuses"]] == [2]
+    assert video.body == b"mp4:onetwo"
     assert missing.status == 404
     assert outdated.status == 404
 

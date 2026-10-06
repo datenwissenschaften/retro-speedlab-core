@@ -2,80 +2,111 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createReplayPlayer } from './replayPlayer.js'
 
-const FRAME_STATUSES = [
+const STATUSES = [
   { attempt: 5, action: 'left', probabilities: { left: 0.7, right: 0.3 } },
   { attempt: 5, action: 'right', probabilities: { left: 0.2, right: 0.8 } },
 ]
-const EPISODE = { id: 4, frame_rate: 1, frame_count: FRAME_STATUSES.length, result: { attempt: 5, level: 'Level1' } }
-const RESPONSES = {
-  '/api/live/episode': { generation: 'g', episode: EPISODE, replays: [], in_progress: { attempt: 6, level: 'Level1' }, summary: {} },
-  '/api/live/frames?generation=g&episode=4&start=0': { frames: FRAME_STATUSES.map(status => ({ image: 'AA==', status })) },
+const EPISODE = { id: 4, frame_rate: 1, frame_count: STATUSES.length, result: { attempt: 5, level: 'Level1' } }
+const LATEST = { generation: 'g', episode: EPISODE, replays: [], in_progress: { attempt: 6, level: 'Level1' }, summary: {} }
+
+const settle = async () => {
+  for (let round = 0; round < 10; round += 1) await new Promise(resolve => { setTimeout(resolve, 0) })
 }
 
-const settle = () => new Promise(resolve => { setTimeout(resolve, 0) })
+const fakeVideo = () => {
+  const listeners = {}
+  return {
+    frameCallbacks: [],
+    played: 0,
+    src: null,
+    currentTime: 0,
+    addEventListener: (name, listener) => { listeners[name] = listener },
+    removeEventListener: name => { delete listeners[name] },
+    removeAttribute: () => {},
+    pause: () => {},
+    play() { this.played += 1 },
+    requestVideoFrameCallback(callback) { this.frameCallbacks.push(callback) },
+    frame(mediaTime) { this.frameCallbacks.shift()(0, { mediaTime }) },
+    end: () => listeners.ended(),
+  }
+}
 
 const installBrowser = responses => {
-  const frames = []
   globalThis.window = { setInterval: () => 0, clearInterval: () => {} }
-  globalThis.fetch = async url => ({ ok: url in responses, status: url in responses ? 200 : 404, json: async () => responses[url] })
-  globalThis.requestAnimationFrame = callback => { frames.push(callback) }
-  globalThis.cancelAnimationFrame = () => {}
-  globalThis.createImageBitmap = async () => ({ close: () => {} })
-  return time => frames.shift()(time)
+  globalThis.URL = { createObjectURL: blob => `blob:${blob}`, revokeObjectURL: () => {} }
+  globalThis.fetch = async url => ({
+    ok: url in responses,
+    status: url in responses ? 200 : 404,
+    json: async () => responses[url],
+    blob: async () => responses[url],
+  })
 }
 
-test('H: every drawn frame carries the decision recorded for that frame of the replayed attempt', async () => {
-  const tick = installBrowser(RESPONSES)
-  const drawn = []
-  const latest = []
-  const player = createReplayPlayer({
-    onFrame: frame => drawn.push(frame.status),
-    onEpisode: () => {},
-    onEpisodeEnd: () => {},
-    onWaiting: () => {},
-    onLatest: (episode, summary, inProgress) => latest.push(inProgress),
-    onConnection: () => {},
-  })
-  player.start()
-  await settle()
-  tick(0)
-  await settle()
-  tick(0)
-  tick(1)
-  tick(1000)
-
-  assert.deepEqual(drawn, FRAME_STATUSES)
-  assert.deepEqual(latest, [{ attempt: 6, level: 'Level1' }])
-  player.stop()
+const player = (video, events) => createReplayPlayer({
+  video: () => video,
+  onFrame: frame => events.push(['frame', frame.status.action]),
+  onEpisode: (episode, replay) => events.push(['episode', episode.id, replay]),
+  onEpisodeEnd: episode => events.push(['end', episode.id]),
+  onWaiting: () => events.push(['waiting']),
+  onLatest: () => {},
+  onConnection: () => {},
 })
 
-test('I: an attempt that disappears while loading still plays the frames already loaded to the end', async () => {
-  const longer = { ...EPISODE, frame_count: 4 }
-  const tick = installBrowser({
-    '/api/live/episode': { ...RESPONSES['/api/live/episode'], episode: longer },
-    '/api/live/frames?generation=g&episode=4&start=0': RESPONSES['/api/live/frames?generation=g&episode=4&start=0'],
+test('H: every shown video frame carries the decision recorded for that frame', async () => {
+  installBrowser({
+    '/api/live/episode': LATEST,
+    '/api/live/statuses?generation=g&episode=4&start=0': { statuses: STATUSES },
+    '/api/live/video?generation=g&episode=4': 'video-4',
   })
-  const drawn = []
+  const video = fakeVideo()
   const events = []
-  const player = createReplayPlayer({
-    onFrame: frame => drawn.push(frame.status),
-    onEpisode: () => {},
-    onEpisodeEnd: () => events.push('end'),
-    onWaiting: () => events.push('waiting'),
-    onLatest: () => {},
-    onConnection: () => {},
-  })
-  player.start()
+  const replays = player(video, events)
+  replays.start()
   await settle()
-  await settle()
-  tick(0)
-  await settle()
-  tick(0)
-  tick(1)
-  tick(1000)
-  tick(2000)
+  video.frame(0)
+  video.frame(1)
 
-  assert.deepEqual(drawn, FRAME_STATUSES)
-  assert.deepEqual(events, ['end'])
-  player.stop()
+  assert.equal(video.src, 'blob:video-4')
+  assert.deepEqual(events, [['episode', 4, false], ['frame', 'left'], ['frame', 'right']])
+  replays.stop()
+})
+
+test('I: a finished attempt is followed by the best replays in a loop', async () => {
+  const replay = { ...EPISODE, id: 2 }
+  installBrowser({
+    '/api/live/episode': { ...LATEST, replays: [replay] },
+    '/api/live/statuses?generation=g&episode=4&start=0': { statuses: STATUSES },
+    '/api/live/statuses?generation=g&episode=2&start=0': { statuses: STATUSES },
+    '/api/live/video?generation=g&episode=4': 'video-4',
+    '/api/live/video?generation=g&episode=2': 'video-2',
+  })
+  const video = fakeVideo()
+  const events = []
+  const replays = player(video, events)
+  replays.start()
+  await settle()
+  video.end()
+  await settle()
+  video.end()
+  await settle()
+
+  assert.deepEqual(events, [['episode', 4, false], ['end', 4], ['episode', 2, true], ['end', 2], ['episode', 2, true]])
+  assert.equal(video.src, 'blob:video-2')
+  replays.stop()
+})
+
+test('J: an attempt that is gone before its video loaded is skipped while waiting', async () => {
+  installBrowser({
+    '/api/live/episode': LATEST,
+    '/api/live/statuses?generation=g&episode=4&start=0': { statuses: STATUSES },
+  })
+  const video = fakeVideo()
+  const events = []
+  const replays = player(video, events)
+  replays.start()
+  await settle()
+
+  assert.deepEqual(events, [['waiting']])
+  assert.equal(video.played, 0)
+  replays.stop()
 })

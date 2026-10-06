@@ -5,33 +5,29 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-import msgspec
+from datenwissenschaften.ui.replay_store import ReplayStore
+from datenwissenschaften.ui.replay_video import encode_video
 
 MAX_COMPLETED_EPISODES = 4
-MAX_FRAMES_PER_REQUEST = 120
-REPLAY_SUFFIX = ".replay"
+MAX_STATUSES_PER_REQUEST = 600
 
 
 class LiveFeed:
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._replay_dir: Path | None = None
+        self._store: ReplayStore | None = None
         self._start_generation()
 
     def keep_replays_in(self, directory: Path) -> None:
         with self._lock:
-            self._replay_dir = directory
-            directory.mkdir(parents=True, exist_ok=True)
-            for path in sorted(directory.glob(f"*{REPLAY_SUFFIX}")):
-                episode = msgspec.msgpack.decode(path.read_bytes())
-                self._replays[episode["result"]["curriculum"]] = episode
+            self._store = ReplayStore(directory)
+            self._replays.update(self._store.load())
 
     def clear(self) -> None:
         with self._lock:
             self._start_generation()
-            if self._replay_dir is not None:
-                for path in self._replay_dir.glob(f"*{REPLAY_SUFFIX}"):
-                    path.unlink()
+            if self._store is not None:
+                self._store.clear()
 
     def _start_generation(self) -> None:
         self._generation = uuid4().hex
@@ -54,33 +50,33 @@ class LiveFeed:
         with self._lock:
             if not self._recording:
                 raise RuntimeError("No frame has been recorded for this episode.")
-            return _base64(self._recording[-1]["image"])
+            return base64.b64encode(self._recording[-1]["image"]).decode("ascii")
 
     def finish_episode(
         self, episode_id: int, frame_rate: float, result: dict[str, Any], summary: dict[str, Any]
     ) -> None:
         with self._lock:
             frames, self._recording = self._recording, []
-            if frames:
-                episode = {"id": episode_id, "frame_rate": frame_rate, "result": result, "frames": frames}
-                self._episodes.append(episode)
-                self._keep_best(episode)
             self._summary = summary
+        if not frames:
+            return
+        episode = {
+            "id": episode_id,
+            "frame_rate": frame_rate,
+            "result": result,
+            "statuses": [frame["status"] for frame in frames],
+            "video": encode_video([frame["image"] for frame in frames], frame_rate),
+        }
+        with self._lock:
+            self._episodes.append(episode)
+            self._keep_best(episode)
 
     def _keep_best(self, episode: dict[str, Any]) -> None:
         curriculum = episode["result"]["curriculum"]
         if curriculum not in self._replays or episode["result"]["score"] > self._replays[curriculum]["result"]["score"]:
             self._replays[curriculum] = episode
-            self._save(curriculum, episode)
-
-    def _save(self, curriculum: str, episode: dict[str, Any]) -> None:
-        if self._replay_dir is None:
-            return
-        self._replay_dir.mkdir(parents=True, exist_ok=True)
-        path = self._replay_dir / f"{curriculum}{REPLAY_SUFFIX}"
-        partial = path.with_suffix(".partial")
-        partial.write_bytes(msgspec.msgpack.encode(episode))
-        partial.replace(path)
+            if self._store is not None:
+                self._store.save(curriculum, episode)
 
     def latest_episode(self) -> dict[str, Any]:
         with self._lock:
@@ -92,19 +88,21 @@ class LiveFeed:
                 "summary": dict(self._summary),
             }
 
-    def episode_frames(self, generation: str, episode_id: int, start: int) -> list[dict[str, Any]]:
+    def episode_statuses(self, generation: str, episode_id: int, start: int) -> list[dict[str, Any]]:
+        statuses = self._episode(generation, episode_id)["statuses"]
+        return [dict(status) for status in statuses[start : start + MAX_STATUSES_PER_REQUEST]]
+
+    def episode_video(self, generation: str, episode_id: int) -> bytes:
+        return self._episode(generation, episode_id)["video"]
+
+    def _episode(self, generation: str, episode_id: int) -> dict[str, Any]:
         with self._lock:
             if generation != self._generation:
                 raise KeyError(generation)
             for episode in (*self._episodes, *self._replays.values()):
                 if episode["id"] == episode_id:
-                    frames = episode["frames"][start : start + MAX_FRAMES_PER_REQUEST]
-                    return [{"image": _base64(frame["image"]), "status": dict(frame["status"])} for frame in frames]
+                    return episode
         raise KeyError(episode_id)
-
-
-def _base64(jpeg: bytes) -> str:
-    return base64.b64encode(jpeg).decode("ascii")
 
 
 def _in_progress(status: dict[str, Any]) -> dict[str, Any]:
@@ -115,7 +113,7 @@ def _overview(episode: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": episode["id"],
         "frame_rate": episode["frame_rate"],
-        "frame_count": len(episode["frames"]),
+        "frame_count": len(episode["statuses"]),
         "result": episode["result"],
     }
 

@@ -31,6 +31,7 @@ from datenwissenschaften.training.hooks import Transition
 from datenwissenschaften.training.state_models import StateModels
 from datenwissenschaften.training.story_book import StoryBook
 from datenwissenschaften.training.story_teller import StoryTeller
+from datenwissenschaften.ui import live as live_module
 from datenwissenschaften.ui.live import LiveFeed
 from datenwissenschaften.vision.detection import Detection
 
@@ -127,7 +128,12 @@ def test_checkpoint_hook_saves_and_publishes_metadata(context: RunContext, monke
     assert published[0][1]["laya"] == {"state": "Survive", "checkpoint": "fake/laya"}
 
 
-def test_live_stream_hook_records_every_frame_of_an_episode_with_its_result(monkeypatch, tmp_path: Path):
+@pytest.fixture
+def fake_video(monkeypatch):
+    monkeypatch.setattr(live_module, "encode_video", lambda jpegs, frame_rate: b"mp4:" + b"".join(jpegs))
+
+
+def test_live_stream_hook_records_every_frame_of_an_episode_with_its_result(monkeypatch, tmp_path: Path, fake_video):
     monkeypatch.setattr(story_book, "publish_metadata", lambda *args, **kwargs: None)
     teller = StoryTeller(StoryBook(JsonDatabase(tmp_path / "db.json"), "FakeGame-v0", "Level1", ("Survive", "Boss")))
     feed = LiveFeed()
@@ -145,8 +151,8 @@ def test_live_stream_hook_records_every_frame_of_an_episode_with_its_result(monk
     hook.on_episode_end(_episode("run.bk2", 4.0, True, True))
 
     generation = feed.latest_episode()["generation"]
-    first, second = (feed.episode_frames(generation, episode_id, 0) for episode_id in (42, 43))
-    status = first[0]["status"]
+    first, second = (feed.episode_statuses(generation, episode_id, 0) for episode_id in (42, 43))
+    status = first[0]
     assert (len(first), len(second)) == (2, 2)
     assert (status["action"], status["probabilities"]["right"]) == ("right", 0.7)
     assert (status["ram"], status["episode_reward"]) == ({"lives": 3}, 2.0)

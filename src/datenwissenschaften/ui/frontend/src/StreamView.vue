@@ -59,13 +59,7 @@ const readable = value => {
   }
   return String(value)
 }
-const drawFrame = frame => {
-  const canvas = screen.value
-  if (canvas.width !== frame.bitmap.width) {
-    canvas.width = frame.bitmap.width
-    canvas.height = frame.bitmap.height
-  }
-  canvas.getContext('2d').drawImage(frame.bitmap, 0, 0)
+const showFrame = frame => {
   live.value = frame.status
   replayProgress.value = frame.progress
 }
@@ -87,7 +81,8 @@ const reload = async () => {
 }
 const reloadIfPending = () => { if (reloadPending) reload() }
 const player = createReplayPlayer({
-  onFrame: drawFrame,
+  video: () => screen.value,
+  onFrame: showFrame,
   onEpisode: (episode, replay, generation) => {
     replayEpisode.value = episode
     waiting.value = false
@@ -222,7 +217,7 @@ watch(() => live.value.ram, (current, previous) => {
       </div>
 
       <div class="stream-screen">
-        <canvas ref="screen" class="stream-video" aria-label="Replayed gameplay"></canvas>
+        <video ref="screen" class="stream-video" aria-label="Replayed gameplay" muted playsinline></video>
         <Transition name="fade">
           <div v-if="snapshot.server && !twitch" class="stream-waiting">
             <span class="stream-waiting-kicker">Stream off</span>

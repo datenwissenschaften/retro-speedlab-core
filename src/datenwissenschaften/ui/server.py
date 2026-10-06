@@ -216,16 +216,25 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         if path == "/api/live/episode":
             self._send_json(live_feed.latest_episode())
             return
-        if path == "/api/live/frames":
+        if path == "/api/live/statuses":
             query = parse_qs(request.query)
             try:
-                frames = live_feed.episode_frames(
+                statuses = live_feed.episode_statuses(
                     query["generation"][0], int(query["episode"][0]), int(query["start"][0])
                 )
             except KeyError:
                 self.send_error(HTTPStatus.NOT_FOUND, "Episode is no longer available")
                 return
-            self._send_json({"frames": frames})
+            self._send_json({"statuses": statuses})
+            return
+        if path == "/api/live/video":
+            query = parse_qs(request.query)
+            try:
+                video = live_feed.episode_video(query["generation"][0], int(query["episode"][0]))
+            except KeyError:
+                self.send_error(HTTPStatus.NOT_FOUND, "Episode is no longer available")
+                return
+            self._send_video(video)
             return
         if path == "/api/health":
             self._send_json({"status": "ok"})
@@ -263,7 +272,7 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             except (FileNotFoundError, OSError):
                 self.send_error(HTTPStatus.NOT_FOUND, "Rollout video not found")
                 return
-            self._send_video(video_path)
+            self._send_video(video_path.read_bytes())
             return
         self._send_asset(path)
 
@@ -320,8 +329,8 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_video(self, path: Path) -> None:
-        size = path.stat().st_size
+    def _send_video(self, video: bytes) -> None:
+        size = len(video)
         start, end = 0, size - 1
         status = HTTPStatus.OK
         requested_range = self.headers.get("Range")
@@ -341,24 +350,15 @@ class _DashboardHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Range", f"bytes */{size}")
                 self.end_headers()
                 return
-        length = end - start + 1
         self.send_response(status)
         self.send_header("Content-Type", "video/mp4")
         self.send_header("Accept-Ranges", "bytes")
         self.send_header("Cache-Control", "no-cache")
-        self.send_header("Content-Length", str(length))
+        self.send_header("Content-Length", str(end - start + 1))
         if status == HTTPStatus.PARTIAL_CONTENT:
             self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
         self.end_headers()
-        with path.open("rb") as video_file:
-            video_file.seek(start)
-            remaining = length
-            while remaining:
-                chunk = video_file.read(min(256 * 1024, remaining))
-                if not chunk:
-                    break  # pragma: no cover - only reachable if the file shrinks mid-read
-                self.wfile.write(chunk)
-                remaining -= len(chunk)
+        self.wfile.write(video[start : end + 1])
 
     def _send_asset(self, requested_path: str) -> None:
         relative = requested_path.lstrip("/") or "index.html"
