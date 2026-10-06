@@ -80,6 +80,7 @@ def _transition() -> Transition:
         "state": "Survive",
         "detections": (Detection("door", 0, 0, 2, 2),),
         "ram": {"lives": 3},
+        "memory": [{"name": "lives", "address": "0x0000", "length": 1, "value": 3}],
         "location": (40, 20),
         "state_transition": None,
     }
@@ -93,16 +94,21 @@ def test_context_places_the_model_and_recordings_per_game(context: RunContext):
 
 def test_telemetry_hook_publishes_finished_episodes(context: RunContext, monkeypatch):
     published = []
+    memories = []
     monkeypatch.setattr(telemetry_hook, "publish_episode", lambda **values: published.append(values))
+    monkeypatch.setattr(telemetry_hook, "publish_metadata", lambda section, values, replace: memories.append(values))
     hook = telemetry_hook.TelemetryHook(context)
 
-    hook.on_step(_transition())
+    for _ in range(telemetry_hook.MEMORY_PUBLISH_STEPS + 1):
+        hook.on_step(_transition())
     hook.on_episode_end(_episode("run.bk2", 4.0, True, True))
     hook.on_update()
 
     assert published[0]["fitness"] == 4.0
     assert published[0]["won"] is True
     assert published[0]["savestate"] == "Level1"
+    assert len(memories) == 2
+    assert memories[0] == {"state": "Survive", "fields": _transition().info["memory"]}
 
 
 def test_checkpoint_hook_saves_and_publishes_metadata(context: RunContext, monkeypatch):

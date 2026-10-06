@@ -1,15 +1,22 @@
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
-from datenwissenschaften.ui.telemetry import publish_episode
+from datenwissenschaften.ui.telemetry import publish_episode, publish_metadata
+
+MEMORY_PUBLISH_STEPS = 10
 
 
 class TelemetryHook:
     def __init__(self, context: RunContext) -> None:
         self.context = context
+        self.steps = 0
 
     def on_step(self, transition: Transition) -> None:
-        pass
+        self.steps += 1
+        if self.steps % MEMORY_PUBLISH_STEPS != 1:
+            return
+        info = transition.info
+        publish_metadata("memory", {"state": info["state"], "fields": info["memory"]}, replace=True)
 
     def on_episode_end(self, episode: EpisodeRecord) -> None:
         publish_episode(

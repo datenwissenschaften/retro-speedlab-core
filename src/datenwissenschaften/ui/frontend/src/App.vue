@@ -186,6 +186,8 @@ const latestDuration = computed(() => activeSummary.value.latest_full_run_durati
 const model = computed(() => snapshot.value.metadata?.model || {})
 const laya = computed(() => model.value.laya || {})
 const knowledge = computed(() => snapshot.value.metadata?.knowledge)
+const memory = computed(() => snapshot.value.metadata?.memory || { state: null, fields: [] })
+const memoryValue = value => Array.isArray(value) ? value.join(' · ') : String(value)
 const inputs = computed(() => layaInputs(knowledge.value, laya.value))
 const stateSources = state => [state.seeded ? 'seeded from power-on' : 'no seed', `${state.demonstrations} demonstrated moves`].join(' · ')
 const environment = computed(() => snapshot.value.metadata?.environment || {})
@@ -344,6 +346,16 @@ const label = key => key.replaceAll('_', ' ')
         </dl>
       </article>
       </div>
+    </section>
+
+    <section class="observatory-section">
+      <div class="section-heading">
+        <div><p class="eyebrow">GAME MEMORY</p><h2>Every RAM value the game package reads</h2><p>Live values from the running attempt, refreshed every ten decisions{{ memory.state ? ` · state ${memory.state}` : '' }}.</p></div>
+      </div>
+      <article class="panel detail-card full-height">
+        <div class="card-heading"><div><p class="eyebrow">GAMERAM</p><h2>{{ memory.fields.length }} fields</h2><p class="card-description">Name, NES address and the value Laya's state machine sees right now.</p></div><span class="chip" :class="{ muted: !memory.fields.length }">{{ memory.fields.length ? 'Live' : 'Waiting' }}</span></div>
+        <dl class="memory-list"><template v-for="field in memory.fields" :key="field.name"><dt>{{ field.name }} <span class="memory-address">{{ field.address }}{{ field.length > 1 ? ` +${field.length}` : '' }}</span></dt><dd>{{ memoryValue(field.value) }}</dd></template></dl>
+      </article>
     </section>
 
     <section class="observatory-section">

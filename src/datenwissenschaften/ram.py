@@ -45,6 +45,14 @@ class RamInfo:
 
         return values
 
+    @final
+    def memory(self) -> list[dict[str, Any]]:
+        values = self.to_dict()
+        return [
+            {"name": name, "address": f"0x{address:04X}", "length": length, "value": values[name]}
+            for name, (address, length) in self.ram_map().items()
+        ]
+
     def describe(self) -> dict[str, Any]:
         return self.to_dict()
 

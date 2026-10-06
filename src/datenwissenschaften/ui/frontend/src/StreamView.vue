@@ -125,8 +125,21 @@ const stageStyle = computed(() => ({
 const twitch = computed(() => snapshot.value.server?.twitch === true)
 const labRun = computed(() => snapshot.value.metadata?.lab_run?.active ? snapshot.value.metadata.lab_run : null)
 let streaming = false
-watch(twitch, enabled => {
-  if (!enabled || streaming) return
+let pausedForLab = false
+watch([twitch, labRun], ([enabled, lab]) => {
+  if (lab && !pausedForLab) {
+    pausedForLab = true
+    player.stop()
+    live.value = {}
+    replayEpisode.value = null
+    replayProgress.value = 0
+    return
+  }
+  if (!lab && pausedForLab) {
+    reload()
+    return
+  }
+  if (!enabled || lab || streaming) return
   streaming = true
   player.start(); obsControl.start()
 })
@@ -152,7 +165,7 @@ const summary = computed(() => snapshot.value.summary?.by_savestate?.[level.valu
 const story = computed(() => snapshot.value.metadata?.stories?.[level.value] || { phases: [], danger: [] })
 const levelBest = savestate => snapshot.value.summary?.by_savestate?.[savestate]?.best_fitness ?? null
 const recent = computed(() => recentAttempts(latestEpisode.value, recentScores.value, levelBest(latestEpisode.value?.result.level), RECENT_ATTEMPTS))
-const replayStatus = computed(() => status(connected.value, replayEpisode.value))
+const replayStatus = computed(() => labRun.value ? 'Upgrading' : status(connected.value, replayEpisode.value))
 const progressLine = computed(() => connected.value ? inProgressLine(replayEpisode.value, inProgress.value) : null)
 const replayIsBest = computed(() => replayEpisode.value !== null && holdsBest(replayEpisode.value, levelBest(replayEpisode.value.result.level)))
 const learningFor = computed(() => snapshot.value.started_at ? elapsed(snapshot.value.started_at, now.value) : '—')
@@ -238,7 +251,15 @@ watch(() => live.value.ram, (current, previous) => {
         </Transition>
       </div>
 
-      <aside class="stream-ad-panel brain-panel">
+      <aside v-if="labRun" class="stream-ad-panel brain-panel">
+        <strong class="stream-ad-title">Lab upgrade</strong>
+        <span class="stream-ad-copy">{{ agentName }}'s next moves return when training resumes</span>
+        <ol class="brain-options lab-steps">
+          <li v-for="(line, index) in LAB_LINES" :key="line" :class="{ chosen: index === labLine }">{{ line }}</li>
+        </ol>
+        <span class="stream-ad-url">Back in about {{ minutesLeft(labRun.until, now) }} min</span>
+      </aside>
+      <aside v-else class="stream-ad-panel brain-panel">
         <strong class="stream-ad-title">Next move</strong>
         <span class="stream-ad-copy">{{ probabilities.length ? `Choosing from ${probabilities.length} actions` : 'Waiting for the first finished attempt…' }}</span>
         <ul class="brain-options">

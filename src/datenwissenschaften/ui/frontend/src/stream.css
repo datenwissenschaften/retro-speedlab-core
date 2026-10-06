@@ -156,6 +156,8 @@
 .stream-ad-url { display: block; color: color-mix(in srgb, var(--secondary) 68%, #ffffff 32%); font-size: 0.64rem; font-weight: 700; letter-spacing: 0.12em; text-align: center; text-transform: uppercase; }
 .brain-options { list-style: none; display: grid; gap: 4px; }
 .brain-options li { padding: 4px 8px; border: 1px solid transparent; border-radius: 6px; }
+.lab-steps li { color: var(--text-muted); font-size: 0.72rem; line-height: 1.45; }
+.lab-steps li.chosen { color: var(--text-strong); }
 .brain-options li.chosen { border-color: var(--primary); background: rgba(255, 79, 163, 0.1); box-shadow: 0 0 14px rgba(255, 79, 163, 0.3); }
 .brain-option-label { display: flex; justify-content: space-between; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; }
 .brain-option-label b { color: var(--text-strong); }

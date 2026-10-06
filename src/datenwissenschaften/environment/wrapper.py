@@ -102,6 +102,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
             "won": won,
             "state_transition": transition,
             "ram": ram.describe(),
+            "memory": ram.memory(),
             "location": ram.location(),
             **self._episode_info,
         }
