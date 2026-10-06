@@ -23,6 +23,7 @@ class LabRun:
     def wait(self) -> ModelResetRequest | None:
         deadline = self.deadline()
         if deadline is None:
+            publish_metadata("lab_run", {"active": False, "until": None})
             return None
         logger.info("A lab run is working on the game; training pauses until it ends")
         while deadline is not None:

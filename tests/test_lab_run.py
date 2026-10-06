@@ -41,3 +41,11 @@ def test_a_model_reset_during_the_pause_is_handed_back(tmp_path: Path, monkeypat
     monkeypatch.setattr(lab_run_module, "consume_model_reset", lambda: "reset")
 
     assert LabRun(marker).wait() == "reset"
+
+
+def test_without_a_lab_run_the_stream_is_told_training_runs(tmp_path: Path, monkeypatch):
+    published = []
+    monkeypatch.setattr(lab_run_module, "publish_metadata", lambda section, values: published.append(values))
+
+    assert LabRun(tmp_path / ".lab-run").wait() is None
+    assert published == [{"active": False, "until": None}]
