@@ -187,7 +187,7 @@ def test_live_endpoints_serve_the_latest_finished_episode_in_chunks(monkeypatch)
     feed = LiveFeed()
     feed.record(b"one", {"timesteps": 1})
     feed.record(b"two", {"timesteps": 2})
-    result = {"score": 3.0, "won": False, "new_best": True, "full_run": True, "succeeded": False}
+    result = {"score": 3.0, "won": False, "new_best": True, "full_run": True, "succeeded": False, "curriculum": "Play"}
     feed.finish_episode(7, 60.0, result, {"recent_scores": [3.0]})
     monkeypatch.setattr(server_module, "live_feed", feed)
 
@@ -473,7 +473,7 @@ def test_the_attempt_being_played_is_reported_until_it_finishes():
     feed.record(b"one", {"attempt": 6, "level": "Level1"})
     assert feed.latest_episode()["in_progress"] == {"attempt": 6, "level": "Level1"}
 
-    result = {"score": 1.0, "attempt": 6, "level": "Level1", "full_run": True, "succeeded": False}
+    result = {"score": 1.0, "attempt": 6, "level": "Level1", "full_run": True, "succeeded": False, "curriculum": "Play"}
     feed.finish_episode(5, 60.0, result, {"recent_scores": []})
     assert feed.latest_episode()["in_progress"] is None
     assert feed.latest_episode()["episode"]["result"]["attempt"] == 6

@@ -13,7 +13,6 @@ import './stream.css'
 const STAGE_WIDTH = 1280
 const STAGE_HEIGHT = 720
 const SNAPSHOT_INTERVAL_MS = 1500
-const RELOAD_DEADLINE_MS = 90000
 const RELOAD_SETTLE_MS = 15000
 const RELOAD_RETRY_MS = 5000
 const CLOCK_INTERVAL_MS = 1000
@@ -47,7 +46,6 @@ let clockTimer
 let labLineTimer
 const labLine = ref(0)
 const arrived = createArrivalTracker()
-let reloadTimer
 let loadedRelease = null
 let reloadPending = false
 let reloading = false
@@ -83,7 +81,6 @@ const pageServed = async () => {
 const reload = async () => {
   if (reloading) return
   reloading = true
-  window.clearTimeout(reloadTimer)
   await pause(RELOAD_SETTLE_MS)
   while (!(await pageServed())) await pause(RELOAD_RETRY_MS)
   window.location.reload()
@@ -154,7 +151,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   player.stop(); obsControl.stop()
   window.removeEventListener('resize', fit)
-  window.clearInterval(snapshotTimer); window.clearInterval(clockTimer); window.clearInterval(labLineTimer); window.clearTimeout(reloadTimer)
+  window.clearInterval(snapshotTimer); window.clearInterval(clockTimer); window.clearInterval(labLineTimer)
 })
 
 const release = computed(() => snapshot.value.server?.release || null)
@@ -187,7 +184,6 @@ watch(release, current => {
   if (current === loadedRelease || reloadPending) return
   reloadPending = true
   if (waiting.value) reload()
-  reloadTimer = window.setTimeout(reload, RELOAD_DEADLINE_MS)
 })
 
 watch(() => live.value.ram, (current, previous) => {
@@ -217,6 +213,7 @@ watch(() => live.value.ram, (current, previous) => {
           <dl class="run-info-grid">
             <div class="run-info-row"><dt>Game</dt><dd>{{ run.game ? gameTitle(run.game) : 'Waiting' }}</dd></div>
             <div class="run-info-row"><dt>Level</dt><dd>{{ levelTitle || '—' }}</dd></div>
+            <div class="run-info-row"><dt>Curriculum</dt><dd>{{ replayEpisode?.result.curriculum ? words(replayEpisode.result.curriculum) : '—' }}</dd></div>
             <div class="run-info-row"><dt>Agent</dt><dd>{{ agentName }}</dd></div>
           </dl>
         </aside>

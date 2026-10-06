@@ -62,6 +62,7 @@ class LiveStreamHook:
             "succeeded": episode.curriculum_succeeded or episode.won,
             "attempt": self.attempt,
             "level": self.savestate,
+            "curriculum": episode.curriculum_state,
         }
         live_feed.finish_episode(self.episode, self.frame_rate, result, {"recent_scores": list(self.recent_scores)})
         self.episode += 1

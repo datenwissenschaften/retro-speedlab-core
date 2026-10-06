@@ -4,8 +4,7 @@ from collections import deque
 from typing import Any
 from uuid import uuid4
 
-MAX_COMPLETED_EPISODES = 2
-MAX_REPLAYS = 5
+MAX_COMPLETED_EPISODES = 4
 MAX_FRAMES_PER_REQUEST = 120
 
 
@@ -22,7 +21,7 @@ class LiveFeed:
         self._generation = uuid4().hex
         self._recording: list[dict[str, Any]] = []
         self._episodes: deque[dict[str, Any]] = deque(maxlen=MAX_COMPLETED_EPISODES)
-        self._replays: list[dict[str, Any]] = []
+        self._replays: dict[str, dict[str, Any]] = {}
         self._summary: dict[str, Any] = {}
 
     def record(self, jpeg: bytes, status: dict[str, Any]) -> None:
@@ -49,21 +48,20 @@ class LiveFeed:
             if frames:
                 episode = {"id": episode_id, "frame_rate": frame_rate, "result": result, "frames": frames}
                 self._episodes.append(episode)
-                if result["full_run"] or result["succeeded"]:
-                    self._keep_best(episode)
+                self._keep_best(episode)
             self._summary = summary
 
     def _keep_best(self, episode: dict[str, Any]) -> None:
-        self._replays.append(episode)
-        self._replays.sort(key=lambda replay: replay["result"]["score"], reverse=True)
-        del self._replays[MAX_REPLAYS:]
+        curriculum = episode["result"]["curriculum"]
+        if curriculum not in self._replays or episode["result"]["score"] > self._replays[curriculum]["result"]["score"]:
+            self._replays[curriculum] = episode
 
     def latest_episode(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "generation": self._generation,
                 "episode": _overview(self._episodes[-1]) if self._episodes else None,
-                "replays": [_overview(episode) for episode in self._replays],
+                "replays": [_overview(episode) for episode in self._replays.values()],
                 "in_progress": _in_progress(self._recording[-1]["status"]) if self._recording else None,
                 "summary": dict(self._summary),
             }
@@ -72,7 +70,7 @@ class LiveFeed:
         with self._lock:
             if generation != self._generation:
                 raise KeyError(generation)
-            for episode in (*self._episodes, *self._replays):
+            for episode in (*self._episodes, *self._replays.values()):
                 if episode["id"] == episode_id:
                     frames = episode["frames"][start : start + MAX_FRAMES_PER_REQUEST]
                     return [{"image": _base64(frame["image"]), "status": dict(frame["status"])} for frame in frames]

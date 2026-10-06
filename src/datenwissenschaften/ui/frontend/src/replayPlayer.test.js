@@ -14,10 +14,10 @@ const RESPONSES = {
 
 const settle = () => new Promise(resolve => { setTimeout(resolve, 0) })
 
-const installBrowser = () => {
+const installBrowser = responses => {
   const frames = []
   globalThis.window = { setInterval: () => 0, clearInterval: () => {} }
-  globalThis.fetch = async url => ({ ok: true, json: async () => RESPONSES[url] })
+  globalThis.fetch = async url => ({ ok: url in responses, status: url in responses ? 200 : 404, json: async () => responses[url] })
   globalThis.requestAnimationFrame = callback => { frames.push(callback) }
   globalThis.cancelAnimationFrame = () => {}
   globalThis.createImageBitmap = async () => ({ close: () => {} })
@@ -25,7 +25,7 @@ const installBrowser = () => {
 }
 
 test('H: every drawn frame carries the decision recorded for that frame of the replayed attempt', async () => {
-  const tick = installBrowser()
+  const tick = installBrowser(RESPONSES)
   const drawn = []
   const latest = []
   const player = createReplayPlayer({
@@ -46,5 +46,36 @@ test('H: every drawn frame carries the decision recorded for that frame of the r
 
   assert.deepEqual(drawn, FRAME_STATUSES)
   assert.deepEqual(latest, [{ attempt: 6, level: 'Level1' }])
+  player.stop()
+})
+
+test('I: an attempt that disappears while loading still plays the frames already loaded to the end', async () => {
+  const longer = { ...EPISODE, frame_count: 4 }
+  const tick = installBrowser({
+    '/api/live/episode': { ...RESPONSES['/api/live/episode'], episode: longer },
+    '/api/live/frames?generation=g&episode=4&start=0': RESPONSES['/api/live/frames?generation=g&episode=4&start=0'],
+  })
+  const drawn = []
+  const events = []
+  const player = createReplayPlayer({
+    onFrame: frame => drawn.push(frame.status),
+    onEpisode: () => {},
+    onEpisodeEnd: () => events.push('end'),
+    onWaiting: () => events.push('waiting'),
+    onLatest: () => {},
+    onConnection: () => {},
+  })
+  player.start()
+  await settle()
+  await settle()
+  tick(0)
+  await settle()
+  tick(0)
+  tick(1)
+  tick(1000)
+  tick(2000)
+
+  assert.deepEqual(drawn, FRAME_STATUSES)
+  assert.deepEqual(events, ['end'])
   player.stop()
 })

@@ -161,6 +161,7 @@ def test_live_stream_hook_records_every_frame_of_an_episode_with_its_result(monk
         "succeeded": True,
         "attempt": 8,
         "level": "Level2",
+        "curriculum": "Survive",
     }
     assert (status["attempt"], status["level"]) == (7, "Level2")
     assert feed._episodes[0]["result"]["new_best"] is False

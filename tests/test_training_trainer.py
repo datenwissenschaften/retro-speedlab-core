@@ -12,9 +12,9 @@ from datenwissenschaften.training import trainer as trainer_module
 from datenwissenschaften.training import video_playback
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.identity import MODEL_LAYOUT, TrainingIdentity, engine_version
-from datenwissenschaften.ui.live import MAX_COMPLETED_EPISODES, MAX_FRAMES_PER_REQUEST, MAX_REPLAYS, LiveFeed
+from datenwissenschaften.ui.live import MAX_COMPLETED_EPISODES, MAX_FRAMES_PER_REQUEST, LiveFeed
 
-LOST = {"score": 1.0, "won": False, "new_best": False, "full_run": False, "succeeded": False}
+LOST = {"score": 1.0, "won": False, "new_best": False, "full_run": False, "succeeded": False, "curriculum": "Play"}
 
 
 class StopTraining(Exception):
@@ -126,12 +126,12 @@ def test_live_feed_keeps_the_latest_finished_episodes_and_serves_them_in_chunks(
         "in_progress": None,
         "summary": {},
     }
-    for episode_id in range(1, MAX_COMPLETED_EPISODES + 2):
+    for episode_id in range(1, MAX_COMPLETED_EPISODES + 3):
         for index in range(MAX_FRAMES_PER_REQUEST + 5):
             feed.record(b"jpeg", {"timesteps": index, "attempt": 1, "level": "Level1"})
         feed.finish_episode(episode_id, 60.0, LOST, {})
 
-    newest = MAX_COMPLETED_EPISODES + 1
+    newest = MAX_COMPLETED_EPISODES + 2
     rest = feed.episode_frames(generation, newest, MAX_FRAMES_PER_REQUEST)
 
     assert len(feed.episode_frames(generation, newest, 0)) == MAX_FRAMES_PER_REQUEST
@@ -141,7 +141,7 @@ def test_live_feed_keeps_the_latest_finished_episodes_and_serves_them_in_chunks(
     assert rest[0]["image"] == "anBlZw=="
     assert feed.latest_episode()["episode"]["id"] == newest
     with pytest.raises(KeyError):
-        feed.episode_frames(generation, 1, 0)
+        feed.episode_frames(generation, 2, 0)
 
 
 def test_clearing_the_live_feed_starts_a_new_generation_without_old_frames():
@@ -162,21 +162,17 @@ def test_clearing_the_live_feed_starts_a_new_generation_without_old_frames():
         feed.episode_frames(old, 1, 0)
 
 
-def test_the_best_full_and_successful_runs_stay_available_as_replays():
+def test_the_best_attempt_of_every_curriculum_state_stays_available_as_a_replay():
     feed = LiveFeed()
     generation = feed.latest_episode()["generation"]
-    scores = [5.0, 1.0, 9.0, 3.0, 7.0, 2.0, 8.0]
-    for episode_id, score in enumerate(scores, start=1):
+    attempts = [("Play", 5.0), ("Grow", 1.0), ("Play", 9.0), ("Grow", 3.0), ("Heavy", -2.0), ("Play", 7.0)]
+    for episode_id, (curriculum, score) in enumerate(attempts, start=1):
         feed.record(b"jpeg", {"timesteps": episode_id, "attempt": episode_id, "level": "Level1"})
-        feed.finish_episode(episode_id, 60.0, {**LOST, "score": score, "full_run": True}, {})
-    feed.record(b"jpeg", {"timesteps": 8, "attempt": 8, "level": "Level1"})
-    feed.finish_episode(8, 60.0, {**LOST, "score": 4.0, "succeeded": True}, {})
-    feed.record(b"jpeg", {"timesteps": 9, "attempt": 9, "level": "Level1"})
-    feed.finish_episode(9, 60.0, {**LOST, "score": 99.0}, {})
+        feed.finish_episode(episode_id, 60.0, {**LOST, "score": score, "curriculum": curriculum}, {})
 
-    assert len(scores) > MAX_REPLAYS
-    assert [replay["id"] for replay in feed.latest_episode()["replays"]] == [3, 7, 5, 1, 8]
-    assert feed.episode_frames(generation, 1, 0)[0]["image"] == "anBlZw=="
+    replays = [(replay["result"]["curriculum"], replay["id"]) for replay in feed.latest_episode()["replays"]]
+    assert replays == [("Play", 3), ("Grow", 4), ("Heavy", 5)]
+    assert feed.episode_frames(generation, 3, 0)[0]["image"] == "anBlZw=="
 
 
 def test_trainer_plays_the_full_game_and_speedruns_it_once_beaten(tmp_path: Path, monkeypatch):

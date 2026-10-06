@@ -20,6 +20,7 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
   let shownLiveId = null
   let episode = null
   let frames = []
+  let frameCount = 0
   let bitmaps = new Map()
   let startedAt = null
   let shown = -1
@@ -63,6 +64,7 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
   const begin = (next, replay) => {
     release()
     episode = next
+    frameCount = next.frame_count
     startedAt = null
     shown = -1
     replaying = replay
@@ -100,10 +102,13 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
         frames.push(...payload.frames)
       }
     } catch {
-      if (episode === target) {
-        episode = null
-        onWaiting()
+      if (episode !== target) return
+      if (frames.length) {
+        frameCount = frames.length
+        return
       }
+      episode = null
+      onWaiting()
     }
   }
 
@@ -124,7 +129,7 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
     }
   }
 
-  const ready = () => frames.length >= Math.min(episode.frame_count, PREROLL_SECONDS * episode.frame_rate)
+  const ready = () => frames.length >= Math.min(frameCount, PREROLL_SECONDS * episode.frame_rate)
 
   const tick = time => {
     animation = requestAnimationFrame(tick)
@@ -135,7 +140,7 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
       return
     }
     const index = Math.floor((time - startedAt) / 1000 * episode.frame_rate)
-    if (index >= episode.frame_count) {
+    if (index >= frameCount) {
       finish()
       return
     }
@@ -147,7 +152,7 @@ export const createReplayPlayer = ({ onFrame, onEpisode, onEpisodeEnd, onWaiting
     const bitmap = bitmaps.get(index)
     if (index === shown || !bitmap) return
     shown = index
-    onFrame({ bitmap, status: frames[index].status, progress: index / episode.frame_count })
+    onFrame({ bitmap, status: frames[index].status, progress: index / frameCount })
   }
 
   return {
