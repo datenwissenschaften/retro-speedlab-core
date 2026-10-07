@@ -13,27 +13,37 @@ class LayaNetwork(nn.Module):
         self.checkpoint = checkpoint
         self.question = LayaQuestion(agent.tok, agent.cfg, options)
         self.decision = agent.model
-        self.decision.encoder.gradient_checkpointing_enable()
-        self.decision.head_checkpointing = True
         self.to(device)
+        self.requires_grad_(False)
+        self.eval()
         self.dtype = autocast_dtype(self.device)
-
-    def restore_pretrained(self) -> None:
-        self.decision.load_state_dict(laya.load(self.checkpoint, device="cpu").model.state_dict())
 
     @property
     def device(self) -> torch.device:
         return next(self.parameters()).device
 
-    def forward(self, states: list[str], questions: list[str]) -> torch.Tensor:
+    @property
+    def width(self) -> int:
+        return self.decision.type_emb.embedding_dim
+
+    @property
+    def scorer(self) -> nn.Module:
+        return self.decision.scorer
+
+    @torch.no_grad()
+    def features(self, states: list[str], questions: list[str]) -> tuple[torch.Tensor, torch.Tensor]:
         batch, orders = self.question.encode(states, questions, self.device)
+        model = self.decision
         with torch.autocast(self.device.type, dtype=self.dtype):
-            logits, _ = self.decision(**batch)
-        return torch.empty_like(logits, dtype=torch.float32).scatter_(1, orders, logits.float())
-
-    def encoder_parameters(self) -> list[nn.Parameter]:
-        return list(self.decision.encoder.parameters())
-
-    def head_parameters(self) -> list[nn.Parameter]:
-        encoder = {id(parameter) for parameter in self.encoder_parameters()}
-        return [parameter for parameter in self.parameters() if id(parameter) not in encoder]
+            hidden = model.encoder(
+                input_ids=batch["input_ids"], attention_mask=batch["attention_mask"]
+            ).last_hidden_state
+            hidden = hidden + model.type_emb(batch["qtype"])[:, None, :]
+            if model.head is not None:
+                padding = ~batch["attention_mask"].bool()
+                for layer in model.head.layers:
+                    hidden = layer(hidden, src_key_padding_mask=padding)
+        hidden = hidden.float()
+        markers = torch.gather(hidden, 1, batch["marker_pos"].clamp(min=0)[:, :, None].expand(-1, -1, hidden.size(-1)))
+        options = torch.empty_like(markers).scatter_(1, orders[:, :, None].expand(-1, -1, hidden.size(-1)), markers)
+        return options, hidden[:, 0]

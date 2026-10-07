@@ -2,9 +2,8 @@ import io
 from pathlib import Path
 
 import torch
-from fakes import write_config
+from fakes import fake_decision, write_config
 
-from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.state_models import StateModels
@@ -37,7 +36,7 @@ def test_every_state_trains_and_keeps_its_own_model(tmp_path: Path):
 
     models.activate("Survive")
     agent.weights = "survivor"
-    models.rollout.add("{}", "q", Decision(0, {"left": 1.0}, 1.0), 1.0, False)
+    models.rollout.add(fake_decision(0, {"left": 1.0}, 1.0), 1.0, False)
     models.save()
     models.activate("Boss")
     boss_weights = agent.weights

@@ -2,8 +2,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from fakes import fake_decision
 
-from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.training import story_book
 from datenwissenschaften.training.episode_record import EpisodeRecord
@@ -24,7 +24,7 @@ def published(monkeypatch) -> list[dict]:
 def _transition(ram: dict, location: tuple[int, int], state: str, change: tuple[str, str] | None) -> Transition:
     info = {"state": state, "ram": ram, "location": location, "state_transition": change}
     observation = {"state": "{}", "question": "Which move?"}
-    return Transition(1, observation, Decision(0, {"left": 1.0}, 1.0), [np.zeros((2, 2, 3))], 0.0, False, info)
+    return Transition(1, observation, fake_decision(0, {"left": 1.0}, 1.0), [np.zeros((2, 2, 3))], 0.0, False, info)
 
 
 def _episode(phase: str, succeeded: bool) -> EpisodeRecord:

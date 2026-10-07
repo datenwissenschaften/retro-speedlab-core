@@ -8,9 +8,8 @@ from types import SimpleNamespace
 import httpx
 import numpy as np
 import pytest
-from fakes import curriculum_run, write_config
+from fakes import curriculum_run, fake_decision, write_config
 
-from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.training import (
@@ -84,7 +83,7 @@ def _transition() -> Transition:
         "location": (40, 20),
         "state_transition": None,
     }
-    return Transition(7, OBSERVATION, Decision(1, {"left": 0.3, "right": 0.7}, 0.66), FRAMES, 2.0, False, info)
+    return Transition(7, OBSERVATION, fake_decision(1, {"left": 0.3, "right": 0.7}, 0.66), FRAMES, 2.0, False, info)
 
 
 def test_context_places_the_model_and_recordings_per_game(context: RunContext):

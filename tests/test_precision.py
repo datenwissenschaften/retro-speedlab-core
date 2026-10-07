@@ -1,9 +1,7 @@
-from types import SimpleNamespace
-
 import torch
 
 from datenwissenschaften.laya import precision
-from datenwissenschaften.laya.precision import LARGE_MINIBATCH, SMALL_MINIBATCH, autocast_dtype, minibatch_size
+from datenwissenschaften.laya.precision import autocast_dtype
 
 GIB = 1024**3
 CUDA = torch.device("cuda")
@@ -27,16 +25,3 @@ def test_modern_gpus_and_the_cpu_train_in_bfloat16(monkeypatch):
 
     assert autocast_dtype(CUDA) == torch.bfloat16
     assert autocast_dtype(torch.device("cpu")) == torch.bfloat16
-
-
-def test_larger_gpus_learn_from_larger_minibatches(monkeypatch):
-    memory = {"total": 8 * GIB}
-    monkeypatch.setattr(
-        precision.torch.cuda, "get_device_properties", lambda device: SimpleNamespace(total_memory=memory["total"])
-    )
-
-    large = minibatch_size(CUDA)
-    memory["total"] = 6 * GIB
-
-    assert (large, minibatch_size(CUDA)) == (LARGE_MINIBATCH, SMALL_MINIBATCH)
-    assert minibatch_size(torch.device("cpu")) == SMALL_MINIBATCH

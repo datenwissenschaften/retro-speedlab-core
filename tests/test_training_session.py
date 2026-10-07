@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fakes import fake_environment, write_config
+from fakes import fake_decision, fake_environment, write_config
 
 from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.laya.imitation import DemonstrationStep
@@ -30,7 +30,7 @@ class RecordingAgent:
 
     def act(self, observation: dict[str, str], exploration: float) -> Decision:
         self.explorations.append(exploration)
-        return Decision(1, {"left": 0.2, "right": 0.8}, 0.74)
+        return fake_decision(1, {"left": 0.2, "right": 0.8}, 0.74)
 
     def learn(self, rollout, demonstrations) -> None:
         self.rollouts.append(len(rollout))

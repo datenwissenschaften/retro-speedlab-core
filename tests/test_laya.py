@@ -1,52 +1,63 @@
+import io
 import json
-import math
 
 import pytest
 import torch
 from fakes import ACTIONS, FakeTokenizer, fake_laya_load
 
-from datenwissenschaften.laya import learning as learning_module
 from datenwissenschaften.laya import network as network_module
 from datenwissenschaften.laya.agent import LayaAgent
 from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.laya.imitation import DemonstrationStep
-from datenwissenschaften.laya.learning import MAX_BACKTRACKS
 from datenwissenschaften.laya.network import LayaNetwork
+from datenwissenschaften.laya.ppo import GAMMA, LAMBDA
 from datenwissenschaften.laya.question import LayaQuestion
 from datenwissenschaften.laya.rollout import Rollout
-from datenwissenschaften.laya.trust_region import TARGET_KL
-from datenwissenschaften.laya.weight_snapshot import WeightSnapshot
 
 QUESTION = "Which move survives?"
-VISIBLE_LEARNING_RATE = 1e-3
 EXPLORATION = 0.2
 OBSERVATION = {"state": json.dumps({"lives": 3, "score": 1}), "question": QUESTION}
+UPDATES = 20
+DECISIONS = 64
 
 
 @pytest.fixture
 def network(monkeypatch) -> LayaNetwork:
     monkeypatch.setattr(network_module.laya, "load", fake_laya_load)
-    monkeypatch.setattr(learning_module, "ENCODER_LEARNING_RATE", VISIBLE_LEARNING_RATE)
-    monkeypatch.setattr(learning_module, "HEAD_LEARNING_RATE", VISIBLE_LEARNING_RATE)
     return LayaNetwork("fake/laya", ACTIONS, "cpu")
 
 
-def _rollout(steps: int) -> Rollout:
+def right_probability(agent: LayaAgent) -> float:
+    return agent.act(OBSERVATION, 0.0).probabilities["right"]
+
+
+def rewarded_rollout(agent: LayaAgent, reward: dict[int, float]) -> Rollout:
     rollout = Rollout()
-    for step in range(steps):
-        rollout.add(
-            OBSERVATION["state"], QUESTION, Decision(step % 2, {"left": 0.5, "right": 0.5}, 0.5), float(step % 2), False
-        )
+    for step in range(DECISIONS):
+        decision = agent.act(OBSERVATION, 0.5)
+        rollout.add(decision, reward[decision.action], step % 8 == 7)
     return rollout
 
 
-def test_network_enables_memory_saving_and_scores_every_option(network: LayaNetwork):
-    logits = network([OBSERVATION["state"]], [QUESTION])
+def test_laya_reads_the_game_frozen_and_returns_one_vector_per_option(network: LayaNetwork):
+    options, pooled = network.features([OBSERVATION["state"]], [QUESTION])
 
-    assert network.decision.encoder.checkpointing is True
-    assert network.decision.head_checkpointing is True
-    assert logits.shape == (1, len(ACTIONS))
-    assert set(map(id, network.encoder_parameters())).isdisjoint(map(id, network.head_parameters()))
+    assert all(not parameter.requires_grad for parameter in network.parameters())
+    assert options.shape == (1, len(ACTIONS), network.width)
+    assert pooled.shape == (1, network.width)
+
+
+def test_option_vectors_follow_the_action_order_whatever_order_laya_saw(network: LayaNetwork, monkeypatch):
+    monkeypatch.setattr(network.question, "_order", lambda state, question: [1, 0])
+    options, _ = network.features([OBSERVATION["state"]], [QUESTION])
+    batch, _ = network.question.encode([OBSERVATION["state"]], [QUESTION], network.device)
+    decision = network.decision
+    hidden = decision.encoder(input_ids=batch["input_ids"], attention_mask=batch["attention_mask"]).last_hidden_state
+    hidden = hidden + decision.type_emb(batch["qtype"])[:, None, :]
+    first_marker, second_marker = batch["marker_pos"][0].tolist()
+
+    assert torch.allclose(options[0, 1], hidden[0, first_marker])
+    assert torch.allclose(options[0, 0], hidden[0, second_marker])
 
 
 def test_question_rejects_prompts_that_hide_options():
@@ -54,18 +65,6 @@ def test_question_rejects_prompts_that_hide_options():
 
     with pytest.raises(ValueError, match="budget"):
         question.require_fits(QUESTION)
-
-
-def test_agent_decision_carries_every_action_probability(network: LayaNetwork):
-    agent = LayaAgent(network, (QUESTION,))
-
-    decision = agent.act(OBSERVATION, EXPLORATION)
-
-    assert decision.action in range(len(ACTIONS))
-    assert list(decision.probabilities) == list(ACTIONS)
-    assert sum(decision.probabilities.values()) == pytest.approx(1.0)
-    chosen = list(decision.probabilities.values())[decision.action]
-    assert decision.behavior_probability == pytest.approx((1 - EXPLORATION) * chosen + EXPLORATION / len(ACTIONS))
 
 
 def test_options_appear_in_a_stable_order_per_state_that_varies_across_states():
@@ -78,153 +77,82 @@ def test_options_appear_in_a_stable_order_per_state_that_varies_across_states():
     assert len(orders) > 1
 
 
-def test_shuffled_option_scores_are_returned_in_action_order(network: LayaNetwork, monkeypatch):
-    monkeypatch.setattr(network.question, "_order", lambda state, question: [1, 0])
-    swapped = network([OBSERVATION["state"]], [QUESTION])
-    monkeypatch.setattr(network.question, "_order", lambda state, question: [0, 1])
-
-    assert torch.allclose(swapped, network([OBSERVATION["state"]], [QUESTION]))
-
-
-def test_agent_learning_changes_every_trainable_part(network: LayaNetwork):
+def test_a_fresh_state_starts_with_lays_own_judgement(network: LayaNetwork):
     agent = LayaAgent(network, (QUESTION,))
-    before = [parameter.detach().clone() for parameter in network.parameters()]
-    rollout = Rollout()
-    for step in range(20):
-        rollout.add(
-            OBSERVATION["state"],
-            QUESTION,
-            Decision(step % 2, {"left": 0.5, "right": 0.5}, 0.5),
-            float(step % 2),
-            step == 9,
-        )
+    options, _ = network.features([OBSERVATION["state"]], [QUESTION])
 
-    agent.learn(rollout, [])
+    decision = agent.act(OBSERVATION, EXPLORATION)
 
-    assert agent.num_timesteps == len(rollout)
-    after = list(network.parameters())
-    assert any(not torch.equal(old, new) for old, new in zip(before, after, strict=True))
+    expected = torch.softmax(network.scorer(options).squeeze(-1)[0], -1)
+    assert list(decision.probabilities.values()) == pytest.approx(expected.tolist())
+    chosen = list(decision.probabilities.values())[decision.action]
+    assert decision.behavior_probability == pytest.approx((1 - EXPLORATION) * chosen + EXPLORATION / len(ACTIONS))
+    assert decision.value == 0.0
+    assert decision.options.shape == (len(ACTIONS), network.width)
+
+
+def test_ppo_makes_the_rewarded_move_likelier_and_learns_its_value(network: LayaNetwork):
+    agent = LayaAgent(network, (QUESTION,))
+    before = right_probability(agent)
+
+    for _ in range(UPDATES):
+        agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 1.0}), [])
+
+    assert right_probability(agent) > before + 0.1
+    assert agent.act(OBSERVATION, 0.0).value > 0.1
+    assert agent.num_timesteps == UPDATES * DECISIONS
     assert set(agent.last_update) == {
         "policy_loss",
+        "value_loss",
         "entropy",
+        "approx_kl",
+        "clip_fraction",
+        "explained_variance",
         "imitation_loss",
         "demonstration_decisions",
-        "step_kl",
-        "kl",
-        "learning_rate_scale",
     }
-    assert agent.last_update["kl"] >= 0.0
-    assert agent.metadata()["entropy"] == agent.last_update["entropy"]
+    assert all(not parameter.requires_grad for parameter in network.parameters())
 
 
-def test_agent_checkpoint_round_trip(network: LayaNetwork, monkeypatch):
+def test_demonstrations_pull_the_policy_toward_their_moves(network: LayaNetwork):
     agent = LayaAgent(network, (QUESTION,))
-    agent.num_timesteps = 42
-    agent.learner.trust_region.learning_rate_scale = 0.3
-    agent.last_update = {"kl": 0.01}
-    checkpoint = agent.checkpoint()
-    checkpoint.seek(0)
-    restored = LayaAgent(LayaNetwork("fake/laya", ACTIONS, "cpu"), (QUESTION,))
+    before = right_probability(agent)
+    demonstrations = [DemonstrationStep(OBSERVATION["state"], QUESTION, 1)] * 8
 
-    restored.restore(torch.load(checkpoint))
+    for _ in range(UPDATES):
+        agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 0.0}), demonstrations)
 
-    assert restored.num_timesteps == 42
-    assert restored.learner.trust_region.learning_rate_scale == 0.3
-    assert restored.last_update == {"kl": 0.01}
-    assert restored.metadata()["actions"] == ACTIONS
-    for original, loaded in zip(network.parameters(), restored.network.parameters(), strict=True):
-        assert torch.equal(original, loaded)
+    assert right_probability(agent) > before + 0.1
+    assert agent.last_update["imitation_loss"] > 0.0
+    assert agent.last_update["demonstration_decisions"] == len(demonstrations)
 
 
-def test_rollout_advantages_are_normalized_and_cut_at_episode_ends():
+def test_advantages_follow_gae_and_stop_at_segment_ends():
     rollout = Rollout()
-    for reward, done in ((1.0, True), (0.0, False), (0.0, False)):
-        rollout.add("{}", QUESTION, Decision(0, {"left": 1.0, "right": 0.0}, 0.9), reward, done)
+    empty = torch.zeros(2, 4)
+    for value, reward, done in ((0.5, 1.0, False), (0.25, 0.0, True), (0.0, 2.0, False)):
+        rollout.add(Decision(0, {"left": 1.0, "right": 0.0}, 1.0, value, empty, torch.zeros(4)), reward, done)
 
-    advantages = rollout.group_relative_advantages(0.9)
+    advantages, returns = rollout.advantages(GAMMA, LAMBDA)
 
-    assert len(rollout) == 3
-    assert advantages.mean().item() == pytest.approx(0.0, abs=1e-6)
-    assert advantages[0] > advantages[1] == advantages[2]
+    last = 2.0 + GAMMA * 0.0 - 0.0
+    second = 0.0 - 0.25
+    first = (1.0 + GAMMA * 0.25 - 0.5) + GAMMA * LAMBDA * second
+    assert advantages.tolist() == pytest.approx([first, second, last])
+    assert returns.tolist() == pytest.approx([first + 0.5, second + 0.25, last])
 
 
-def test_float16_learning_scales_gradients_and_stays_finite(monkeypatch):
-    monkeypatch.setattr(network_module, "autocast_dtype", lambda device: torch.float16)
-    monkeypatch.setattr(network_module.laya, "load", fake_laya_load)
-    monkeypatch.setattr(learning_module, "HEAD_LEARNING_RATE", VISIBLE_LEARNING_RATE)
-    network = LayaNetwork("fake/laya", ACTIONS, "cpu")
+def test_checkpoints_hold_the_heads_and_restart_returns_to_laya(network: LayaNetwork):
     agent = LayaAgent(network, (QUESTION,))
-    before = [parameter.detach().clone() for parameter in network.parameters()]
-    rollout = Rollout()
-    for step in range(12):
-        rollout.add(
-            OBSERVATION["state"], QUESTION, Decision(step % 2, {"left": 0.5, "right": 0.5}, 0.5), 1.0, step == 5
-        )
-
-    agent.learn(rollout, [])
-
-    assert agent.learner.scaler.is_enabled()
-    assert agent.metadata()["precision"] == "float16"
-    assert all(torch.isfinite(parameter).all() for parameter in network.parameters())
-    assert any(not torch.equal(old, new) for old, new in zip(before, network.parameters(), strict=True))
-
-
-def test_agent_restart_returns_to_the_pretrained_laya(network: LayaNetwork):
-    pretrained = [parameter.detach().clone() for parameter in network.parameters()]
-    agent = LayaAgent(network, (QUESTION,))
-    with torch.no_grad():
-        for parameter in network.parameters():
-            parameter.add_(1.0)
-    agent.num_timesteps, agent.last_update = 99, {"kl": 1.0}
+    pretrained = right_probability(agent)
+    agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 1.0}), [])
+    trained = right_probability(agent)
+    checkpoint = torch.load(io.BytesIO(agent.checkpoint().getvalue()), map_location="cpu")
 
     agent.restart()
+    assert right_probability(agent) == pytest.approx(pretrained)
+    agent.restore(checkpoint)
 
-    assert (agent.num_timesteps, agent.last_update) == (0, {})
-    assert all(torch.equal(old, new) for old, new in zip(pretrained, network.parameters(), strict=True))
-
-
-def test_an_overshooting_update_is_pulled_back_into_the_trust_region(network: LayaNetwork):
-    learner = LayaAgent(network, (QUESTION,)).learner
-    measured, blends = iter([0.5, 0.001]), []
-    learner._measure_kl = lambda rollout, previous: next(measured)
-    learner.snapshot.blend = blends.append
-
-    kl = learner._backtrack(_rollout(2), torch.ones(2, 2), 1.0)
-
-    assert kl == 0.001
-    assert blends == pytest.approx([math.sqrt(TARGET_KL / 1.0), math.sqrt(TARGET_KL / 0.5)])
-
-
-def test_an_update_that_stays_too_far_away_is_reverted(network: LayaNetwork):
-    learner = LayaAgent(network, (QUESTION,)).learner
-    blends = []
-    learner._measure_kl = lambda rollout, previous: 0.0 if blends[-1:] == [0.0] else 1.0
-    learner.snapshot.blend = blends.append
-
-    kl = learner._backtrack(_rollout(2), torch.ones(2, 2), 1.0)
-
-    assert kl == 0.0
-    assert len(blends) == MAX_BACKTRACKS + 1
-    assert blends[-1] == 0.0
-
-
-def test_weight_snapshot_blends_back_toward_the_captured_weights():
-    parameter = torch.nn.Parameter(torch.zeros(3))
-    snapshot = WeightSnapshot([parameter])
-    snapshot.capture()
-    with torch.no_grad():
-        parameter.add_(4.0)
-
-    snapshot.blend(0.25)
-
-    assert torch.equal(parameter.detach(), torch.full((3,), 1.0))
-
-
-def test_learning_reports_how_far_laya_is_from_the_demonstrations(network: LayaNetwork):
-    agent = LayaAgent(network, (QUESTION,))
-    demonstrations = [DemonstrationStep(OBSERVATION["state"], QUESTION, 1)] * 4
-
-    agent.learn(_rollout(8), demonstrations)
-
-    assert agent.last_update["imitation_loss"] == pytest.approx(math.log(len(ACTIONS)), abs=0.1)
-    assert agent.last_update["demonstration_decisions"] == len(demonstrations)
+    assert right_probability(agent) == pytest.approx(trained)
+    assert agent.num_timesteps == DECISIONS
+    assert agent.metadata()["trained_parameters"] < agent.metadata()["reader_parameters"] * 10

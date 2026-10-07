@@ -9,7 +9,7 @@ from datenwissenschaften.training.lab_run import LabRun
 from datenwissenschaften.training.state_models import StateModels
 from datenwissenschaften.ui.control import ModelResetRequest, consume_model_reset
 
-ROLLOUT_STEPS = 64
+ROLLOUT_STEPS = 256
 EXPLORATION_WHILE_LEARNING = 0.2
 EXPLORATION_ONCE_MASTERED = 0.05
 
@@ -45,7 +45,7 @@ class TrainingSession:
             done = terminated or truncated
             segment_ends = done or info["state"] != state_name
             rollout = self.models.rollout
-            rollout.add(observation["state"], observation["question"], decision, reward, segment_ends)
+            rollout.add(decision, reward, segment_ends)
             episode.add_step(info, reward)
             timesteps = self.models.agent.num_timesteps + len(rollout)
             transition = Transition(timesteps, observation, decision, self.env.frames, reward, done, info)

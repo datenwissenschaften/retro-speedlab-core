@@ -11,12 +11,14 @@ from datenwissenschaften.environment.curriculum_run import CurriculumRun
 from datenwissenschaften.environment.level_clock import LevelClock
 from datenwissenschaften.environment.levels import LevelTargets
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
+from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.ram import RamInfo, ram
 from datenwissenschaften.states.landmarks import Landmarks
 from datenwissenschaften.states.state import State
 
 VOCABULARY = 64
 HIDDEN = 8
+MAX_LENGTH = 128
 ACTIONS = {"left": "move left", "right": "move right"}
 
 PRETRAINED_SEED = 7
@@ -38,32 +40,25 @@ class FakeEncoder(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.embedding = nn.Embedding(VOCABULARY, HIDDEN)
-        self.checkpointing = False
+        self.position = nn.Embedding(MAX_LENGTH, HIDDEN)
 
-    def gradient_checkpointing_enable(self) -> None:
-        self.checkpointing = True
-
-    def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
-        return self.embedding(input_ids)
+    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> SimpleNamespace:
+        positions = torch.arange(input_ids.size(1), device=input_ids.device)
+        return SimpleNamespace(last_hidden_state=self.embedding(input_ids) + self.position(positions)[None])
 
 
 class FakeDecision(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.encoder = FakeEncoder()
-        self.scorer = nn.Linear(HIDDEN, 1)
-        self.head_checkpointing = False
-
-    def forward(self, input_ids, attention_mask, marker_pos, marker_mask, qtype):
-        hidden = self.encoder(input_ids)
-        markers = torch.gather(hidden, 1, marker_pos[:, :, None].expand(-1, -1, HIDDEN))
-        logits = self.scorer(markers).squeeze(-1).masked_fill(~marker_mask, -1e4)
-        return logits, torch.zeros(len(input_ids), 2)
+        self.type_emb = nn.Embedding(3, HIDDEN)
+        self.head = None
+        self.scorer = nn.Sequential(nn.LayerNorm(HIDDEN), nn.Linear(HIDDEN, HIDDEN), nn.GELU(), nn.Linear(HIDDEN, 1))
 
 
 def fake_laya_load(checkpoint: str, device: str) -> SimpleNamespace:
     torch.manual_seed(PRETRAINED_SEED)
-    return SimpleNamespace(tok=FakeTokenizer(), cfg={"max_len": 128, "head_max_len": 48}, model=FakeDecision())
+    return SimpleNamespace(tok=FakeTokenizer(), cfg={"max_len": MAX_LENGTH, "head_max_len": 48}, model=FakeDecision())
 
 
 @dataclass
@@ -175,3 +170,8 @@ def curriculum_run(root: Path, state_names: tuple[str, ...], seeds: Path) -> Cur
     return CurriculumRun(
         root, LevelTargets(state_names, {}), "Level1", seeds, LevelClock(root / "level_times.json", 60.0)
     )
+
+
+def fake_decision(action: int, probabilities: dict[str, float], behavior_probability: float) -> Decision:
+    options = torch.zeros(len(probabilities), HIDDEN)
+    return Decision(action, probabilities, behavior_probability, 0.0, options, torch.zeros(HIDDEN))
