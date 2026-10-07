@@ -7,6 +7,7 @@ import gymnasium as gym
 import numpy as np
 
 from datenwissenschaften.environment.curriculum_run import CurriculumRun
+from datenwissenschaften.environment.levels import Levels, level_map
 from datenwissenschaften.environment.recording import active_movie_path, ensure_movie_directory, restore_emulator_state
 from datenwissenschaften.ram import RamInfo
 from datenwissenschaften.states.landmarks import Landmarks
@@ -30,6 +31,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
     ram_info_cls: type[T]
     action_table: np.ndarray
     action_descriptions: dict[str, str]
+    levels: Levels
 
     def __init__(self, env: gym.Env, curriculum: CurriculumRun, landmarks: Landmarks, initial_savestate: str) -> None:
         super().__init__(env)
@@ -37,6 +39,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
             raise ValueError("action_table must have the shape (actions, frames, buttons).")
         if len(self.action_descriptions) != len(self.action_table):
             raise ValueError("Every action_table row needs exactly one action description.")
+        level_map(self.levels, self.state_classes)
         self.action_space = gym.spaces.Discrete(len(self.action_table))
         self.observation_space = gym.spaces.Dict({"state": TEXT_SPACE, "question": TEXT_SPACE})
         self.state_machine = StateMachine[T](self.start_state_cls, landmarks)

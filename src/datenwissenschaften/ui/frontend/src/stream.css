@@ -199,6 +199,10 @@
 .path-skill { width: 80%; height: 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
 .path-skill span { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--primary), var(--secondary)); transition: width 0.6s ease; }
 .path-note { color: var(--text-subtle); font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.path-split { display: grid; justify-items: center; gap: 1px; }
+.split-time { color: #ffd84f; font-family: var(--font-display); font-size: 0.68rem; letter-spacing: 0.04em; text-shadow: 0 0 10px rgba(255, 216, 79, 0.45); }
+.split-delta { color: #ff6b7a; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; }
+.split-delta.ahead { color: #7dff9a; }
 @keyframes path-pulse { 50% { box-shadow: 0 0 24px rgba(255, 79, 163, 0.9); } }
 
 .spotlight-panel { flex: 1 1 0; min-height: 0; padding: 12px 14px; overflow: hidden; }

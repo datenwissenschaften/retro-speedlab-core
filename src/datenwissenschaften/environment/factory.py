@@ -4,12 +4,15 @@ from pathlib import Path
 import stable_retro as retro
 
 from datenwissenschaften.environment.curriculum_run import CurriculumRun
+from datenwissenschaften.environment.level_clock import LevelClock
+from datenwissenschaften.environment.levels import LevelTargets, curriculum_targets, level_map
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.roms import import_roms
 from datenwissenschaften.settings import RetroSpeedlabConfig
 from datenwissenschaften.states.landmarks import Landmarks
 
 LANDMARKS_FILE = "landmarks.json"
+LEVEL_TIMES_FILE = "level_times.json"
 POWER_ON = "PowerOn"
 SESSION_STAMP = "%Y%m%dT%H%M%S"
 
@@ -30,13 +33,12 @@ def make_environment(wrapper_cls: type[StateMachineGymWrapper], config: RetroSpe
     emulator.initial_state = emulator.em.get_state()
     emulator.statename = f"{POWER_ON}-{datetime.now(UTC):{SESSION_STAMP}}"
     root = curriculum_root(config)
-    curriculum = CurriculumRun(root, state_names(wrapper_cls), POWER_ON, config.paths.curriculum_dir)
+    levels = level_map(wrapper_cls.levels, wrapper_cls.state_classes)
+    targets = curriculum_targets(wrapper_cls.state_classes, levels)
+    clock = LevelClock(root / LEVEL_TIMES_FILE, emulator.em.get_screen_rate())
+    curriculum = CurriculumRun(root, LevelTargets(targets, levels), POWER_ON, config.paths.curriculum_dir, clock)
     return wrapper_cls(env, curriculum, Landmarks(root / LANDMARKS_FILE), POWER_ON)
 
 
 def curriculum_root(config: RetroSpeedlabConfig) -> Path:
     return config.paths.cache_dir / "curriculum" / config.training.game_identity
-
-
-def state_names(wrapper_cls: type[StateMachineGymWrapper]) -> tuple[str, ...]:
-    return tuple(state_cls.__name__ for state_cls in wrapper_cls.state_classes)

@@ -162,6 +162,12 @@ const progressLine = computed(() => connected.value ? inProgressLine(replayEpiso
 const replayIsBest = computed(() => replayEpisode.value !== null && holdsBest(replayEpisode.value, levelBest(replayEpisode.value.result.level)))
 const learningFor = computed(() => snapshot.value.started_at ? elapsed(snapshot.value.started_at, now.value) : '—')
 const inputs = computed(() => layaInputs(snapshot.value.metadata?.knowledge, snapshot.value.metadata?.model?.laya))
+const levels = computed(() => snapshot.value.metadata?.environment?.levels || {})
+const levelRun = computed(() => {
+  const episode = replayEpisode.value
+  if (!episode || !(episode.result.curriculum in levels.value)) return null
+  return { level: episode.result.curriculum, seconds: replayProgress.value * episode.frame_count / episode.frame_rate }
+})
 const agentName = computed(() => snapshot.value.metadata?.model?.display_name || '—')
 const areasReached = computed(() => story.value.phases.filter(item => item.reached).length)
 const probabilities = computed(() => Object.entries(live.value.probabilities || {}))
@@ -269,7 +275,13 @@ watch(() => live.value.ram, (current, previous) => {
       </aside>
 
       <div class="stream-bottom">
-        <ProgressPath :curriculum="snapshot.metadata?.curricula?.[level] || {}" :playing="live.training_state || ''" />
+        <ProgressPath
+          :curriculum="snapshot.metadata?.curricula?.[level] || {}"
+          :playing="live.training_state || ''"
+          :levels="levels"
+          :times="snapshot.metadata?.level_times || {}"
+          :running="levelRun"
+        />
         <section class="site-card">
           <span class="sight-title">Experiment</span>
           <strong class="site-url">Learning for {{ learningFor }}</strong>

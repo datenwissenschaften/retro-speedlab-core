@@ -6,6 +6,7 @@ import torch
 from datenwissenschaften.accelerator import configure_accelerator
 from datenwissenschaften.environment.demonstration import load_demonstrations
 from datenwissenschaften.environment.factory import POWER_ON, make_environment
+from datenwissenschaften.environment.levels import level_map
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.laya.agent import LayaAgent
 from datenwissenschaften.laya.network import LayaNetwork
@@ -139,6 +140,7 @@ class LayaTrainer:
             {
                 "wrapper": self.wrapper_cls.__name__,
                 "states": [state_cls.__name__ for state_cls in self.wrapper_cls.state_classes],
+                "levels": level_map(self.wrapper_cls.levels, self.wrapper_cls.state_classes),
                 "actions": self.wrapper_cls.action_descriptions,
                 "frames_per_decision": self.wrapper_cls.action_table.shape[1],
             },

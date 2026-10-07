@@ -8,6 +8,8 @@ import torch
 from torch import nn
 
 from datenwissenschaften.environment.curriculum_run import CurriculumRun
+from datenwissenschaften.environment.level_clock import LevelClock
+from datenwissenschaften.environment.levels import LevelTargets
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.ram import RamInfo, ram
 from datenwissenschaften.states.landmarks import Landmarks
@@ -139,11 +141,12 @@ class FakeWrapper(StateMachineGymWrapper[FakeRam]):
     ram_info_cls = FakeRam
     action_table = np.array([[[1, 0]], [[0, 1]]], dtype=np.int8)
     action_descriptions = ACTIONS
+    levels = ()
 
 
 def fake_environment(tmp_path: Path, script: list[tuple[int, int]]) -> FakeWrapper:
     emulator = FakeEmulator(tmp_path / "recordings", script)
-    curriculum = CurriculumRun(tmp_path / "curriculum", ("Survive", "Boss"), "Level1", tmp_path / "seeds")
+    curriculum = curriculum_run(tmp_path / "curriculum", ("Survive", "Boss"), tmp_path / "seeds")
     return FakeWrapper(emulator, curriculum, Landmarks(tmp_path / "landmarks.json"), "Level1")
 
 
@@ -166,3 +169,9 @@ def write_config(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     return config_path
+
+
+def curriculum_run(root: Path, state_names: tuple[str, ...], seeds: Path) -> CurriculumRun:
+    return CurriculumRun(
+        root, LevelTargets(state_names, {}), "Level1", seeds, LevelClock(root / "level_times.json", 60.0)
+    )

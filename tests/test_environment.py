@@ -5,11 +5,10 @@ from pathlib import Path
 import fakes
 import numpy as np
 import pytest
-from fakes import FakeEmulator, FakeWrapper, fake_environment, write_config
+from fakes import FakeEmulator, FakeWrapper, curriculum_run, fake_environment, write_config
 
 from datenwissenschaften.curriculum import ReverseCurriculum
 from datenwissenschaften.environment import factory, wrapper
-from datenwissenschaften.environment.curriculum_run import CurriculumRun
 from datenwissenschaften.environment.recording import active_movie_path
 from datenwissenschaften.environment.wrapper import MAX_STATE_SECONDS, SPEEDRUN_FRAME_COST
 from datenwissenschaften.settings import load_config
@@ -93,7 +92,7 @@ def test_reset_resumes_from_the_active_curriculum_checkpoint(tmp_path: Path):
 
 
 def test_a_new_checkpoint_remembers_the_score_that_reached_it(tmp_path: Path):
-    run = CurriculumRun(tmp_path, ("Survive", "Boss"), "Level1", tmp_path / "seeds")
+    run = curriculum_run(tmp_path, ("Survive", "Boss"), tmp_path / "seeds")
     run.begin_episode()
     run.add_reward(3.0, False)
 
@@ -103,7 +102,7 @@ def test_a_new_checkpoint_remembers_the_score_that_reached_it(tmp_path: Path):
 
 
 def test_falling_back_to_an_earlier_state_is_no_curriculum_success(tmp_path: Path):
-    run = CurriculumRun(tmp_path, ("Survive", "Boss"), "Level1", tmp_path / "seeds")
+    run = curriculum_run(tmp_path, ("Survive", "Boss"), tmp_path / "seeds")
     run.curriculum.save_checkpoint("Boss", b"boss", 0.0)
     run.begin_episode()
     run.start_state = "Boss"
@@ -127,7 +126,7 @@ def test_every_action_needs_a_description(tmp_path: Path):
     with pytest.raises(ValueError, match="description"):
         Undescribed(
             FakeEmulator(tmp_path, [(3, 0)]),
-            CurriculumRun(tmp_path, ("Survive",), "Level1", tmp_path / "seeds"),
+            curriculum_run(tmp_path, ("Survive",), tmp_path / "seeds"),
             Landmarks(tmp_path / "landmarks.json"),
             "Level1",
         )
@@ -140,7 +139,7 @@ def test_actions_must_be_button_sequences(tmp_path: Path):
     with pytest.raises(ValueError, match="frames"):
         Flat(
             FakeEmulator(tmp_path, [(3, 0)]),
-            CurriculumRun(tmp_path, ("Survive",), "Level1", tmp_path / "seeds"),
+            curriculum_run(tmp_path, ("Survive",), tmp_path / "seeds"),
             Landmarks(tmp_path / "landmarks.json"),
             "Level1",
         )
@@ -190,7 +189,7 @@ def test_the_agents_seeds_become_curriculum_checkpoints_until_the_engine_has_its
     (seeds / "Boss.state").write_bytes(b"boss room")
     (seeds / "Unknown.state").write_bytes(b"ignored")
 
-    run = CurriculumRun(tmp_path / "curriculum", ("Survive", "Boss"), "Level1", seeds)
+    run = curriculum_run(tmp_path / "curriculum", ("Survive", "Boss"), seeds)
 
     assert run.curriculum.checkpoint("Boss") == b"boss room"
     assert not run.curriculum.has_checkpoint("Survive")
@@ -216,7 +215,7 @@ def test_what_a_state_sees_becomes_part_of_layas_text(tmp_path: Path):
 
     env = SeeingWrapper(
         FakeEmulator(tmp_path, [(3, 0), (3, 1)]),
-        CurriculumRun(tmp_path, ("Seeing", "Boss"), "Level1", tmp_path / "seeds"),
+        curriculum_run(tmp_path, ("Seeing", "Boss"), tmp_path / "seeds"),
         Landmarks(tmp_path / "landmarks.json"),
         "Level1",
     )

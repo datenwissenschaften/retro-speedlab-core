@@ -8,9 +8,8 @@ from types import SimpleNamespace
 import httpx
 import numpy as np
 import pytest
-from fakes import write_config
+from fakes import curriculum_run, write_config
 
-from datenwissenschaften.environment.curriculum_run import CurriculumRun
 from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.settings import load_config
@@ -324,7 +323,7 @@ def test_system_metadata_without_nvidia_smi(monkeypatch):
 
 
 def test_curriculum_upload_hook_sends_the_curriculum_once_per_change(tmp_path: Path, context: RunContext, monkeypatch):
-    run = CurriculumRun(tmp_path / "curriculum", ("Menu", "Level1"), "PowerOn", tmp_path / "seeds")
+    run = curriculum_run(tmp_path / "curriculum", ("Menu", "Level1"), tmp_path / "seeds")
     puts = []
     monkeypatch.setattr(
         curriculum_upload_hook.httpx,
