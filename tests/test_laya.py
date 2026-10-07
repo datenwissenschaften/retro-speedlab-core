@@ -17,7 +17,7 @@ from datenwissenschaften.laya.rollout import Rollout
 QUESTION = "Which move survives?"
 EXPLORATION = 0.2
 OBSERVATION = {"state": json.dumps({"lives": 3, "score": 1}), "question": QUESTION}
-UPDATES = 20
+UPDATES = 60
 DECISIONS = 64
 
 

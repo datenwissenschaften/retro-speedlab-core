@@ -18,6 +18,7 @@ class ReverseCurriculum:
     """
 
     WIN_TARGET = 8
+    SPEED_MARGIN = 1.25
     BAD_CHECKPOINT_EVIDENCE_TARGET = 128
 
     def __init__(self, root: Path, state_names: Sequence[str]) -> None:
@@ -76,15 +77,30 @@ class ReverseCurriculum:
     def record_success(self, state_name: str, episode_steps: int) -> bool:
         self._require_state(state_name)
         with self._lock(state_name):
-            if self.is_mastered(state_name):
+            if self.is_mastered(state_name) or not self.is_fast_enough(state_name, episode_steps):
                 return False
             self._record_longest_attempt(state_name, episode_steps)
+            best = self.best_win_steps(state_name)
+            fastest = episode_steps if best is None else min(best, episode_steps)
+            self._atomic_write(self._best_win_path(state_name), str(fastest).encode("utf-8"))
             target = self.win_target(state_name)
             wins = min(target, self.wins(state_name) + 1)
             self._atomic_write(self._success_path(state_name), str(wins).encode("utf-8"))
             self._clear_score_evidence(state_name)
             mastered = wins >= target
             return mastered
+
+    def best_win_steps(self, state_name: str) -> int | None:
+        self._require_state(state_name)
+        return self._read_int(self._best_win_path(state_name)) or None
+
+    def step_limit(self, state_name: str) -> int | None:
+        best = self.best_win_steps(state_name)
+        return None if best is None else math.floor(best * self.SPEED_MARGIN)
+
+    def is_fast_enough(self, state_name: str, episode_steps: int) -> bool:
+        limit = self.step_limit(state_name)
+        return limit is None or episode_steps <= limit
 
     def record_failure(self, state_name: str, episode_steps: int, score: float) -> bool:
         self._require_state(state_name)
@@ -168,6 +184,7 @@ class ReverseCurriculum:
                 "best_checkpoint_score": self.best_score(state_name),
                 "last_checkpoint_score": self.last_score(state_name),
                 "typical_episode_steps": self.typical_steps(state_name),
+                "best_win_steps": self.best_win_steps(state_name),
                 "mastered": self.is_mastered(state_name),
                 "has_checkpoint": self.has_checkpoint(state_name),
                 "active": state_name == active_state,
@@ -196,6 +213,9 @@ class ReverseCurriculum:
 
     def _last_score_path(self, state_name: str) -> Path:
         return self.root / f"{state_name}.last_score"
+
+    def _best_win_path(self, state_name: str) -> Path:
+        return self.root / f"{state_name}.best_win_steps"
 
     def _attempt_steps_path(self, state_name: str) -> Path:
         return self.root / f"{state_name}.attempt_steps"

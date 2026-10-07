@@ -143,3 +143,16 @@ def test_success_target_is_the_same_for_every_state(tmp_path: Path):
     assert curriculum.win_target("Finish") == ReverseCurriculum.WIN_TARGET
     assert curriculum.progress()["Finish"]["wins"] == 1
     assert curriculum.progress()["Finish"]["win_target"] == ReverseCurriculum.WIN_TARGET
+
+
+def test_a_win_only_counts_within_the_speed_margin_of_the_fastest_win(tmp_path: Path):
+    curriculum = ReverseCurriculum(tmp_path, ("Start", "Finish"))
+    curriculum.record_success("Start", 100)
+    curriculum.record_success("Start", 80)
+
+    assert curriculum.step_limit("Start") == 100
+    assert curriculum.record_success("Start", 101) is False
+    assert curriculum.wins("Start") == 2
+    curriculum.record_success("Start", 100)
+    assert curriculum.wins("Start") == 3
+    assert curriculum.progress()["Start"]["best_win_steps"] == 80
