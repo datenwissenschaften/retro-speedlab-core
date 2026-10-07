@@ -11,6 +11,7 @@ from datenwissenschaften.ui.live import MAX_COMPLETED_EPISODES, MAX_STATUSES_PER
 from datenwissenschaften.ui.replay_video import encode_video
 
 LOST = {"score": 1.0, "won": False, "new_best": False, "full_run": False, "succeeded": False, "curriculum": "Play"}
+SUCCEEDED = {**LOST, "succeeded": True}
 
 
 @pytest.fixture(autouse=True)
@@ -60,11 +61,11 @@ def test_clearing_the_live_feed_starts_a_new_generation_without_old_attempts():
 CURRICULA = frozenset({"Play", "Grow", "Heavy"})
 
 
-def test_the_best_attempt_of_every_curriculum_state_stays_available_as_a_replay():
+def test_the_shortest_success_of_every_curriculum_state_stays_available_as_a_replay():
     feed = LiveFeed()
-    attempts = [("Play", 5.0), ("Grow", 1.0), ("Play", 9.0), ("Grow", 3.0), ("Heavy", -2.0), ("Play", 7.0)]
-    for episode_id, (curriculum, score) in enumerate(attempts, start=1):
-        play(feed, episode_id, 1, {**LOST, "score": score, "curriculum": curriculum})
+    attempts = [("Play", 5), ("Grow", 4), ("Play", 2), ("Grow", 3), ("Heavy", 6), ("Play", 3)]
+    for episode_id, (curriculum, frames) in enumerate(attempts, start=1):
+        play(feed, episode_id, frames, {**SUCCEEDED, "curriculum": curriculum})
 
     replays = [(replay["result"]["curriculum"], replay["id"]) for replay in feed.latest_episode()["replays"]]
     assert replays == [("Play", 3), ("Grow", 4), ("Heavy", 5)]
@@ -73,8 +74,8 @@ def test_the_best_attempt_of_every_curriculum_state_stays_available_as_a_replay(
 def test_the_best_replays_survive_a_restart_on_disk_and_go_with_a_reset(tmp_path: Path):
     feed = LiveFeed()
     feed.keep_replays_in(tmp_path / "replays", CURRICULA)
-    for episode_id, (curriculum, score) in enumerate([("Play", 2.0), ("Grow", 1.0), ("Play", 5.0)], start=1):
-        play(feed, episode_id, 2, {**LOST, "score": score, "curriculum": curriculum})
+    for episode_id, (curriculum, frames) in enumerate([("Play", 3), ("Grow", 2), ("Play", 2)], start=1):
+        play(feed, episode_id, frames, {**SUCCEEDED, "curriculum": curriculum})
 
     restarted = LiveFeed()
     restarted.keep_replays_in(tmp_path / "replays", CURRICULA)
@@ -126,21 +127,33 @@ def test_frames_are_encoded_into_a_playable_h264_video(tmp_path: Path):
     assert probe.stdout.strip() == f"h264,240,224,{len(frames)}"
 
 
-def test_a_successful_attempt_beats_any_failed_one_and_the_shortest_success_wins():
+def test_failed_attempts_never_become_replays_and_the_shortest_success_wins():
     feed = LiveFeed()
-    play(feed, 1, 1, {**LOST, "score": 50.0, "curriculum": "Heavy"})
-    play(feed, 2, 4, {**LOST, "score": 1.0, "succeeded": True, "curriculum": "Heavy"})
-    play(feed, 3, 2, {**LOST, "score": 0.5, "succeeded": True, "curriculum": "Heavy"})
-    play(feed, 4, 3, {**LOST, "score": 9.0, "succeeded": True, "curriculum": "Heavy"})
+    play(feed, 1, 1, {**LOST, "score": 50.0, "curriculum": "Door"})
+    play(feed, 2, 4, {**SUCCEEDED, "score": 1.0, "curriculum": "Heavy"})
+    play(feed, 3, 2, {**SUCCEEDED, "score": 0.5, "curriculum": "Heavy"})
+    play(feed, 4, 3, {**SUCCEEDED, "score": 9.0, "curriculum": "Heavy"})
 
     assert [replay["id"] for replay in feed.latest_episode()["replays"]] == [3]
+
+
+def test_stored_failed_replays_are_deleted_at_start(tmp_path: Path):
+    old = tmp_path / "replays" / "Heavy.replay"
+    old.parent.mkdir()
+    old.write_bytes(msgspec.msgpack.encode({"id": 1, "frame_rate": 60.0, "result": LOST, "statuses": [], "video": b""}))
+
+    feed = LiveFeed()
+    feed.keep_replays_in(old.parent, CURRICULA)
+
+    assert feed.latest_episode()["replays"] == []
+    assert not old.exists()
 
 
 def test_replays_of_states_the_curriculum_no_longer_has_are_deleted(tmp_path: Path):
     feed = LiveFeed()
     feed.keep_replays_in(tmp_path / "replays", CURRICULA)
-    play(feed, 1, 1, {**LOST, "curriculum": "Grow"})
-    play(feed, 2, 1, {**LOST, "curriculum": "Heavy"})
+    play(feed, 1, 1, {**SUCCEEDED, "curriculum": "Grow"})
+    play(feed, 2, 1, {**SUCCEEDED, "curriculum": "Heavy"})
 
     feed.keep_replays_in(tmp_path / "replays", frozenset({"Heavy"}))
 

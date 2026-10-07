@@ -193,7 +193,7 @@ def test_live_endpoints_serve_the_latest_attempt_as_a_video_with_its_decisions(m
     feed = LiveFeed()
     feed.record(b"one", {"timesteps": 1})
     feed.record(b"two", {"timesteps": 2})
-    result = {"score": 3.0, "won": False, "new_best": True, "full_run": True, "succeeded": False, "curriculum": "Play"}
+    result = {"score": 3.0, "won": False, "new_best": True, "full_run": True, "succeeded": True, "curriculum": "Play"}
     feed.finish_episode(7, 60.0, result, {"recent_scores": [3.0]})
     monkeypatch.setattr(server_module, "live_feed", feed)
 

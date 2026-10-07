@@ -25,6 +25,10 @@ class ReplayStore:
                 logger.warning(f"Deleting {path.name}: it stores frames instead of a video")
                 path.unlink()
                 continue
+            if not episode["result"]["succeeded"]:
+                logger.info(f"Deleting the replay of {path.stem}: it never reached its goal")
+                path.unlink()
+                continue
             replays[episode["result"]["curriculum"]] = episode
         return replays
 

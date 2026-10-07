@@ -73,8 +73,10 @@ class LiveFeed:
             self._keep_best(episode)
 
     def _keep_best(self, episode: dict[str, Any]) -> None:
+        if not episode["result"]["succeeded"]:
+            return
         curriculum = episode["result"]["curriculum"]
-        if curriculum not in self._replays or _rank(episode) > _rank(self._replays[curriculum]):
+        if curriculum not in self._replays or len(episode["statuses"]) < len(self._replays[curriculum]["statuses"]):
             self._replays[curriculum] = episode
             if self._store is not None:
                 self._store.save(curriculum, episode)
@@ -103,11 +105,6 @@ class LiveFeed:
                 if episode["id"] == episode_id:
                     return episode
         raise KeyError(episode_id)
-
-
-def _rank(episode: dict[str, Any]) -> tuple[bool, float]:
-    result = episode["result"]
-    return (True, -len(episode["statuses"])) if result["succeeded"] else (False, result["score"])
 
 
 def _overview(episode: dict[str, Any]) -> dict[str, Any]:
