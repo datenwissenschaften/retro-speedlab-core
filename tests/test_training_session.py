@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import torch
 from fakes import fake_decision, fake_environment, write_config
 
 from datenwissenschaften.laya.decision import Decision
@@ -10,6 +11,7 @@ from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
 from datenwissenschaften.training.lab_run import LabRun
+from datenwissenschaften.training.practice import PracticeStep
 from datenwissenschaften.training.session import (
     EXPLORATION_ONCE_MASTERED,
     EXPLORATION_WHILE_LEARNING,
@@ -21,21 +23,53 @@ from datenwissenschaften.training.state_models import StateModels
 IDLE_LAB = LabRun(Path("no-lab-run"))
 
 
-class RecordingAgent:
+class RecordingPolicy:
     def __init__(self) -> None:
         self.num_timesteps = 0
+
+
+class RecordingAgent:
+    def __init__(self) -> None:
+        self.policy = RecordingPolicy()
         self.rollouts: list[int] = []
         self.explorations: list[float] = []
         self.demonstrations: list[int] = []
 
-    def act(self, observation: dict[str, str], exploration: float) -> Decision:
+    @property
+    def num_timesteps(self) -> int:
+        return self.policy.num_timesteps
+
+    def restart(self) -> None:
+        self.policy = RecordingPolicy()
+
+    def read(self, observations: list[dict[str, str]]) -> tuple[torch.Tensor, torch.Tensor]:
+        rows = torch.zeros(len(observations), 1)
+        return rows, rows
+
+    def decide(self, features: tuple[torch.Tensor, torch.Tensor], exploration: float) -> list[Decision]:
         self.explorations.append(exploration)
-        return fake_decision(1, {"left": 0.2, "right": 0.8}, 0.74)
+        return [fake_decision(1, {"left": 0.2, "right": 0.8}, 0.74) for _ in range(len(features[0]))]
 
     def learn(self, rollout, demonstrations) -> None:
         self.rollouts.append(len(rollout))
         self.demonstrations.append(len(demonstrations))
-        self.num_timesteps += len(rollout)
+        self.policy.num_timesteps += len(rollout)
+
+
+class FakePractice:
+    def __init__(self, workers: int) -> None:
+        self.observations = [{"state": "{}", "question": "Which move survives?"}] * workers
+        self.states = ["Survive"] * workers
+        self.actions: list[list[int]] = []
+
+    def send(self, actions: list[int]) -> None:
+        self.actions.append(actions)
+
+    def receive(self) -> list[PracticeStep]:
+        return [PracticeStep(observation, 1.0, False, "Survive") for observation in self.observations]
+
+
+NO_PRACTICE = FakePractice(0)
 
 
 class RecordingHook:
@@ -61,7 +95,7 @@ def test_session_plays_learns_and_stops_on_a_reset_request(tmp_path: Path, monke
     agent, hook = RecordingAgent(), RecordingHook()
     models = StateModels(agent, RunContext(load_config(write_config(tmp_path)), "Level1"), ("Survive", "Boss"))
 
-    result = TrainingSession(env, models, [hook], float("inf"), {}, IDLE_LAB).run()
+    result = TrainingSession(env, models, [hook], float("inf"), {}, IDLE_LAB, NO_PRACTICE).run()
 
     assert result == "reset"
     assert agent.num_timesteps == ROLLOUT_STEPS
@@ -85,7 +119,7 @@ def test_mastered_states_explore_less(tmp_path: Path):
     for _ in range(env.curriculum.curriculum.WIN_TARGET):
         env.curriculum.curriculum.record_success("Survive", 1)
 
-    session = TrainingSession(env, models, [], float("inf"), {}, IDLE_LAB)
+    session = TrainingSession(env, models, [], float("inf"), {}, IDLE_LAB, NO_PRACTICE)
 
     assert session._exploration("Survive") == EXPLORATION_ONCE_MASTERED
     assert session._exploration("Boss") == EXPLORATION_WHILE_LEARNING
@@ -98,7 +132,7 @@ def test_session_hands_over_to_the_next_level_after_an_episode_past_the_deadline
     context = RunContext(load_config(write_config(tmp_path)), "Level1")
     models = StateModels(RecordingAgent(), context, ("Survive", "Boss"))
 
-    result = TrainingSession(env, models, [hook], 0.0, {}, IDLE_LAB).run()
+    result = TrainingSession(env, models, [hook], 0.0, {}, IDLE_LAB, NO_PRACTICE).run()
 
     assert result is None
     assert len(hook.episodes) == 1
@@ -112,8 +146,22 @@ def test_only_unmastered_states_learn_from_their_demonstrations(tmp_path: Path):
     for _ in range(env.curriculum.curriculum.WIN_TARGET):
         env.curriculum.curriculum.record_success("Survive", 1)
 
-    session = TrainingSession(env, models, [], float("inf"), {"Survive": [step], "Boss": [step]}, IDLE_LAB)
+    session = TrainingSession(env, models, [], float("inf"), {"Survive": [step], "Boss": [step]}, IDLE_LAB, NO_PRACTICE)
 
     assert session._demonstrations("Survive") == []
     assert session._demonstrations("Boss") == [step]
-    assert TrainingSession(env, models, [], float("inf"), {}, IDLE_LAB)._demonstrations("Boss") == []
+    assert TrainingSession(env, models, [], float("inf"), {}, IDLE_LAB, NO_PRACTICE)._demonstrations("Boss") == []
+
+
+def test_practice_emulators_play_alongside_and_fill_the_same_state_rollouts(tmp_path: Path, monkeypatch):
+    requests = iter([None] * (ROLLOUT_STEPS // 2) + ["reset"])
+    monkeypatch.setattr(session_module, "consume_model_reset", lambda: next(requests))
+    env = fake_environment(tmp_path, [(3, 0)] * ROLLOUT_STEPS)
+    agent, practice = RecordingAgent(), FakePractice(1)
+    models = StateModels(agent, RunContext(load_config(write_config(tmp_path)), "Level1"), ("Survive", "Boss"))
+
+    TrainingSession(env, models, [], float("inf"), {}, IDLE_LAB, practice).run()
+
+    assert agent.rollouts == [ROLLOUT_STEPS]
+    assert practice.actions[0] == [1]
+    assert len(practice.actions) == ROLLOUT_STEPS // 2

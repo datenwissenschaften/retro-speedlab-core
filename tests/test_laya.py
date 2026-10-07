@@ -147,11 +147,11 @@ def test_checkpoints_hold_the_heads_and_restart_returns_to_laya(network: LayaNet
     pretrained = right_probability(agent)
     agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 1.0}), [])
     trained = right_probability(agent)
-    checkpoint = torch.load(io.BytesIO(agent.checkpoint().getvalue()), map_location="cpu")
+    checkpoint = torch.load(io.BytesIO(agent.policy.checkpoint().getvalue()), map_location="cpu")
 
     agent.restart()
     assert right_probability(agent) == pytest.approx(pretrained)
-    agent.restore(checkpoint)
+    agent.policy.restore(checkpoint)
 
     assert right_probability(agent) == pytest.approx(trained)
     assert agent.num_timesteps == DECISIONS

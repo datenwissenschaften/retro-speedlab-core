@@ -1,12 +1,12 @@
-from concurrent.futures import Future
-
 from loguru import logger
 
-from datenwissenschaften.laya.agent import LayaAgent
+from datenwissenschaften.laya.agent import LayaAgent, Observation
+from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.laya.imitation import DemonstrationStep
+from datenwissenschaften.laya.policy import Policy
 from datenwissenschaften.laya.rollout import Rollout
 from datenwissenschaften.training.context import RunContext
-from datenwissenschaften.training.model_store import Checkpoint, ModelStore
+from datenwissenschaften.training.model_store import ModelStore
 
 
 class StateModels:
@@ -14,14 +14,10 @@ class StateModels:
         self.agent = agent
         self.context = context
         self.state_names = state_names
-        self.rollouts = {state_name: Rollout() for state_name in state_names}
+        self.policies: dict[str, Policy] = {}
+        self.rollouts: dict[tuple[str, int], Rollout] = {}
         self.store = ModelStore()
         self.active: str | None = None
-        self.prefetched: tuple[str, Future[Checkpoint | None]] | None = None
-
-    @property
-    def rollout(self) -> Rollout:
-        return self.rollouts[self.require_active()]
 
     def require_active(self) -> str:
         if self.active is None:
@@ -31,32 +27,45 @@ class StateModels:
     def activate(self, state_name: str) -> None:
         if state_name == self.active:
             return
-        checkpoint = self._fetch(state_name).result()
-        if checkpoint is not None:
-            self.agent.restore(checkpoint)
-        elif self.active is not None:
+        if state_name not in self.policies:
             self.agent.restart()
+            checkpoint = self.store.read(self.context.model_path(state_name)).result()
+            if checkpoint is not None:
+                self.agent.policy.restore(checkpoint)
+            self.policies[state_name] = self.agent.policy
+            logger.debug(f"Laya model for {state_name} loaded at {self.agent.num_timesteps:,} trained decisions")
+        self.agent.policy = self.policies[state_name]
         self.active = state_name
-        self._prefetch_following(state_name)
-        logger.debug(f"Laya model for {state_name} active at {self.agent.num_timesteps:,} trained decisions")
 
-    def learn(self, demonstrations: list[DemonstrationStep]) -> None:
-        self.agent.learn(self.rollout, demonstrations)
-        self.rollouts[self.require_active()] = Rollout()
+    def decide(
+        self, observations: list[Observation], states: list[str], exploration: dict[str, float]
+    ) -> list[Decision]:
+        options, pooled = self.agent.read(observations)
+        decisions: dict[int, Decision] = {}
+        for state_name in dict.fromkeys(states):
+            rows = [row for row, state in enumerate(states) if state == state_name]
+            self.activate(state_name)
+            chosen = self.agent.decide((options[rows], pooled[rows]), exploration[state_name])
+            decisions.update(zip(rows, chosen, strict=True))
+        return [decisions[row] for row in range(len(states))]
+
+    def rollout(self, state_name: str, environment: int) -> Rollout:
+        return self.rollouts.setdefault((state_name, environment), Rollout())
+
+    def collected(self, state_name: str) -> int:
+        return sum(len(rollout) for (state, _), rollout in self.rollouts.items() if state == state_name)
+
+    def timesteps(self, state_name: str) -> int:
+        self.activate(state_name)
+        return self.agent.num_timesteps + self.collected(state_name)
+
+    def learn(self, state_name: str, demonstrations: list[DemonstrationStep]) -> None:
+        self.activate(state_name)
+        keys = [key for key in self.rollouts if key[0] == state_name]
+        self.agent.learn(Rollout.joined([self.rollouts.pop(key) for key in keys]), demonstrations)
 
     def save(self) -> None:
-        self.store.write(self.context.model_path(self.require_active()), self.agent.checkpoint)
+        self.store.write(self.context.model_path(self.require_active()), self.agent.policy.checkpoint)
 
     def close(self) -> None:
         self.store.close()
-
-    def _fetch(self, state_name: str) -> Future[Checkpoint | None]:
-        prefetched, self.prefetched = self.prefetched, None
-        if prefetched is not None and prefetched[0] == state_name:
-            return prefetched[1]
-        return self.store.read(self.context.model_path(state_name))
-
-    def _prefetch_following(self, state_name: str) -> None:
-        following = self.state_names[(self.state_names.index(state_name) + 1) % len(self.state_names)]
-        if following != state_name:
-            self.prefetched = following, self.store.read(self.context.model_path(following))

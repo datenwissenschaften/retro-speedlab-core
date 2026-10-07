@@ -172,14 +172,14 @@ def test_factory_starts_the_game_at_power_on_with_every_button(tmp_path: Path, m
     monkeypatch.setattr(factory.retro, "make", make)
     config = load_config(write_config(tmp_path))
 
-    env = factory.make_environment(FakeWrapper, config)
+    env = factory.make_environment(FakeWrapper, config, 0)
 
     assert calls["roms"] == (config.paths.roms_path, config.paths.integrations_dir)
     assert (calls["game"], calls["state"]) == ("FakeGame-v0", factory.retro.State.NONE)
     assert calls["actions"] == factory.retro.Actions.ALL
     assert calls["record"] == str(config.paths.record_dir / "FakeGame-v0")
     assert env.unwrapped.initial_state == env.unwrapped.em.get_state()
-    assert re.fullmatch(r"PowerOn-\d{8}T\d{6}", env.unwrapped.statename)
+    assert re.fullmatch(r"PowerOn-\d{8}T\d{6}-0", env.unwrapped.statename)
     assert env.curriculum.state_names == ("Survive", "Boss")
 
 

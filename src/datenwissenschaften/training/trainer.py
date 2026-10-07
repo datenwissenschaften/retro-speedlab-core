@@ -1,3 +1,4 @@
+import os
 import time
 from pathlib import Path
 
@@ -21,8 +22,9 @@ from datenwissenschaften.training.identity import TrainingIdentity
 from datenwissenschaften.training.knowledge import knowledge
 from datenwissenschaften.training.lab_run import LabRun
 from datenwissenschaften.training.live_stream_hook import LiveStreamHook
+from datenwissenschaften.training.practice import PracticeEnvironments
 from datenwissenschaften.training.report_upload_hook import ReportUploadHook
-from datenwissenschaften.training.session import TrainingSession
+from datenwissenschaften.training.session import MAIN_ENVIRONMENT, TrainingSession
 from datenwissenschaften.training.state_models import StateModels
 from datenwissenschaften.training.story_book import StoryBook
 from datenwissenschaften.training.story_teller import StoryTeller
@@ -37,6 +39,7 @@ from datenwissenschaften.ui.telemetry import configure_history, level_full_run_w
 
 SESSION_SECONDS = 2 * 60 * 60
 BEATEN_FULL_RUN_WINS = 8
+RESERVED_CORES = 2
 
 
 class LayaTrainer:
@@ -53,7 +56,7 @@ class LayaTrainer:
         configure_history(self.config.training.game_identity, database)
         live_feed.keep_replays_in(self.config.paths.cache_dir / "replays" / self.config.training.game_identity)
         while True:
-            env = make_environment(self.wrapper_cls, self.config)
+            env = make_environment(self.wrapper_cls, self.config, MAIN_ENVIRONMENT)
             env.speedrun = self.speedrun = level_full_run_wins(POWER_ON) >= BEATEN_FULL_RUN_WINS
             identity = TrainingIdentity(self.context, database)
             identity.require_compatible(env)
@@ -70,17 +73,20 @@ class LayaTrainer:
         self, env: StateMachineGymWrapper, database: JsonDatabase, seconds: float
     ) -> ModelResetRequest | None:
         models = self._models()
-        self._publish_run()
+        workers = range(MAIN_ENVIRONMENT + 1, len(os.sched_getaffinity(0)) - RESERVED_CORES)
+        self._publish_run(len(workers) + 1)
         publish_metadata("model", model_metadata(models), replace=True)
         story = StoryBook(database, self.config.training.game_identity, self.context.savestate, self._phases())
         demonstrations = load_demonstrations(env, self.config.paths.demonstrations_dir)
         publish_metadata("knowledge", knowledge(env, self.config.laya.checkpoint, demonstrations), replace=True)
         deadline = time.monotonic() + seconds
+        practice = PracticeEnvironments(self.wrapper_cls, self.config, self.speedrun, workers)
         try:
             hooks = self._hooks(env, models, StoryTeller(story))
             lab_run = LabRun(self.config.paths.lab_run_marker)
-            return TrainingSession(env, models, hooks, deadline, demonstrations, lab_run).run()
+            return TrainingSession(env, models, hooks, deadline, demonstrations, lab_run, practice).run()
         finally:
+            practice.close()
             models.close()
 
     def _phases(self) -> tuple[str, ...]:
@@ -126,13 +132,14 @@ class LayaTrainer:
         start_ui(ui, self.context.record_root, reports_dir, report_digest(ui, self.context.game, reports_dir))
         self.ui_started = True
 
-    def _publish_run(self) -> None:
+    def _publish_run(self, emulators: int) -> None:
         publish_metadata(
             "run",
             {
                 "game": self.context.game,
                 "savestate": self.context.savestate,
                 "speedrun": self.speedrun,
+                "emulators": emulators,
             },
         )
         publish_metadata(

@@ -1,4 +1,5 @@
 import json
+import os
 import threading
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,6 @@ class JsonDatabase:
 
     def _write(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = self.path.with_suffix(".tmp")
+        temporary = self.path.with_name(f".{self.path.name}.{os.getpid()}.tmp")
         temporary.write_text(json.dumps(self._data, separators=(",", ":")), encoding="utf-8")
         temporary.replace(self.path)

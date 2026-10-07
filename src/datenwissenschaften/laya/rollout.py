@@ -8,24 +8,37 @@ class Rollout:
         self.decisions: list[Decision] = []
         self.rewards: list[float] = []
         self.dones: list[bool] = []
+        self.cuts: list[bool] = []
 
     def __len__(self) -> int:
         return len(self.decisions)
+
+    @classmethod
+    def joined(cls, parts: list["Rollout"]) -> "Rollout":
+        rollout = cls()
+        for part in parts:
+            rollout.decisions += part.decisions
+            rollout.rewards += part.rewards
+            rollout.dones += part.dones
+            rollout.cuts += [*part.cuts[:-1], True]
+        return rollout
 
     def add(self, decision: Decision, reward: float, done: bool) -> None:
         self.decisions.append(decision)
         self.rewards.append(reward)
         self.dones.append(done)
+        self.cuts.append(False)
 
     def advantages(self, gamma: float, lam: float) -> tuple[torch.Tensor, torch.Tensor]:
         values = [decision.value for decision in self.decisions]
         advantages = torch.zeros(len(self))
         running = 0.0
         for step in reversed(range(len(self))):
-            following = values[step + 1] if step + 1 < len(self) else values[step]
+            last = self.cuts[step] or step + 1 == len(self)
+            following = values[step] if last else values[step + 1]
             following = 0.0 if self.dones[step] else following
             delta = self.rewards[step] + gamma * following - values[step]
-            running = delta + gamma * lam * running * (not self.dones[step])
+            running = delta + gamma * lam * running * (not (self.dones[step] or last))
             advantages[step] = running
         returns = advantages + torch.tensor(values)
         return advantages, returns

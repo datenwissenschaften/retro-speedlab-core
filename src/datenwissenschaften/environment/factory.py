@@ -17,7 +17,9 @@ POWER_ON = "PowerOn"
 SESSION_STAMP = "%Y%m%dT%H%M%S"
 
 
-def make_environment(wrapper_cls: type[StateMachineGymWrapper], config: RetroSpeedlabConfig) -> StateMachineGymWrapper:
+def make_environment(
+    wrapper_cls: type[StateMachineGymWrapper], config: RetroSpeedlabConfig, worker: int
+) -> StateMachineGymWrapper:
     training = config.training
     import_roms(config.paths.roms_path, config.paths.integrations_dir)
     record_dir = config.paths.record_dir / training.game
@@ -31,7 +33,7 @@ def make_environment(wrapper_cls: type[StateMachineGymWrapper], config: RetroSpe
     )
     emulator = env.unwrapped
     emulator.initial_state = emulator.em.get_state()
-    emulator.statename = f"{POWER_ON}-{datetime.now(UTC):{SESSION_STAMP}}"
+    emulator.statename = f"{POWER_ON}-{datetime.now(UTC):{SESSION_STAMP}}-{worker}"
     root = curriculum_root(config)
     levels = level_map(wrapper_cls.levels, wrapper_cls.state_classes)
     targets = curriculum_targets(wrapper_cls.state_classes, levels)

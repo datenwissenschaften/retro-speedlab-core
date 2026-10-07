@@ -44,11 +44,17 @@ OBSERVATION = {"state": '{"lives": 3}', "question": "Which move survives?"}
 FRAMES = [np.zeros((4, 4, 3), np.uint8), np.ones((4, 4, 3), np.uint8)]
 
 
-class FakeAgent:
-    num_timesteps = 7
-
+class FakePolicy:
     def checkpoint(self) -> io.BytesIO:
         return io.BytesIO(b"weights")
+
+
+class FakeAgent:
+    num_timesteps = 7
+    policy = FakePolicy()
+
+    def restart(self) -> None:
+        self.policy = FakePolicy()
 
     def metadata(self) -> dict[str, object]:
         return {"checkpoint": "fake/laya"}

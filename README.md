@@ -289,11 +289,15 @@ npm run build
 
 ## Limitations
 
-- Training uses one emulator; each update learns from 64 decisions.
+- Training runs one emulator per CPU core, minus two (on the stream is the
+  first one; the others practise in worker processes). Laya reads all their
+  situations in one batch per step; the GPU caps this at about 100 decisions
+  per second on an RTX 2070. Each state learns after 256 decisions.
 - Laya only knows what the game package describes. Unmapped RAM, such as an
   enemy that was never measured, is invisible to it.
-- A state checkpoint stores all Laya weights plus the optimizer (about 2.4 GB),
-  and swapping states reloads it (a few seconds).
+- Laya's 421M weights stay frozen; a state checkpoint stores only its small
+  policy and value heads plus their optimizer, and every state's heads stay in
+  memory.
 - Training is resumable, not bit-exact reproducible: sampling, CUDA kernels and
   the emulator are not seeded into one deterministic stream.
 - Binding the dashboard to `0.0.0.0` exposes it to the network without

@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 from datenwissenschaften.ui.telemetry import publish_metadata
@@ -24,7 +25,9 @@ class LevelClock:
             "runs": int(previous["runs"]) + 1,
         }
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(times), encoding="utf-8")
+        temporary = self.path.with_name(f".{self.path.name}.{os.getpid()}.tmp")
+        temporary.write_text(json.dumps(times), encoding="utf-8")
+        temporary.replace(self.path)
         self.publish()
 
     def publish(self) -> None:
