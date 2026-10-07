@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ProgressPath from './ProgressPath.vue'
-import { createArrivalTracker, holdsBest, inProgressLine, playingLine, recentAttempts, status } from './attempts.js'
+import { createArrivalTracker, holdsBest, playingLine, recentAttempts, status } from './attempts.js'
 import { layaInputs } from './knowledge.js'
 import { fmt, gameTitle, percent, words } from './naming.js'
 import { createObsControl, STREAM_TIME_ZONE } from './obsControl.js'
@@ -33,7 +33,6 @@ const screen = ref(null)
 const replayEpisode = ref(null)
 const latestEpisode = ref(null)
 const recentScores = ref([])
-const inProgress = ref(null)
 const bestRefresh = ref(0)
 const waiting = ref(true)
 const replayProgress = ref(0)
@@ -94,10 +93,9 @@ const player = createReplayPlayer({
     reloadIfPending()
   },
   onEpisodeEnd: reloadIfPending,
-  onLatest: (episode, summary, running) => {
+  onLatest: (episode, summary) => {
     latestEpisode.value = episode
     recentScores.value = summary.recent_scores || []
-    inProgress.value = running
   },
   onConnection: online => { connected.value = online },
 })
@@ -158,7 +156,6 @@ const story = computed(() => snapshot.value.metadata?.stories?.[level.value] || 
 const levelBest = savestate => snapshot.value.summary?.by_savestate?.[savestate]?.best_fitness ?? null
 const recent = computed(() => recentAttempts(latestEpisode.value, recentScores.value, levelBest(latestEpisode.value?.result.level), RECENT_ATTEMPTS))
 const replayStatus = computed(() => labRun.value ? 'Upgrading' : status(connected.value, replayEpisode.value))
-const progressLine = computed(() => connected.value ? inProgressLine(replayEpisode.value, inProgress.value) : null)
 const replayIsBest = computed(() => replayEpisode.value !== null && holdsBest(replayEpisode.value, levelBest(replayEpisode.value.result.level)))
 const learningFor = computed(() => snapshot.value.started_at ? elapsed(snapshot.value.started_at, now.value) : '—')
 const inputs = computed(() => layaInputs(snapshot.value.metadata?.knowledge, snapshot.value.metadata?.model?.laya))
@@ -196,17 +193,25 @@ watch(() => live.value.ram, (current, previous) => {
 <template>
   <div class="stream-view">
     <div class="stream-stage" :style="stageStyle">
+      <div class="stream-signal-strip" aria-hidden="true"></div>
+      <div class="stream-signal-strip bottom" aria-hidden="true"></div>
       <div class="stream-left-rail">
         <aside class="run-info-panel">
           <div class="run-info-brand">
-            <img class="run-info-logo" src="/logo.png" alt="Retro Speedlab" />
-            <span class="run-info-kicker">{{ replayStatus }}</span>
+            <img class="run-info-logo" src="/laya-logo.svg" alt="" />
+            <span class="run-info-wordmark">
+              <strong>Retro Speedlab</strong>
+              <small>Cartridge 01 · live signal</small>
+            </span>
           </div>
           <div class="run-info-medal">
-            <span class="run-info-medal-icon">🧠</span>
+            <span class="signal-bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>
             <span>
-              <strong class="run-info-medal-title">Attempt {{ replayEpisode ? `#${replayEpisode.result.attempt} · ${words(replayEpisode.result.level)}` : '—' }}</strong>
-              <span v-if="progressLine" class="replay-badge">{{ progressLine }}</span>
+              <span class="run-info-medal-head">
+                <strong class="run-info-medal-title">Attempt {{ replayEpisode ? `#${replayEpisode.result.attempt}` : '—' }}</strong>
+                <span class="run-info-kicker">{{ replayStatus }}</span>
+              </span>
+              <small v-if="replayEpisode" class="run-info-medal-start">{{ words(replayEpisode.result.level) }}</small>
               <span v-if="replayIsBest" class="replay-badge best">★ Best so far</span>
               <span class="replay-track"><span :style="{ width: percent(replayProgress) }"></span></span>
             </span>
@@ -224,6 +229,7 @@ watch(() => live.value.ram, (current, previous) => {
 
       <div class="stream-screen">
         <video ref="screen" class="stream-video" aria-label="Replayed gameplay" muted playsinline></video>
+        <div class="crt-glass" aria-hidden="true"></div>
         <Transition name="fade">
           <div v-if="snapshot.server && !twitch" class="stream-waiting">
             <span class="stream-waiting-kicker">Stream off</span>

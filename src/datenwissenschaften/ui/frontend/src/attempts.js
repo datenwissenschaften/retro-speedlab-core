@@ -37,14 +37,6 @@ export const status = (connected, replayed) => {
   return replayed ? 'Replay' : 'Waiting'
 }
 
-export const inProgressLine = (replayed, inProgress) => {
-  if (!inProgress) return null
-  const { attempt, level } = inProgress
-  if (replayed && replayed.result.level === level && replayed.result.attempt + 1 === attempt) return 'Next attempt in progress'
-  const where = replayed && replayed.result.level !== level ? `${words(level)} · ` : ''
-  return `${where}Attempt #${attempt} in progress`
-}
-
 export const dangerTitle = spot => spot.located ? `Failed here ${spot.count}×` : `Failed ${spot.count}×`
 
 export const dangerNote = (failures, located) => {

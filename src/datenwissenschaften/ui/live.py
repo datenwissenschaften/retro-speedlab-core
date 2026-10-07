@@ -85,7 +85,6 @@ class LiveFeed:
                 "generation": self._generation,
                 "episode": _overview(self._episodes[-1]) if self._episodes else None,
                 "replays": [_overview(episode) for episode in self._replays.values()],
-                "in_progress": _in_progress(self._recording[-1]["status"]) if self._recording else None,
                 "summary": dict(self._summary),
             }
 
@@ -109,10 +108,6 @@ class LiveFeed:
 def _rank(episode: dict[str, Any]) -> tuple[bool, float]:
     result = episode["result"]
     return (True, -len(episode["statuses"])) if result["succeeded"] else (False, result["score"])
-
-
-def _in_progress(status: dict[str, Any]) -> dict[str, Any]:
-    return {"attempt": status["attempt"], "level": status["level"]}
 
 
 def _overview(episode: dict[str, Any]) -> dict[str, Any]:

@@ -27,7 +27,7 @@ def play(feed: LiveFeed, episode_id: int, frames: int, result: dict) -> None:
 def test_the_latest_attempts_are_kept_as_a_video_with_their_decisions_in_chunks():
     feed = LiveFeed()
     generation = feed.latest_episode()["generation"]
-    empty = {"generation": generation, "episode": None, "replays": [], "in_progress": None, "summary": {}}
+    empty = {"generation": generation, "episode": None, "replays": [], "summary": {}}
     assert feed.latest_episode() == empty
     for episode_id in range(1, MAX_COMPLETED_EPISODES + 3):
         play(feed, episode_id, MAX_STATUSES_PER_REQUEST + 5, LOST)

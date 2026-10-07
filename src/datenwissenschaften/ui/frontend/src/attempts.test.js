@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
-  createArrivalTracker, dangerNote, dangerTitle, holdsBest, inProgressLine, playingLine, recentAttempts, status,
+  createArrivalTracker, dangerNote, dangerTitle, holdsBest, playingLine, recentAttempts, status,
 } from './attempts.js'
 
 const episode = (id, result) => ({ id, result: { score: 0, won: false, new_best: false, attempt: id + 1, level: 'Level1', ...result } })
@@ -50,14 +50,8 @@ test('an attempt holds the level best when it reaches it', () => {
 
 const replaying = (attempt, level) => episode(attempt - 1, { attempt, level })
 
-test('A: replaying #5 while #6 is played shows the replay and the next attempt in progress', () => {
+test('A: replaying #5 shows the replay status', () => {
   assert.equal(status(true, replaying(5, 'Level1')), 'Replay')
-  assert.equal(inProgressLine(replaying(5, 'Level1'), { attempt: 6, level: 'Level1' }), 'Next attempt in progress')
-})
-
-test('A: a replay older than the newest completed attempt names the attempt in progress', () => {
-  assert.equal(inProgressLine(replaying(5, 'Level1'), { attempt: 7, level: 'Level1' }), 'Attempt #7 in progress')
-  assert.equal(inProgressLine(replaying(5, 'Level1'), { attempt: 2, level: 'Level2' }), 'Level 2 · Attempt #2 in progress')
 })
 
 test('B: a completed #6 replaces the replay once and is listed once', () => {
@@ -78,9 +72,7 @@ test('C: a new best arrives once however often the same attempt is polled or rep
   assert.equal(recentAttempts(best, [-26, -20], -20, 5)[0].best, true)
 })
 
-test('D: nothing in progress hides the in-progress line', () => {
-  assert.equal(inProgressLine(replaying(5, 'Level1'), null), null)
-  assert.equal(inProgressLine(null, null), null)
+test('D: the status shows offline and waiting', () => {
   assert.equal(status(false, replaying(5, 'Level1')), 'Offline')
   assert.equal(status(true, null), 'Waiting')
 })

@@ -1,5 +1,6 @@
 import io
 import json
+import math
 import os
 import subprocess
 from pathlib import Path
@@ -52,6 +53,8 @@ class FakePolicy:
 class FakeAgent:
     num_timesteps = 7
     policy = FakePolicy()
+    last_update = {"entropy": math.log(2), "explained_variance": 0.25}
+    network = SimpleNamespace(question=SimpleNamespace(options={"left": "go left", "right": "go right"}))
 
     def restart(self) -> None:
         self.policy = FakePolicy()
@@ -130,6 +133,10 @@ def test_checkpoint_hook_saves_and_publishes_metadata(context: RunContext, monke
 
     assert context.model_path("Survive").read_bytes() == b"weights"
     assert published[0][1]["laya"] == {"state": "Survive", "checkpoint": "fake/laya"}
+    assert published[1] == (
+        "state_models",
+        {"Survive": {"num_timesteps": 7, "entropy_share": 1.0, "explained_variance": 0.25}},
+    )
 
 
 @pytest.fixture

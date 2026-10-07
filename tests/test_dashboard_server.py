@@ -212,7 +212,6 @@ def test_live_endpoints_serve_the_latest_attempt_as_a_video_with_its_decisions(m
         "result": result,
     }
     assert [replay["id"] for replay in latest["replays"]] == [7]
-    assert latest["in_progress"] is None
     assert [status["timesteps"] for status in statuses["statuses"]] == [2]
     assert video.body == b"mp4:onetwo"
     assert missing.status == 404
@@ -472,16 +471,3 @@ def test_the_persona_tag_is_six_cool_characters_stable_per_release():
 
     assert len(tag) == 6 and tag.isalnum() and tag.islower()
     assert tag == persona_tag("2026.10.01-3") != persona_tag("2026.10.01-4")
-
-
-def test_the_attempt_being_played_is_reported_until_it_finishes():
-    feed = LiveFeed()
-    assert feed.latest_episode()["in_progress"] is None
-
-    feed.record(b"one", {"attempt": 6, "level": "Level1"})
-    assert feed.latest_episode()["in_progress"] == {"attempt": 6, "level": "Level1"}
-
-    result = {"score": 1.0, "attempt": 6, "level": "Level1", "full_run": True, "succeeded": False, "curriculum": "Play"}
-    feed.finish_episode(5, 60.0, result, {"recent_scores": []})
-    assert feed.latest_episode()["in_progress"] is None
-    assert feed.latest_episode()["episode"]["result"]["attempt"] == 6

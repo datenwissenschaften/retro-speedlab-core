@@ -1,3 +1,5 @@
+import math
+
 from loguru import logger
 
 from datenwissenschaften.training.episode_record import EpisodeRecord
@@ -6,7 +8,17 @@ from datenwissenschaften.training.state_models import StateModels
 from datenwissenschaften.ui.telemetry import publish_metadata
 
 DISPLAY_NAME = "Laya"
-DESCRIPTION = "One Laya model per state chooses every action; group-relative policy gradients fine-tune all weights."
+DESCRIPTION = "Laya reads the game frozen; small policy and value heads per state learn with PPO."
+
+
+def learning_metadata(models: StateModels) -> dict[str, object]:
+    update = models.agent.last_update
+    uniform = math.log(len(models.agent.network.question.options))
+    return {
+        "num_timesteps": models.agent.num_timesteps,
+        "entropy_share": round(update["entropy"] / uniform, 3),
+        "explained_variance": round(update["explained_variance"], 3),
+    }
 
 
 def model_metadata(models: StateModels) -> dict[str, object]:
@@ -30,6 +42,7 @@ class CheckpointHook:
     def on_update(self) -> None:
         self.models.save()
         publish_metadata("model", model_metadata(self.models), replace=True)
+        publish_metadata("state_models", {self.models.require_active(): learning_metadata(self.models)})
         logger.debug(
             f"{self.models.active} model queued for saving at {self.models.agent.num_timesteps:,} trained decisions"
         )

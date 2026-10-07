@@ -7,7 +7,7 @@ const STATUSES = [
   { attempt: 5, action: 'right', probabilities: { left: 0.2, right: 0.8 } },
 ]
 const EPISODE = { id: 4, frame_rate: 1, frame_count: STATUSES.length, result: { attempt: 5, level: 'Level1' } }
-const LATEST = { generation: 'g', episode: EPISODE, replays: [], in_progress: { attempt: 6, level: 'Level1' }, summary: {} }
+const LATEST = { generation: 'g', episode: EPISODE, replays: [], summary: {} }
 
 const settle = async () => {
   for (let round = 0; round < 10; round += 1) await new Promise(resolve => { setTimeout(resolve, 0) })
