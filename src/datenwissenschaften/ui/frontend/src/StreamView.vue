@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ProgressPath from './ProgressPath.vue'
-import { createArrivalTracker, holdsBest, inProgressLine, recentAttempts, status } from './attempts.js'
+import { createArrivalTracker, holdsBest, inProgressLine, playingLine, recentAttempts, status } from './attempts.js'
 import { layaInputs } from './knowledge.js'
 import { fmt, gameTitle, percent, words } from './naming.js'
 import { createObsControl, STREAM_TIME_ZONE } from './obsControl.js'
@@ -208,7 +208,7 @@ watch(() => live.value.ram, (current, previous) => {
           <dl class="run-info-grid">
             <div class="run-info-row"><dt>Game</dt><dd>{{ run.game ? gameTitle(run.game) : 'Waiting' }}</dd></div>
             <div class="run-info-row"><dt>Level</dt><dd>{{ levelTitle || '—' }}</dd></div>
-            <div class="run-info-row"><dt>Curriculum</dt><dd>{{ replayEpisode?.result.curriculum ? words(replayEpisode.result.curriculum) : '—' }}</dd></div>
+            <div class="run-info-row"><dt>Curriculum</dt><dd>{{ playingLine(live.training_state, replayEpisode) }}</dd></div>
             <div class="run-info-row"><dt>Agent</dt><dd>{{ agentName }}</dd></div>
           </dl>
         </aside>

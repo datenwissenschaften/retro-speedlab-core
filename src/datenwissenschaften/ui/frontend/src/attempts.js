@@ -51,3 +51,8 @@ export const dangerNote = (failures, located) => {
   const attempts = `last ${failures} failed ${failures === 1 ? 'attempt' : 'attempts'}`
   return located ? `Where the ${attempts} ended` : `From the ${attempts}`
 }
+
+export const playingLine = (state, episode) => {
+  if (!state) return '—'
+  return episode?.result.full_run ? `${words(state)} · full run` : words(state)
+}

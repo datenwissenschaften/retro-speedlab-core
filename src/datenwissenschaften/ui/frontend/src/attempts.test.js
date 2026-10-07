@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
-  createArrivalTracker, dangerNote, dangerTitle, holdsBest, inProgressLine, recentAttempts, status,
+  createArrivalTracker, dangerNote, dangerTitle, holdsBest, inProgressLine, playingLine, recentAttempts, status,
 } from './attempts.js'
 
 const episode = (id, result) => ({ id, result: { score: 0, won: false, new_best: false, attempt: id + 1, level: 'Level1', ...result } })
@@ -91,4 +91,10 @@ test('G: danger wording follows the real failure window and whether a place is k
   assert.equal(dangerNote(6, false), 'From the last 6 failed attempts')
   assert.equal(dangerNote(100, true), 'Where the last 100 failed attempts ended')
   assert.equal(dangerNote(1, true), 'Where the last 1 failed attempt ended')
+})
+
+test('K: the curriculum shown is the state being played, and a full run says so', () => {
+  assert.equal(playingLine('Play', episode(1, { curriculum: 'Feed', full_run: false })), 'Play')
+  assert.equal(playingLine('Grow', episode(2, { curriculum: 'Menu', full_run: true })), 'Grow · full run')
+  assert.equal(playingLine(undefined, episode(3, {})), '—')
 })
