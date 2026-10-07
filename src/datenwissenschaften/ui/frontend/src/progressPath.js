@@ -1,3 +1,5 @@
+import { words } from './naming.js'
+
 const HUNDREDTHS_PER_SECOND = 100
 const HUNDREDTHS_PER_MINUTE = 6000
 const ROUNDING_SLACK = 1e-6
@@ -25,4 +27,10 @@ export const splitDelta = (seconds, best) => {
   if (seconds == null || best == null) return null
   const delta = seconds - best
   return { text: `${delta < 0 ? '−' : '+'}${Math.abs(delta).toFixed(2)}`, ahead: delta <= 0 }
+}
+
+export const levelOf = (state, levels) => {
+  if (!state) return '—'
+  const level = Object.entries(levels).find(([, states]) => states.includes(state))
+  return level ? level[0] : words(state)
 }

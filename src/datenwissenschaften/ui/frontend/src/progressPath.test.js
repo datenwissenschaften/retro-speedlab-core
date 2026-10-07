@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { pathNodes, splitDelta, splitTime } from './progressPath.js'
+import { levelOf, pathNodes, splitDelta, splitTime } from './progressPath.js'
 
 const phase = mastered => ({ mastered, wins: mastered ? 8 : 2, win_target: 8 })
 const LEVELS = { 'Level 1': ['Play', 'Grow', 'Door'], 'Level 2': ['Level2', 'Island2'] }
@@ -26,4 +26,11 @@ test('split times read like a speedrun timer, deltas against the best run', () =
   assert.deepEqual(splitDelta(73.15, 72.35), { text: '+0.80', ahead: false })
   assert.deepEqual(splitDelta(70, 72.35), { text: '−2.35', ahead: true })
   assert.equal(splitDelta(null, 72.35), null)
+})
+
+test('the level shown is the level of the state being played', () => {
+  assert.equal(levelOf('Grow', LEVELS), 'Level 1')
+  assert.equal(levelOf('Island2', LEVELS), 'Level 2')
+  assert.equal(levelOf('Menu', LEVELS), 'Menu')
+  assert.equal(levelOf(undefined, LEVELS), '—')
 })

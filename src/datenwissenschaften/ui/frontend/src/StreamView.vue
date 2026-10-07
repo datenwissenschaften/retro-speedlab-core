@@ -5,6 +5,7 @@ import { createArrivalTracker, holdsBest, inProgressLine, playingLine, recentAtt
 import { layaInputs } from './knowledge.js'
 import { fmt, gameTitle, percent, words } from './naming.js'
 import { createObsControl, STREAM_TIME_ZONE } from './obsControl.js'
+import { levelOf } from './progressPath.js'
 import { createReplayPlayer } from './replayPlayer.js'
 import { elapsed, minutesLeft } from './runtime.js'
 import SpotlightPanel from './SpotlightPanel.vue'
@@ -152,7 +153,6 @@ onBeforeUnmount(() => {
 const release = computed(() => snapshot.value.server?.release || null)
 const run = computed(() => snapshot.value.metadata?.run || {})
 const level = computed(() => live.value.level || run.value.savestate || '')
-const levelTitle = computed(() => words(level.value))
 const summary = computed(() => snapshot.value.summary?.by_savestate?.[level.value] || {})
 const story = computed(() => snapshot.value.metadata?.stories?.[level.value] || { phases: [], danger: [] })
 const levelBest = savestate => snapshot.value.summary?.by_savestate?.[savestate]?.best_fitness ?? null
@@ -213,7 +213,7 @@ watch(() => live.value.ram, (current, previous) => {
           </div>
           <dl class="run-info-grid">
             <div class="run-info-row"><dt>Game</dt><dd>{{ run.game ? gameTitle(run.game) : 'Waiting' }}</dd></div>
-            <div class="run-info-row"><dt>Level</dt><dd>{{ levelTitle || '—' }}</dd></div>
+            <div class="run-info-row"><dt>Level</dt><dd>{{ levelOf(live.training_state, levels) }}</dd></div>
             <div class="run-info-row"><dt>Curriculum</dt><dd>{{ playingLine(live.training_state, replayEpisode) }}</dd></div>
             <div class="run-info-row"><dt>Agent</dt><dd>{{ agentName }}</dd></div>
           </dl>
