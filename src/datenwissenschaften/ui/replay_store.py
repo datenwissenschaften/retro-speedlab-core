@@ -39,6 +39,9 @@ class ReplayStore:
         partial.write_bytes(msgspec.msgpack.encode(episode))
         partial.replace(path)
 
+    def delete(self, curriculum: str) -> None:
+        (self.directory / f"{curriculum}{REPLAY_SUFFIX}").unlink(missing_ok=True)
+
     def clear(self) -> None:
         for path in self.directory.glob(f"*{REPLAY_SUFFIX}"):
             path.unlink()

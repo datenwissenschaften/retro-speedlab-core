@@ -14,6 +14,7 @@ from fakes import curriculum_run, fake_decision, write_config
 from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.training import (
+    beaten_level_hook,
     checkpoint_hook,
     curriculum_upload_hook,
     live_stream_hook,
@@ -382,3 +383,16 @@ def test_curriculum_upload_hook_sends_the_curriculum_once_per_change(tmp_path: P
         "has_checkpoint": False,
     }
     assert second[0]["wins"] == 1
+
+
+def test_a_beaten_level_drops_the_replays_of_its_states(monkeypatch):
+    dropped = []
+    monkeypatch.setattr(beaten_level_hook.live_feed, "drop_replays", dropped.append)
+    curriculum = SimpleNamespace(
+        targets=SimpleNamespace(levels={"Level 1": ("Survive", "Boss"), "Level 2": ("Climb",)}),
+        curriculum=SimpleNamespace(is_mastered=lambda name: name == "Level 1"),
+    )
+
+    beaten_level_hook.BeatenLevelHook(curriculum).on_episode_end(_episode("run.bk2", 1.0, True, True))
+
+    assert dropped == [("Survive", "Boss")]

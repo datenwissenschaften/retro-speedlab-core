@@ -159,3 +159,15 @@ def test_replays_of_states_the_curriculum_no_longer_has_are_deleted(tmp_path: Pa
 
     assert [replay["result"]["curriculum"] for replay in feed.latest_episode()["replays"]] == ["Heavy"]
     assert [path.name for path in (tmp_path / "replays").iterdir()] == ["Heavy.replay"]
+
+
+def test_the_replays_of_a_beaten_level_s_states_are_dropped(tmp_path: Path):
+    feed = LiveFeed()
+    feed.keep_replays_in(tmp_path / "replays", CURRICULA)
+    for episode_id, curriculum in enumerate(("Play", "Grow", "Heavy"), start=1):
+        play(feed, episode_id, 1, {**SUCCEEDED, "curriculum": curriculum})
+
+    feed.drop_replays(("Play", "Grow"))
+
+    assert [replay["result"]["curriculum"] for replay in feed.latest_episode()["replays"]] == ["Heavy"]
+    assert [path.name for path in (tmp_path / "replays").iterdir()] == ["Heavy.replay"]

@@ -81,6 +81,15 @@ class LiveFeed:
             if self._store is not None:
                 self._store.save(curriculum, episode)
 
+    def drop_replays(self, curricula: tuple[str, ...]) -> None:
+        with self._lock:
+            for curriculum in curricula:
+                if curriculum not in self._replays:
+                    continue
+                del self._replays[curriculum]
+                if self._store is not None:
+                    self._store.delete(curriculum)
+
     def latest_episode(self) -> dict[str, Any]:
         with self._lock:
             return {

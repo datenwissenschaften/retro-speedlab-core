@@ -15,6 +15,7 @@ from datenwissenschaften.laya.network import LayaNetwork
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.settings import load_config
+from datenwissenschaften.training.beaten_level_hook import BeatenLevelHook
 from datenwissenschaften.training.checkpoint_hook import CheckpointHook, model_metadata
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.curriculum_upload_hook import CurriculumUploadHook
@@ -115,6 +116,7 @@ class LayaTrainer:
             TelemetryHook(self.context),
             CheckpointHook(models),
             BestVideoHook(self.context, self._curricula()),
+            BeatenLevelHook(env.curriculum),
             UploadHook(self.context, models.agent, frame_rate, frozenset(env.curriculum.targets.levels)),
             ReportUploadHook(self.context),
             CurriculumUploadHook(self.context, env.curriculum),
