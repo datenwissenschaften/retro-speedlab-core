@@ -122,3 +122,13 @@ def test_a_level_run_from_power_on_times_the_level_from_its_first_state(run: Cur
 
     assert run.transition("Door", "Next", b"next", 0.0) == (True, False)
     assert run.clock.times()["Level 1"]["last_seconds"] == 10.0
+
+
+def test_once_every_target_is_mastered_attempts_are_full_runs(run: CurriculumRun):
+    for target in ("Level 1", "Next"):
+        for _ in range(ReverseCurriculum.WIN_TARGET):
+            run.curriculum.record_success(target, 1)
+
+    assert run.begin_episode() is None
+    assert run.finish_step(False, True, 0.0, None, (False, False))["curriculum_state"] == "Full run"
+    assert run.transition("Door", "Next", b"next", 0.0) == (False, False)

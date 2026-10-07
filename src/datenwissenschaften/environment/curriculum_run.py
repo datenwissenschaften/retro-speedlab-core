@@ -7,6 +7,8 @@ from datenwissenschaften.environment.level_clock import LevelClock
 from datenwissenschaften.environment.levels import LevelTargets
 from datenwissenschaften.ui.telemetry import publish_metadata
 
+FULL_RUN = "Full run"
+
 
 class CurriculumRun:
     def __init__(self, root: Path, targets: LevelTargets, level: str, seeds_dir: Path, clock: LevelClock) -> None:
@@ -30,7 +32,7 @@ class CurriculumRun:
 
     def begin_episode(self) -> str | None:
         active_state = self.curriculum.active_state()
-        self.start_state = active_state or self.state_names[0]
+        self.start_state = active_state or FULL_RUN
         self.outcome_recorded = active_state is None
         self.episode_steps = 0
         self.segment_return = 0.0
