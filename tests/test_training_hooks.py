@@ -230,17 +230,25 @@ def test_upload_hook_uploads_only_complete_winning_runs(context: RunContext, mon
     monkeypatch.setattr(
         upload_hook.httpx, "post", lambda url, **kwargs: posts.append(kwargs["data"]) or _response("POST", url)
     )
-    hook = upload_hook.UploadHook(context, FakeAgent(), 60.0)
+    hook = upload_hook.UploadHook(context, FakeAgent(), 60.0, frozenset({"Level 1"}))
     hook.settings = SimpleNamespace(url="https://upload.test", api_key="key")
+
+    level_run = _episode(str(recording), 7.0, False, False)
+    level_run.curriculum_state, level_run.curriculum_succeeded = "Level 1", True
+    failed_level_run = _episode(str(recording), 2.0, False, False)
+    failed_level_run.curriculum_state = "Level 1"
 
     hook.on_step(_transition())
     hook.on_episode_end(_episode(str(recording), 9.0, True, True))
     hook.on_episode_end(_episode(str(recording), 9.0, True, False))
     hook.on_episode_end(_episode(str(recording), 1.0, False, True))
+    hook.on_episode_end(level_run)
+    hook.on_episode_end(failed_level_run)
     hook.on_update()
 
     assert [(post["game"], post["level"], post["frames"], post["frame_rate"]) for post in posts] == [
-        ("FakeGame-v0", "Level1", "600", "60.0")
+        ("FakeGame-v0", "Full run", "600", "60.0"),
+        ("FakeGame-v0", "Level 1", "600", "60.0"),
     ]
     assert json.loads(posts[0]["details"])["laya"] == {"checkpoint": "fake/laya"}
     assert hook.pending == []
@@ -255,7 +263,7 @@ def test_upload_hook_keeps_runs_when_the_server_fails(context: RunContext, monke
     monkeypatch.setattr(upload_hook, "system_metadata", lambda: {"cpu": "fake"})
     monkeypatch.setattr(upload_hook, "count_frames", lambda path: 600)
     monkeypatch.setattr(upload_hook.httpx, "post", fail)
-    hook = upload_hook.UploadHook(context, FakeAgent(), 60.0)
+    hook = upload_hook.UploadHook(context, FakeAgent(), 60.0, frozenset({"Level 1"}))
     hook.settings = SimpleNamespace(url="https://upload.test", api_key="key")
 
     hook.on_episode_end(_episode(str(recording), 9.0, True, True))
@@ -265,7 +273,7 @@ def test_upload_hook_keeps_runs_when_the_server_fails(context: RunContext, monke
 
 
 def test_upload_hook_discards_runs_without_an_api_key(context: RunContext):
-    hook = upload_hook.UploadHook(context, FakeAgent(), 60.0)
+    hook = upload_hook.UploadHook(context, FakeAgent(), 60.0, frozenset({"Level 1"}))
 
     hook.on_update()
     hook.on_episode_end(_episode("win.bk2", 9.0, True, True))
@@ -339,6 +347,7 @@ def test_curriculum_upload_hook_sends_the_curriculum_once_per_change(tmp_path: P
 
     assert [url for url, _ in puts] == ["https://upload.test/curricula/FakeGame-v0"] * 2
     first, second = (payload["states"] for _, payload in puts)
+    assert (puts[0][1]["levels"], puts[0][1]["level_times"]) == ({}, {})
     assert first[0] == {
         "name": "Menu",
         "wins": 0,

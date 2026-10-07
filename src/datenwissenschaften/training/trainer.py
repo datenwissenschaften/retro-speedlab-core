@@ -103,7 +103,7 @@ class LayaTrainer:
             TelemetryHook(self.context),
             CheckpointHook(models),
             BestVideoHook(self.context),
-            UploadHook(self.context, models.agent, frame_rate),
+            UploadHook(self.context, models.agent, frame_rate, frozenset(env.curriculum.targets.levels)),
             ReportUploadHook(self.context),
             CurriculumUploadHook(self.context, env.curriculum),
         ]

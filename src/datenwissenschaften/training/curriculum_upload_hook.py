@@ -15,7 +15,7 @@ class CurriculumUploadHook:
         self.context = context
         self.curriculum = curriculum
         self.settings = context.config.upload
-        self.uploaded: list[dict] | None = None
+        self.uploaded: dict | None = None
 
     def on_step(self, transition: Transition) -> None:
         pass
@@ -30,12 +30,17 @@ class CurriculumUploadHook:
             {"name": name, **{field: progress[field] for field in UPLOADED_FIELDS}}
             for name, progress in self.curriculum.curriculum.progress().items()
         ]
-        if states == self.uploaded:
+        payload = {
+            "states": states,
+            "levels": {level: list(members) for level, members in self.curriculum.targets.levels.items()},
+            "level_times": self.curriculum.clock.times(),
+        }
+        if payload == self.uploaded:
             return
         try:
             response = httpx.put(
                 f"{self.settings.url}/curricula/{self.context.game}",
-                json={"states": states},
+                json=payload,
                 headers={"X-API-Key": self.settings.api_key},
                 timeout=TIMEOUT_SECONDS,
             )
@@ -43,4 +48,4 @@ class CurriculumUploadHook:
         except httpx.HTTPError as error:
             logger.error(f"Curriculum upload failed: {error}")
             return
-        self.uploaded = states
+        self.uploaded = payload
