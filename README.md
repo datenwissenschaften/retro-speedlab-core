@@ -136,8 +136,9 @@ The whole model is trainable on a 6 GB GPU:
 `ReverseCurriculum` masters the states of a level in order. When an attempt
 reaches a new state, the emulator state is saved as that state's checkpoint;
 eight wins master a state. A win only counts if it takes at most 25 % more
-steps than the fastest win of that state so far, so every faster win tightens
-the limit and mastery means fast, not just lucky. From then on attempts start from the checkpoint
+steps than the median of that state's last 8 wins, so faster wins pull the
+limit down and mastery means fast and consistent, while one lucky fast win
+never blocks it. From then on attempts start from the checkpoint
 of the first unmastered state, so Laya practises the hard part instead of
 replaying the easy one. Mastery is never lost; a checkpoint that keeps failing
 is rebuilt from the nearest earlier mastered checkpoint.

@@ -3,6 +3,7 @@ from __future__ import annotations
 import fcntl
 import math
 import os
+import statistics
 from collections.abc import Sequence
 from contextlib import contextmanager
 from pathlib import Path
@@ -77,12 +78,14 @@ class ReverseCurriculum:
     def record_success(self, state_name: str, episode_steps: int) -> bool:
         self._require_state(state_name)
         with self._lock(state_name):
-            if self.is_mastered(state_name) or not self.is_fast_enough(state_name, episode_steps):
+            if self.is_mastered(state_name):
+                return False
+            fast_enough = self.is_fast_enough(state_name, episode_steps)
+            recent = [*self.recent_win_steps(state_name), episode_steps][-self.WIN_TARGET :]
+            self._atomic_write(self._win_steps_path(state_name), " ".join(map(str, recent)).encode("utf-8"))
+            if not fast_enough:
                 return False
             self._record_longest_attempt(state_name, episode_steps)
-            best = self.best_win_steps(state_name)
-            fastest = episode_steps if best is None else min(best, episode_steps)
-            self._atomic_write(self._best_win_path(state_name), str(fastest).encode("utf-8"))
             target = self.win_target(state_name)
             wins = min(target, self.wins(state_name) + 1)
             self._atomic_write(self._success_path(state_name), str(wins).encode("utf-8"))
@@ -90,13 +93,14 @@ class ReverseCurriculum:
             mastered = wins >= target
             return mastered
 
-    def best_win_steps(self, state_name: str) -> int | None:
+    def recent_win_steps(self, state_name: str) -> list[int]:
         self._require_state(state_name)
-        return self._read_int(self._best_win_path(state_name)) or None
+        path = self._win_steps_path(state_name)
+        return [int(steps) for steps in path.read_text(encoding="utf-8").split()] if path.is_file() else []
 
     def step_limit(self, state_name: str) -> int | None:
-        best = self.best_win_steps(state_name)
-        return None if best is None else math.floor(best * self.SPEED_MARGIN)
+        recent = self.recent_win_steps(state_name)
+        return math.floor(statistics.median(recent) * self.SPEED_MARGIN) if recent else None
 
     def is_fast_enough(self, state_name: str, episode_steps: int) -> bool:
         limit = self.step_limit(state_name)
@@ -184,7 +188,7 @@ class ReverseCurriculum:
                 "best_checkpoint_score": self.best_score(state_name),
                 "last_checkpoint_score": self.last_score(state_name),
                 "typical_episode_steps": self.typical_steps(state_name),
-                "best_win_steps": self.best_win_steps(state_name),
+                "win_step_limit": self.step_limit(state_name),
                 "mastered": self.is_mastered(state_name),
                 "has_checkpoint": self.has_checkpoint(state_name),
                 "active": state_name == active_state,
@@ -214,8 +218,8 @@ class ReverseCurriculum:
     def _last_score_path(self, state_name: str) -> Path:
         return self.root / f"{state_name}.last_score"
 
-    def _best_win_path(self, state_name: str) -> Path:
-        return self.root / f"{state_name}.best_win_steps"
+    def _win_steps_path(self, state_name: str) -> Path:
+        return self.root / f"{state_name}.win_steps"
 
     def _attempt_steps_path(self, state_name: str) -> Path:
         return self.root / f"{state_name}.attempt_steps"

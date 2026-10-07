@@ -15,10 +15,19 @@ METADATA_SUFFIX = ".rollout.json"
 
 
 class BestVideoHook:
-    def __init__(self, context: RunContext) -> None:
+    def __init__(self, context: RunContext, curricula: frozenset[str]) -> None:
         self.context = context
         self.episodes: list[EpisodeRecord] = []
         self.updates = 0
+        self._forget_removed(curricula)
+
+    def _forget_removed(self, curricula: frozenset[str]) -> None:
+        for metadata_path in self.context.record_dir.glob(f"*{METADATA_SUFFIX}"):
+            if json.loads(metadata_path.read_text(encoding="utf-8"))["curriculum"] in curricula:
+                continue
+            logger.info(f"Deleting the video {metadata_path.name}: the curriculum no longer has its state")
+            metadata_path.with_name(metadata_path.name.removesuffix(METADATA_SUFFIX) + ".mp4").unlink(missing_ok=True)
+            metadata_path.unlink()
 
     def on_step(self, transition: Transition) -> None:
         pass

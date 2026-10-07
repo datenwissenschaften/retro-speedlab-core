@@ -18,10 +18,11 @@ class LiveFeed:
         self._store: ReplayStore | None = None
         self._start_generation()
 
-    def keep_replays_in(self, directory: Path) -> None:
+    def keep_replays_in(self, directory: Path, curricula: frozenset[str]) -> None:
         with self._lock:
             self._store = ReplayStore(directory)
-            self._replays.update(self._store.load())
+            self._replays = {name: replay for name, replay in self._replays.items() if name in curricula}
+            self._replays.update(self._store.load(curricula))
 
     def clear(self) -> None:
         with self._lock:
@@ -73,7 +74,7 @@ class LiveFeed:
 
     def _keep_best(self, episode: dict[str, Any]) -> None:
         curriculum = episode["result"]["curriculum"]
-        if curriculum not in self._replays or episode["result"]["score"] > self._replays[curriculum]["result"]["score"]:
+        if curriculum not in self._replays or _rank(episode) > _rank(self._replays[curriculum]):
             self._replays[curriculum] = episode
             if self._store is not None:
                 self._store.save(curriculum, episode)
@@ -103,6 +104,11 @@ class LiveFeed:
                 if episode["id"] == episode_id:
                     return episode
         raise KeyError(episode_id)
+
+
+def _rank(episode: dict[str, Any]) -> tuple[bool, float]:
+    result = episode["result"]
+    return (True, -len(episode["statuses"])) if result["succeeded"] else (False, result["score"])
 
 
 def _in_progress(status: dict[str, Any]) -> dict[str, Any]:

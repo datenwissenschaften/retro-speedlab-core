@@ -100,11 +100,13 @@ class CurriculumRun:
         self.outcome_recorded = True
         if self.targets.is_level(self.start_state):
             self.clock.record(self.start_state, self.episode_steps)
-        if not self.curriculum.is_fast_enough(self.start_state, self.episode_steps):
-            limit = self.curriculum.step_limit(self.start_state)
-            logger.info(f"Too slow for {self.start_state}: {self.episode_steps} steps, limit {limit}")
-            return False
+        limit = self.curriculum.step_limit(self.start_state)
+        fast_enough = self.curriculum.is_fast_enough(self.start_state, self.episode_steps)
         mastered = self.curriculum.record_success(self.start_state, self.episode_steps)
+        if not fast_enough:
+            logger.info(f"Too slow for {self.start_state}: {self.episode_steps} steps, limit {limit}")
+            self.publish()
+            return False
         wins, target = self.curriculum.wins(self.start_state), self.curriculum.win_target(self.start_state)
         logger.info(f"Curriculum win for {self.start_state}: {wins}/{target}{', mastered' if mastered else ''}")
         self.publish()

@@ -190,7 +190,7 @@ def test_video_hook_renders_only_new_best_runs(context: RunContext, monkeypatch)
         Path(command[-1]).with_suffix(".mp4").write_bytes(b"video")
 
     monkeypatch.setattr(video_hook.subprocess, "run", render)
-    hook = video_hook.BestVideoHook(context)
+    hook = video_hook.BestVideoHook(context, frozenset({"Survive"}))
 
     hook.on_step(_transition())
     hook.on_episode_end(_episode(str(recording), 3.0, False, True))
@@ -213,7 +213,7 @@ def test_video_hook_skips_missing_recordings_and_survives_render_failures(contex
         raise subprocess.CalledProcessError(1, command, stderr="boom")
 
     monkeypatch.setattr(video_hook.subprocess, "run", fail)
-    hook = video_hook.BestVideoHook(context)
+    hook = video_hook.BestVideoHook(context, frozenset({"Survive"}))
 
     hook.on_episode_end(_episode(str(context.record_dir / "missing.bk2"), 1.0, False, True))
     hook.on_update()
@@ -221,6 +221,18 @@ def test_video_hook_skips_missing_recordings_and_survives_render_failures(contex
     hook.on_update()
 
     assert not (context.record_dir / "broken.mp4").exists()
+
+
+def test_video_hook_deletes_the_videos_of_removed_states(context: RunContext):
+    context.record_dir.mkdir(parents=True)
+    for name, curriculum in (("kept", "Survive"), ("merged", "Grow")):
+        (context.record_dir / f"{name}.mp4").write_bytes(b"video")
+        metadata = json.dumps({"curriculum": curriculum, "score": 1.0})
+        (context.record_dir / f"{name}{video_hook.METADATA_SUFFIX}").write_text(metadata, encoding="utf-8")
+
+    video_hook.BestVideoHook(context, frozenset({"Survive"}))
+
+    assert sorted(path.name for path in context.record_dir.iterdir()) == ["kept.mp4", "kept.rollout.json"]
 
 
 def _response(method: str, url: str, **kwargs) -> httpx.Response:

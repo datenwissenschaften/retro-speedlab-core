@@ -5,6 +5,7 @@ from pathlib import Path
 import torch
 
 from datenwissenschaften.accelerator import configure_accelerator
+from datenwissenschaften.environment.curriculum_run import FULL_RUN
 from datenwissenschaften.environment.demonstration import load_demonstrations
 from datenwissenschaften.environment.factory import POWER_ON, make_environment
 from datenwissenschaften.environment.levels import level_map
@@ -54,7 +55,8 @@ class LayaTrainer:
     def train(self) -> None:
         database = JsonDatabase(self.config.paths.database_path)
         configure_history(self.config.training.game_identity, database)
-        live_feed.keep_replays_in(self.config.paths.cache_dir / "replays" / self.config.training.game_identity)
+        replays = self.config.paths.cache_dir / "replays" / self.config.training.game_identity
+        live_feed.keep_replays_in(replays, self._curricula())
         while True:
             env = make_environment(self.wrapper_cls, self.config, MAIN_ENVIRONMENT)
             env.speedrun = self.speedrun = level_full_run_wins(POWER_ON) >= BEATEN_FULL_RUN_WINS
@@ -93,6 +95,10 @@ class LayaTrainer:
         classes = (self.wrapper_cls.start_state_cls, *self.wrapper_cls.state_classes)
         return tuple(dict.fromkeys(state_cls.__name__ for state_cls in classes))
 
+    def _curricula(self) -> frozenset[str]:
+        levels = level_map(self.wrapper_cls.levels, self.wrapper_cls.state_classes)
+        return frozenset((*self._phases(), *levels, FULL_RUN))
+
     def _models(self) -> StateModels:
         network = LayaNetwork(
             self.config.laya.checkpoint, self.wrapper_cls.action_descriptions, configure_accelerator()
@@ -108,7 +114,7 @@ class LayaTrainer:
             *(stream if self.config.ui.twitch else []),
             TelemetryHook(self.context),
             CheckpointHook(models),
-            BestVideoHook(self.context),
+            BestVideoHook(self.context, self._curricula()),
             UploadHook(self.context, models.agent, frame_rate, frozenset(env.curriculum.targets.levels)),
             ReportUploadHook(self.context),
             CurriculumUploadHook(self.context, env.curriculum),

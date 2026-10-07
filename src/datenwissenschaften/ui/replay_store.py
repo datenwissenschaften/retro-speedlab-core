@@ -13,9 +13,13 @@ class ReplayStore:
         self.directory = directory
         directory.mkdir(parents=True, exist_ok=True)
 
-    def load(self) -> dict[str, dict[str, Any]]:
+    def load(self, curricula: frozenset[str]) -> dict[str, dict[str, Any]]:
         replays = {}
         for path in sorted(self.directory.glob(f"*{REPLAY_SUFFIX}")):
+            if path.stem not in curricula:
+                logger.info(f"Deleting the replay of {path.stem}: the curriculum no longer has it")
+                path.unlink()
+                continue
             episode = msgspec.msgpack.decode(path.read_bytes())
             if "video" not in episode:
                 logger.warning(f"Deleting {path.name}: it stores frames instead of a video")

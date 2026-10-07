@@ -145,14 +145,25 @@ def test_success_target_is_the_same_for_every_state(tmp_path: Path):
     assert curriculum.progress()["Finish"]["win_target"] == ReverseCurriculum.WIN_TARGET
 
 
-def test_a_win_only_counts_within_the_speed_margin_of_the_fastest_win(tmp_path: Path):
+def test_a_win_only_counts_within_the_speed_margin_of_the_median_recent_win(tmp_path: Path):
     curriculum = ReverseCurriculum(tmp_path, ("Start", "Finish"))
-    curriculum.record_success("Start", 100)
     curriculum.record_success("Start", 80)
-
-    assert curriculum.step_limit("Start") == 100
-    assert curriculum.record_success("Start", 101) is False
-    assert curriculum.wins("Start") == 2
     curriculum.record_success("Start", 100)
+
+    assert curriculum.step_limit("Start") == 112
+    assert curriculum.record_success("Start", 400) is False
+    assert curriculum.wins("Start") == 2
+    assert curriculum.step_limit("Start") == 125
+    curriculum.record_success("Start", 120)
     assert curriculum.wins("Start") == 3
-    assert curriculum.progress()["Start"]["best_win_steps"] == 80
+    assert curriculum.progress()["Start"]["win_step_limit"] == 137
+
+
+def test_one_lucky_fast_win_never_blocks_mastery(tmp_path: Path):
+    curriculum = ReverseCurriculum(tmp_path, ("Start", "Finish"))
+    curriculum.record_success("Start", 50)
+
+    while not curriculum.is_mastered("Start"):
+        curriculum.record_success("Start", 4000)
+
+    assert curriculum.recent_win_steps("Start")[-1] == 4000
