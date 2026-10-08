@@ -1,5 +1,6 @@
 import json
 import subprocess
+import time
 from pathlib import Path
 
 import httpx
@@ -15,6 +16,8 @@ from datenwissenschaften.training.system import system_metadata
 from datenwissenschaften.training.video_render import count_frames, render_video
 
 TIMEOUT_SECONDS = 120
+FIRST_RETRY_SECONDS = 60.0
+MAX_RETRY_SECONDS = 3600.0
 
 
 class UploadHook:
@@ -25,6 +28,8 @@ class UploadHook:
         self.settings = context.config.upload
         self.levels = levels
         self.pending: list[tuple[EpisodeRecord, str]] = []
+        self.failures = 0
+        self.retry_at = 0.0
 
     def on_step(self, transition: Transition) -> None:
         pass
@@ -36,7 +41,7 @@ class UploadHook:
             self.pending.append((episode, FULL_RUN))
 
     def on_update(self) -> None:
-        if not self.pending:
+        if not self.pending or time.monotonic() < self.retry_at:
             return
         if self.settings.api_key is None:
             logger.info("Upload API key is not configured. Skipping episode upload.")
@@ -46,8 +51,12 @@ class UploadHook:
             for beaten in list(self.pending):
                 self._upload(*beaten, self.settings.api_key)
                 self.pending.remove(beaten)
+            self.failures = 0
         except (httpx.HTTPError, subprocess.CalledProcessError) as error:
-            logger.error(f"Episode upload failed: {error}")
+            self.failures += 1
+            delay = min(FIRST_RETRY_SECONDS * 2 ** (self.failures - 1), MAX_RETRY_SECONDS)
+            self.retry_at = time.monotonic() + delay
+            logger.error(f"Episode upload failed: {error}; retrying in {delay:.0f} s")
 
     def _details(self, episode: EpisodeRecord) -> str:
         details = {

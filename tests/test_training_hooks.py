@@ -298,6 +298,31 @@ def test_upload_hook_keeps_runs_when_the_server_fails(context: RunContext, monke
     assert len(hook.pending) == 1
 
 
+def test_a_failed_upload_waits_longer_before_each_retry(context: RunContext, tmp_path: Path, monkeypatch):
+    attempts = []
+
+    def fail(url, **kwargs):
+        attempts.append(url)
+        raise httpx.HTTPStatusError("too large", request=None, response=None)
+
+    clock = iter([0.0, 0.0, 30.0, 61.0, 61.0, 120.0, 182.0, 182.0])
+    recording = tmp_path / "win.bk2"
+    recording.with_suffix(".mp4").write_bytes(b"video")
+    monkeypatch.setattr(upload_hook, "system_metadata", lambda: {"cpu": "fake"})
+    monkeypatch.setattr(upload_hook, "count_frames", lambda path: 600)
+    monkeypatch.setattr(upload_hook.httpx, "post", fail)
+    monkeypatch.setattr(upload_hook.time, "monotonic", lambda: next(clock))
+    hook = upload_hook.UploadHook(context, FakeAgent(), 60.0, frozenset({"Level 1"}))
+    hook.settings = SimpleNamespace(url="https://upload.test", api_key="key")
+    hook.on_episode_end(_episode(str(recording), 9.0, True, True))
+
+    for _ in range(5):
+        hook.on_update()
+
+    assert len(attempts) == 3
+    assert hook.failures == 3
+
+
 def test_upload_hook_discards_runs_without_an_api_key(context: RunContext):
     hook = upload_hook.UploadHook(context, FakeAgent(), 60.0, frozenset({"Level 1"}))
 
