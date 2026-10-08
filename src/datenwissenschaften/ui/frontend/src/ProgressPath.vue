@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { words } from './naming.js'
-import { pathNodes, splitDelta, splitTime } from './progressPath.js'
+import { PATH_WINDOW, pathNodes, pathWindow, splitDelta, splitTime } from './progressPath.js'
 
 const props = defineProps({
   curriculum: { type: Object, required: true },
@@ -12,16 +12,16 @@ const props = defineProps({
   models: { type: Object, required: true },
 })
 
-const nodes = computed(() => pathNodes(props.curriculum, props.levels))
+const nodes = computed(() => pathWindow(pathNodes(props.curriculum, props.levels), PATH_WINDOW))
 const winWidth = phase => `${Math.round(Math.min(1, phase.wins / phase.win_target) * 100)}%`
 const stalled = name => props.models[name]?.stalled === true
 const note = (name, phase) => {
   if (phase.mastered) return 'mastered'
-  if (stalled(name)) return 'stalled · not learning'
-  const start = phase.has_checkpoint ? 'checkpoint ready' : 'no checkpoint yet'
-  return phase.active ? `practising · ${phase.wins} / ${phase.win_target} wins` : start
+  if (stalled(name)) return 'stalled'
+  if (phase.active) return `${phase.wins} / ${phase.win_target} wins`
+  return phase.has_checkpoint ? 'ready' : 'not reached'
 }
-const levelNote = (name, phase) => (phase.mastered ? 'beaten' : `whole level · ${phase.wins} / ${phase.win_target}`)
+const levelNote = (name, phase) => (phase.mastered ? 'beaten' : `level · ${phase.wins} / ${phase.win_target}`)
 const best = name => props.times[name]?.best_seconds ?? null
 const last = name => props.times[name]?.last_seconds ?? null
 const runningHere = name => props.running?.level === name
@@ -31,12 +31,13 @@ const runningHere = name => props.running?.level === name
   <section class="path-panel">
     <span class="path-title">Curriculum · this attempt starts at {{ playing ? words(playing) : 'power-on' }}</span>
     <ol class="path-track">
+      <template v-for="node in nodes" :key="node.key || node.name">
+      <li v-if="node.gap" class="path-gap" aria-label="More curriculum states">…</li>
       <li
-        v-for="(node, index) in nodes"
-        :key="node.name"
+        v-else
         :class="['path-node', { reached: node.phase.active || node.phase.mastered, current: node.phase.active, mastered: node.phase.mastered, level: node.level, stalled: stalled(node.name) }]"
       >
-        <span class="path-dot">{{ node.phase.mastered ? '✓' : index + 1 }}</span>
+        <span class="path-dot">{{ node.phase.mastered ? '✓' : node.number }}</span>
         <strong class="path-label">{{ words(node.name) }}</strong>
         <span class="path-skill"><span :style="{ width: winWidth(node.phase) }"></span></span>
         <small v-if="!node.level" class="path-note">{{ note(node.name, node.phase) }}</small>
@@ -49,6 +50,7 @@ const runningHere = name => props.running?.level === name
           <small v-else class="path-note">{{ levelNote(node.name, node.phase) }}</small>
         </span>
       </li>
+      </template>
     </ol>
   </section>
 </template>

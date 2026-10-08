@@ -140,7 +140,10 @@ onBeforeUnmount(() => {
       <div v-else key="best" class="spotlight-slide">
         <span class="sight-title">{{ fresh ? '★ New best attempt' : 'Best attempt so far' }}</span>
         <figure v-if="best" class="best-attempt">
-          <video :key="best.path" :src="source(best)" autoplay muted loop playsinline></video>
+          <div class="best-crt">
+            <video :key="best.path" class="crt-picture" :src="source(best)" autoplay muted loop playsinline></video>
+            <div class="crt-glass" aria-hidden="true"></div>
+          </div>
           <figcaption>
             <b>Reward {{ best.score.toFixed(1) }}</b>
             <span>{{ words(best.curriculum) }} · {{ age(best.recorded_at) }}</span>

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { levelOf, pathNodes, splitDelta, splitTime } from './progressPath.js'
+import { levelOf, PATH_WINDOW, pathNodes, pathWindow, splitDelta, splitTime } from './progressPath.js'
 
 const phase = mastered => ({ mastered, wins: mastered ? 8 : 2, win_target: 8 })
 const LEVELS = { 'Level 1': ['Play', 'Grow', 'Door'], 'Level 2': ['Level2', 'Island2'] }
@@ -33,4 +33,14 @@ test('the level shown is the level of the state being played', () => {
   assert.equal(levelOf('Island2', LEVELS), 'Level 2')
   assert.equal(levelOf('Menu', LEVELS), 'Menu')
   assert.equal(levelOf(undefined, LEVELS), '—')
+})
+
+test('at most ten states show at once around the one Laya practises, with … for the rest', () => {
+  const names = Array.from({ length: 14 }, (_, index) => `S${index + 1}`)
+  const curriculum = Object.fromEntries(names.map((name, index) => [name, { mastered: index < 6, active: index === 6, wins: 0, win_target: 8 }]))
+  const shown = pathWindow(pathNodes(curriculum, {}), PATH_WINDOW)
+  assert.deepEqual(shown.map(node => node.name), ['…', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10', 'S11', 'S12', 'S13', 'S14'])
+  assert.equal(shown[3].number, 7)
+  const early = pathWindow(pathNodes({ ...curriculum, S1: { ...curriculum.S1, mastered: false, active: true }, S7: { ...curriculum.S7, active: false } }, {}), PATH_WINDOW)
+  assert.deepEqual(early.map(node => node.name), [...names.slice(0, 10), '…'])
 })

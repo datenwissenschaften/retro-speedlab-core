@@ -98,20 +98,23 @@
   animation: screen-scan 4.2s linear infinite;
 }
 .stream-video,
-.crt-glass {
+.stream-screen .crt-glass {
   position: absolute;
   inset: 12px;
   width: calc(100% - 24px);
   height: calc(100% - 24px);
   border-radius: 11% / 14%;
 }
-.stream-video {
+.crt-picture {
   display: block;
   object-fit: contain;
   image-rendering: pixelated;
   background: #050405;
   filter: sepia(0.22) saturate(1.15) contrast(1.1) brightness(1.08);
 }
+.best-crt { position: relative; min-height: 0; overflow: hidden; background: #000; border: 1px solid rgba(230, 184, 92, 0.55); }
+.best-crt .crt-picture,
+.best-crt .crt-glass { position: absolute; inset: 5px; width: calc(100% - 10px); height: calc(100% - 10px); border-radius: 11% / 14%; }
 .crt-glass {
   z-index: 10;
   pointer-events: none;
@@ -266,7 +269,9 @@
 .brain-bar { height: 5px; margin: 4px 0 2px; background: rgba(255, 248, 232, 0.1); overflow: hidden; }
 .brain-bar span { display: block; height: 100%; background: linear-gradient(90deg, var(--copper), var(--brass)); transition: width 0.12s linear; }
 .brain-options li.chosen .brain-bar span { background: linear-gradient(90deg, var(--brass), var(--mint)); }
-.brain-ram { display: grid; flex-shrink: 0; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--rule); font-size: 0.68rem; }
+.brain-ram-window { --ram-row: 18px; flex-shrink: 0; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--rule); overflow: hidden; max-height: calc(10 * var(--ram-row) + 5px); }
+.brain-ram { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-auto-rows: 14px; gap: 4px 12px; font-size: 0.68rem; line-height: 14px; }
+.brain-ram-window.scrolling .brain-ram { animation: ram-scroll calc(var(--hidden-rows) * 2s + 6s) ease-in-out infinite alternate; }
 .brain-ram dt { color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
 .brain-ram dd { color: var(--ivory); font-weight: 700; text-align: right; white-space: nowrap; }
 .brain-ram dd.flash { animation: stream-flash 0.5s ease-out; }
@@ -292,7 +297,8 @@
 .path-label { max-width: 100%; overflow: hidden; color: var(--ivory); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .path-skill { width: 80%; height: 5px; background: rgba(255, 248, 232, 0.1); overflow: hidden; }
 .path-skill span { display: block; height: 100%; background: linear-gradient(90deg, var(--copper), var(--brass), var(--mint)); transition: width 0.6s ease; }
-.path-note { color: var(--muted); font-size: 0.66rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.path-note { max-width: 100%; overflow: hidden; color: var(--muted); font-size: 0.66rem; letter-spacing: 0.04em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.path-gap { align-self: start; flex: 0 0 28px; color: var(--muted); font-family: var(--font-pixel); font-size: 0.9rem; line-height: 36px; text-align: center; }
 .path-node.stalled .path-note { color: var(--danger); }
 .path-node.stalled .path-dot { border-color: var(--danger); }
 .path-split { display: grid; justify-items: center; gap: 1px; }
@@ -304,7 +310,6 @@
 .spotlight-panel.fresh { border-color: var(--mint); }
 .spotlight-slide { display: grid; grid-template-rows: auto 1fr auto; gap: 8px; height: 100%; }
 .best-attempt { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 6px; min-height: 0; grid-row: 2 / 4; }
-.best-attempt video { width: 100%; height: 100%; min-height: 0; object-fit: contain; background: #000; border: 1px solid var(--rule); image-rendering: pixelated; }
 .best-attempt figcaption { display: grid; gap: 2px; text-align: center; }
 .best-attempt figcaption b { color: var(--brass-light); font-family: var(--font-pixel); font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; }
 .best-attempt figcaption span { color: var(--muted); font-size: 0.72rem; }
@@ -369,6 +374,7 @@
 
 @keyframes signal-jump { to { height: 100%; } }
 @keyframes screen-scan { to { transform: translateY(520%); } }
+@keyframes ram-scroll { 0%, 20% { transform: translateY(0); } 80%, 100% { transform: translateY(calc(-1 * var(--hidden-rows) * var(--ram-row))); } }
 @keyframes path-pulse { 50% { box-shadow: inset 0 0 0 2px var(--brass-light); filter: brightness(1.15); } }
 @keyframes lab-in { from { opacity: 0; transform: translateY(6px); } }
 @keyframes stream-blink { 50% { opacity: 0.15; } }

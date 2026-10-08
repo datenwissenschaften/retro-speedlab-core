@@ -12,7 +12,25 @@ export const pathNodes = (curriculum, levels) => {
   const shown = new Set(beaten.map(([level]) => level))
   return Object.entries(curriculum)
     .filter(([name]) => (name in levels ? shown.has(name) : !hidden.has(name)))
-    .map(([name, phase]) => ({ name, phase, level: name in levels }))
+    .map(([name, phase], index) => ({ name, phase, level: name in levels, number: index + 1 }))
+}
+
+export const PATH_WINDOW = 10
+const STATES_BEFORE_FOCUS = 2
+const GAP = { name: '…', gap: true }
+
+const focusOf = nodes => {
+  const active = nodes.findIndex(node => node.phase.active)
+  if (active >= 0) return active
+  const open = nodes.findIndex(node => !node.phase.mastered)
+  return open >= 0 ? open : nodes.length - 1
+}
+
+export const pathWindow = (nodes, size) => {
+  if (nodes.length <= size) return nodes
+  const start = Math.min(Math.max(0, focusOf(nodes) - STATES_BEFORE_FOCUS), nodes.length - size)
+  const end = start + size
+  return [...(start > 0 ? [{ ...GAP, key: 'before' }] : []), ...nodes.slice(start, end), ...(end < nodes.length ? [{ ...GAP, key: 'after' }] : [])]
 }
 
 export const splitTime = seconds => {

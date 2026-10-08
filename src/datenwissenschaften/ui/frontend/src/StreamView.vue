@@ -172,6 +172,8 @@ const confidence = computed(() => Math.max(0, ...probabilities.value.map(([, p])
 const isSighting = value => Boolean(value) && typeof value === 'object' && 'visible' in value
 const ramState = computed(() => Object.entries(live.value.ram || {})
   .filter(([name, value]) => !isSighting(value) && name !== 'snake_visible'))
+const RAM_ROWS = 10
+const hiddenRamRows = computed(() => Math.max(0, ramState.value.length - RAM_ROWS))
 
 watch(release, current => {
   if (!current) return
@@ -228,7 +230,7 @@ watch(() => live.value.ram, (current, previous) => {
       </div>
 
       <div class="stream-screen">
-        <video ref="screen" class="stream-video" aria-label="Replayed gameplay" muted playsinline></video>
+        <video ref="screen" class="stream-video crt-picture" aria-label="Replayed gameplay" muted playsinline></video>
         <div class="crt-glass" aria-hidden="true"></div>
         <Transition name="fade">
           <div v-if="snapshot.server && !twitch" class="stream-waiting">
@@ -273,11 +275,13 @@ watch(() => live.value.ram, (current, previous) => {
           </li>
         </ul>
         <span class="stream-ad-url">{{ percent(confidence) }} confidence · {{ probabilities.length }} actions</span>
-        <dl class="brain-ram">
-          <template v-for="[name, value] in ramState" :key="name">
-            <dt>{{ label(name) }}</dt><dd :class="{ flash: changedFields.has(name) }">{{ readable(value) }}</dd>
-          </template>
-        </dl>
+        <div :class="['brain-ram-window', { scrolling: hiddenRamRows > 0 }]" :style="{ '--hidden-rows': hiddenRamRows }">
+          <dl class="brain-ram">
+            <template v-for="[name, value] in ramState" :key="name">
+              <dt>{{ label(name) }}</dt><dd :class="{ flash: changedFields.has(name) }">{{ readable(value) }}</dd>
+            </template>
+          </dl>
+        </div>
       </aside>
 
       <div class="stream-bottom">
