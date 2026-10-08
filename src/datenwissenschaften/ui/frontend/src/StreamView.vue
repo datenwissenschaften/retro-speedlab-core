@@ -40,7 +40,6 @@ const snapshot = ref({ metadata: {}, summary: {} })
 const connected = ref(false)
 const scale = ref(1)
 const now = ref(new Date())
-const changedFields = ref(new Set())
 let snapshotTimer
 let clockTimer
 let labLineTimer
@@ -185,11 +184,6 @@ watch(release, current => {
   reloadPending = true
   if (waiting.value) reload()
 })
-
-watch(() => live.value.ram, (current, previous) => {
-  if (!current || !previous) return
-  changedFields.value = new Set(Object.keys(current).filter(key => JSON.stringify(current[key]) !== JSON.stringify(previous[key])))
-})
 </script>
 
 <template>
@@ -278,7 +272,7 @@ watch(() => live.value.ram, (current, previous) => {
         <div :class="['brain-ram-window', { scrolling: hiddenRamRows > 0 }]" :style="{ '--hidden-rows': hiddenRamRows }">
           <dl class="brain-ram">
             <template v-for="[name, value] in ramState" :key="name">
-              <dt>{{ label(name) }}</dt><dd :class="{ flash: changedFields.has(name) }">{{ readable(value) }}</dd>
+              <dt>{{ label(name) }}</dt><dd>{{ readable(value) }}</dd>
             </template>
           </dl>
         </div>
