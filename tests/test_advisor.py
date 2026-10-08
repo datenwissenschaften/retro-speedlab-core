@@ -23,6 +23,14 @@ def advisors(tmp_path: Path) -> Advisors:
     return Advisors(ACTIONS, "cpu", lambda state: tmp_path / state / "advisor.pt")
 
 
+def backplay_depth(root: Path):
+    return lambda state: root / "backplay" / state
+
+
+def no_backplay(root: Path) -> Backplay:
+    return Backplay({}, (), backplay_depth(root))
+
+
 def test_inputs_hold_the_scaled_ram_and_a_fixed_number_of_fact_slots():
     inputs = encode(np.array([0, 255], dtype=np.uint8), {"lives": 3, "door": Offset(-4, 2), "target": "bell"})
 
@@ -62,7 +70,7 @@ class EndlessPractice:
 
 def test_the_coach_practises_until_stopped_and_learns_every_full_rollout(tmp_path: Path):
     pool, practice = advisors(tmp_path), EndlessPractice()
-    coach = Coach(pool, practice, LabRun(tmp_path / "no-lab-run"), lambda state: [], Backplay({}, ()))
+    coach = Coach(pool, practice, LabRun(tmp_path / "no-lab-run"), lambda state: [], no_backplay(tmp_path))
     deadline = time.monotonic() + COACH_WAIT_SECONDS
     while practice.steps < ROLLOUT_STEPS and time.monotonic() < deadline:
         coach.check()
@@ -86,7 +94,7 @@ class ExitingPractice(EndlessPractice):
 
 def test_the_coach_counts_where_practice_leaves_each_state(tmp_path: Path):
     pool, practice = advisors(tmp_path), ExitingPractice()
-    coach = Coach(pool, practice, LabRun(tmp_path / "no-lab-run"), lambda state: [], Backplay({}, ()))
+    coach = Coach(pool, practice, LabRun(tmp_path / "no-lab-run"), lambda state: [], no_backplay(tmp_path))
     deadline = time.monotonic() + COACH_WAIT_SECONDS
     while practice.steps < 10 and time.monotonic() < deadline:
         coach.check()
@@ -117,7 +125,7 @@ class RestartablePractice(EndlessPractice):
 
 def test_ended_practice_restarts_from_a_backplay_point_and_its_exit_counts_as_success(tmp_path: Path):
     pool, practice = advisors(tmp_path), RestartablePractice()
-    backplay = Backplay({"Play": [b"near the door"]}, ("Play", "Door"))
+    backplay = Backplay({"Play": [b"near the door"]}, ("Play", "Door"), backplay_depth(tmp_path))
     coach = Coach(pool, practice, LabRun(tmp_path / "no-lab-run"), lambda state: [], backplay)
     deadline = time.monotonic() + COACH_WAIT_SECONDS
     while practice.steps < 5 and time.monotonic() < deadline:

@@ -102,7 +102,8 @@ class LayaTrainer:
         advisors = Advisors(actions, configure_accelerator(), self.context.advisor_path)
         env.observer.advisor = advisors.advise
         practice = PracticeEnvironments(self.wrapper_cls, self.config, self.speedrun, workers)
-        team = AdvisorTeam(advisors, practice, lab_run, lessons, Backplay(starts, phases(self.wrapper_cls)))
+        backplay = Backplay(starts, phases(self.wrapper_cls), self.context.backplay_path)
+        team = AdvisorTeam(advisors, practice, lab_run, lessons, backplay)
         try:
             hooks = self._hooks(env, models, StoryTeller(story))
             return TrainingSession(env, models, hooks, deadline, lessons, lab_run, team.coach).run()

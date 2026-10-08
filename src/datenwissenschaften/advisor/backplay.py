@@ -1,4 +1,6 @@
 import random
+from collections.abc import Callable
+from pathlib import Path
 
 from loguru import logger
 
@@ -9,10 +11,11 @@ ADVANCE_RATE = 0.5
 
 
 class Backplay:
-    def __init__(self, starts: StartPoints, order: tuple[str, ...]) -> None:
+    def __init__(self, starts: StartPoints, order: tuple[str, ...], path: Callable[[str], Path]) -> None:
         self.starts = {state: points for state, points in starts.items() if points}
         self.order = order
-        self.depth = dict.fromkeys(self.starts, 1)
+        self.path = path
+        self.depth = {state: self._saved_depth(state) for state in self.starts}
         self.outcomes: dict[str, list[bool]] = {state: [] for state in self.starts}
         self.random = random.Random()
 
@@ -34,8 +37,15 @@ class Backplay:
             return
         if sum(outcomes) / len(outcomes) >= ADVANCE_RATE:
             self.depth[state] += 1
+            self.path(state).parent.mkdir(parents=True, exist_ok=True)
+            self.path(state).write_text(str(self.depth[state]), encoding="utf-8")
             logger.info(f"Backplay for {state} starts {self.progress(state)} start points before its exit")
         outcomes.clear()
 
     def progress(self, state: str) -> str:
         return f"{min(self.depth[state], len(self.starts[state]))}/{len(self.starts[state])}"
+
+    def _saved_depth(self, state: str) -> int:
+        if not self.path(state).exists():
+            return 1
+        return int(self.path(state).read_text(encoding="utf-8"))
