@@ -136,7 +136,7 @@ def test_checkpoint_hook_saves_and_publishes_metadata(context: RunContext, monke
     assert published[0][1]["laya"] == {"state": "Survive", "checkpoint": "fake/laya"}
     assert published[1] == (
         "state_models",
-        {"Survive": {"num_timesteps": 7, "entropy_share": 1.0, "explained_variance": 0.25}},
+        {"Survive": {"num_timesteps": 7, "entropy_share": 1.0, "explained_variance": 0.25, "stalled": False}},
     )
 
 

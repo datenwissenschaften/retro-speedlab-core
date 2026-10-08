@@ -11,3 +11,4 @@ class Decision:
     value: float
     options: torch.Tensor
     pooled: torch.Tensor
+    advice: int | None

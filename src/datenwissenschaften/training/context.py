@@ -4,6 +4,7 @@ from pathlib import Path
 from datenwissenschaften.settings import RetroSpeedlabConfig
 
 MODEL_FILENAME = "laya.pt"
+ADVISOR_FILENAME = "advisor.pt"
 
 
 @dataclass(slots=True, frozen=True)
@@ -29,3 +30,6 @@ class RunContext:
 
     def model_path(self, state_name: str) -> Path:
         return self.model_dir / state_name / MODEL_FILENAME
+
+    def advisor_path(self, state_name: str) -> Path:
+        return self.model_dir / state_name / ADVISOR_FILENAME

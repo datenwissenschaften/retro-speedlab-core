@@ -26,6 +26,15 @@ class NoPractice:
         pass
 
 
+class NoTeam:
+    def __init__(self, advisors, practice, lab_run, lessons) -> None:
+        self.coach = None
+        self.closed = False
+
+    def close(self) -> None:
+        self.closed = True
+
+
 def test_identity_resets_training_when_the_release_changes(tmp_path: Path, monkeypatch):
     resets = []
     monkeypatch.setattr(identity_module, "perform_model_reset", resets.append)
@@ -74,9 +83,10 @@ def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_pa
     agents, ui = [], []
     monkeypatch.setattr(network_module.laya, "load", fake_laya_load)
     monkeypatch.setattr(trainer_module, "configure_accelerator", lambda: "cpu")
-    monkeypatch.setattr(trainer_module, "make_environment", lambda wrapper, config, worker: env)
+    monkeypatch.setattr(trainer_module, "make_environment", lambda wrapper, config, worker, record: env)
     monkeypatch.setattr(identity_module, "perform_model_reset", lambda request: None)
     monkeypatch.setattr(trainer_module, "PracticeEnvironments", NoPractice)
+    monkeypatch.setattr(trainer_module, "AdvisorTeam", NoTeam)
     monkeypatch.setattr(trainer_module, "configure_history", lambda *args, **kwargs: ui.append("history"))
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr(trainer_module, "start_ui", lambda settings, root, reports, digest: ui.append(root))
@@ -129,8 +139,9 @@ def test_trainer_plays_the_full_game_and_speedruns_it_once_beaten(tmp_path: Path
     monkeypatch.setattr(trainer_module, "configure_accelerator", lambda: "cpu")
     monkeypatch.setattr(identity_module, "perform_model_reset", lambda request: None)
     monkeypatch.setattr(trainer_module, "PracticeEnvironments", NoPractice)
+    monkeypatch.setattr(trainer_module, "AdvisorTeam", NoTeam)
     monkeypatch.setattr(
-        trainer_module, "make_environment", lambda wrapper, config, worker: fake_environment(tmp_path, [(3, 0)])
+        trainer_module, "make_environment", lambda wrapper, config, worker, record: fake_environment(tmp_path, [(3, 0)])
     )
 
     def run(session):

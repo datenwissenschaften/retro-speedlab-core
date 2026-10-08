@@ -3,7 +3,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from datenwissenschaften.environment.wrapper import Observation
+from datenwissenschaften.environment.observer import Observation
 from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.training.episode_record import EpisodeRecord
 

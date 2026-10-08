@@ -5,14 +5,17 @@ import torch
 
 from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.laya.heads import Heads
-from datenwissenschaften.laya.imitation import DemonstrationStep
-from datenwissenschaften.laya.network import LayaNetwork
+from datenwissenschaften.laya.imitation import DemonstrationStep, imitation_loss
+from datenwissenschaften.laya.network import Features, LayaNetwork
 from datenwissenschaften.laya.policy import Policy
-from datenwissenschaften.laya.ppo import MINIBATCH, Demonstration, PpoLearner
-from datenwissenschaften.laya.rollout import Rollout
+from datenwissenschaften.ppo import PpoLearner
+from datenwissenschaften.rollout import Rollout
+
+LEARNING_RATE = 3e-4
+MINIBATCH = 64
+NO_ADVICE = -1
 
 Observation = dict[str, str]
-Features = tuple[torch.Tensor, torch.Tensor]
 
 
 class LayaAgent:
@@ -35,12 +38,12 @@ class LayaAgent:
         return self.network.features(states, [observation["question"] for observation in observations])
 
     @torch.no_grad()
-    def decide(self, features: Features, exploration: float) -> list[Decision]:
+    def decide(self, features: Features, exploration: float, advice: list[int | None]) -> list[Decision]:
         options, pooled = features
         probabilities = torch.softmax(self.policy.heads.policy(options), -1)
         behavior = (1 - exploration) * probabilities + exploration / probabilities.size(-1)
         actions = torch.distributions.Categorical(probs=behavior).sample().tolist()
-        values = self.policy.heads.value(pooled).tolist()
+        values = self.policy.heads.value(options, pooled).tolist()
         names = self.network.question.options
         return [
             Decision(
@@ -50,18 +53,44 @@ class LayaAgent:
                 values[row],
                 options[row].cpu(),
                 pooled[row].cpu(),
+                advice[row],
             )
             for row, action in enumerate(actions)
         ]
 
-    def act(self, observation: Observation, exploration: float) -> Decision:
-        return self.decide(self.read([observation]), exploration)[0]
+    def act(self, observation: Observation, exploration: float, advice: int | None) -> Decision:
+        return self.decide(self.read([observation]), exploration, [advice])[0]
 
-    def learn(self, rollout: Rollout, demonstrations: list[DemonstrationStep]) -> None:
-        self.policy.last_update = self.policy.learner.update(rollout, self._demonstration(demonstrations))
+    def learn(self, rollout: Rollout[Decision], demonstrations: list[DemonstrationStep]) -> None:
+        device = self.network.device
+        options = torch.stack([decision.options for decision in rollout.decisions]).to(device)
+        pooled = torch.stack([decision.pooled for decision in rollout.decisions]).to(device)
+        advice = torch.tensor(
+            [NO_ADVICE if decision.advice is None else decision.advice for decision in rollout.decisions],
+            device=device,
+        )
+        demonstration = self._demonstration(demonstrations)
+        heads = self.policy.heads
+
+        def evaluate(index: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+            return torch.log_softmax(heads.policy(options[index]), -1), heads.value(options[index], pooled[index])
+
+        def imitate(index: torch.Tensor) -> torch.Tensor:
+            advised = index[advice[index] != NO_ADVICE]
+            loss = options.new_zeros(())
+            if len(advised):
+                loss = loss + imitation_loss(heads.policy, options[advised], advice[advised])
+            if demonstration is not None:
+                loss = loss + imitation_loss(heads.policy, *demonstration)
+            return loss
+
+        self.policy.last_update = {
+            **self.policy.learner.update(rollout, evaluate, imitate),
+            "demonstration_decisions": 0 if demonstration is None else len(demonstration[1]),
+        }
         self.policy.num_timesteps += len(rollout)
 
-    def _demonstration(self, demonstrations: list[DemonstrationStep]) -> Demonstration:
+    def _demonstration(self, demonstrations: list[DemonstrationStep]) -> tuple[torch.Tensor, torch.Tensor] | None:
         if not demonstrations:
             return None
         sample = random.sample(demonstrations, min(len(demonstrations), MINIBATCH))
@@ -69,8 +98,9 @@ class LayaAgent:
         return options, torch.tensor([step.action for step in sample], device=options.device)
 
     def restart(self) -> None:
-        heads = Heads(self.network.scorer, self.network.width).to(self.network.device).eval()
-        self.policy = Policy(heads, PpoLearner(heads), 0, {})
+        heads = Heads(self.network.scorer, self.network.width, len(self.network.question.options))
+        heads = heads.to(self.network.device).eval()
+        self.policy = Policy(heads, PpoLearner((heads.policy, heads.value), LEARNING_RATE, MINIBATCH), 0, {})
 
     def metadata(self) -> dict[str, Any]:
         return {

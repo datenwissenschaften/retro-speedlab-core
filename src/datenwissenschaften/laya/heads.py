@@ -16,20 +16,21 @@ class PolicyHead(nn.Module):
 
 
 class ValueHead(nn.Module):
-    def __init__(self, width: int) -> None:
+    def __init__(self, width: int, option_count: int) -> None:
         super().__init__()
+        inputs = width * (option_count + 1)
         self.net = nn.Sequential(
-            nn.LayerNorm(width), nn.Linear(width, VALUE_HIDDEN), nn.GELU(), nn.Linear(VALUE_HIDDEN, 1)
+            nn.LayerNorm(inputs), nn.Linear(inputs, VALUE_HIDDEN), nn.GELU(), nn.Linear(VALUE_HIDDEN, 1)
         )
         nn.init.zeros_(self.net[-1].weight)
         nn.init.zeros_(self.net[-1].bias)
 
-    def forward(self, pooled: torch.Tensor) -> torch.Tensor:
-        return self.net(pooled).squeeze(-1)
+    def forward(self, options: torch.Tensor, pooled: torch.Tensor) -> torch.Tensor:
+        return self.net(torch.cat([pooled, options.flatten(1)], -1)).squeeze(-1)
 
 
 class Heads(nn.Module):
-    def __init__(self, scorer: nn.Module, width: int) -> None:
+    def __init__(self, scorer: nn.Module, width: int, option_count: int) -> None:
         super().__init__()
         self.policy = PolicyHead(scorer)
-        self.value = ValueHead(width)
+        self.value = ValueHead(width, option_count)

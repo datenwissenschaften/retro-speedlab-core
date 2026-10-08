@@ -287,6 +287,7 @@ watch(() => live.value.ram, (current, previous) => {
           :levels="levels"
           :times="snapshot.metadata?.level_times || {}"
           :running="levelRun"
+          :models="snapshot.metadata?.state_models || {}"
         />
         <section class="site-card">
           <span class="sight-title">Experiment</span>

@@ -15,14 +15,20 @@ knowledge into a learning agent.
 
 ## Highlights
 
-- **Laya decides every action**: one forward pass scores each named action of
-  the active state; there is no critic and no pixel encoder
-- **Group-relative policy gradients** with a measured-KL trust region that
-  backtracks oversized updates and adapts the learning rate
+- **Laya decides every action**: one frozen forward pass reads the game as
+  text and scores each named action of the active state; there is no pixel
+  encoder
+- **A fast advisor coaches Laya**: a small PPO network per state practises on
+  every other CPU core at emulator speed; Laya reads its advice as one more
+  fact and still makes every decision on the main emulator
+- **PPO and imitation on Laya's features**: Laya's small policy and value heads
+  learn from their own play, the advisor's advice and lab demonstrations
 - **One Laya per state**: each phase of a level has its own question and its
   own checkpoint, loaded and prefetched as the state machine moves on
-- **Fits a consumer GPU**: bf16 (or fp16 with gradient scaling), gradient
-  checkpointing and 8-bit AdamW train every weight in about 6 GB
+- **Fits a consumer GPU**: the frozen reader runs under fp16 or bf16 autocast,
+  and only the heads and the advisors (a few million weights each) are trained
+- **Probe and stall watch**: a probe measures which facts Laya can read back
+  from its features, and the dashboard flags states whose learning is flat
 - **Power-on start like a real speedrun**: every attempt boots the game at its
   title screen with every button, levels are states of one full-game run
 - **Curriculum** with automatic savestates: once a phase is mastered,
@@ -43,9 +49,11 @@ flowchart TD
     Env["Stable Retro environment<br/>StateMachineGymWrapper"]
     Text["Game state as text<br/>+ the active state's question"]
     Laya["Laya<br/>probability per named action"]
+    Practice["Practice emulators<br/>one per CPU core"]
+    Advisor["Advisor per state<br/>PPO on RAM + facts"]
     Action["Button sequence<br/>from action_table"]
-    Rollout["Rollout of 64 decisions"]
-    Learner["Group-relative policy gradients<br/>+ KL trust region"]
+    Rollout["Rollout of 256 decisions per state"]
+    Learner["PPO on frozen Laya features<br/>policy + value heads"]
     Models["Checkpoint per state"]
     Curriculum["Reverse curriculum<br/>+ level rotation"]
     Rec["BK2 recordings · MP4 videos"]
@@ -58,6 +66,9 @@ flowchart TD
     Laya --> Action
     Action --> Env
     Laya --> Rollout
+    Practice --> Advisor
+    Advisor --> Practice
+    Advisor -- "advice" --> Text
     Rollout --> Learner
     Learner --> Models
     Models --> Laya
@@ -78,6 +89,9 @@ curriculum, recording, uploads and telemetry.
 1. **The game speaks text.** Each `State` returns a `describe()` dict built
    from verified RAM values and detections, for example
    `{"score": 120, "lives": 3, "nearest_enemy": {"direction": "up-left", "distance": 128}}`.
+   Positions relative to the player belong in an `Offset(right, down)`, which
+   Laya reads as `"34 right, 12 below"`: in the probe it recovered direction
+   from such phrases far better than from signed numbers.
 2. **Every state asks a question.** A state's `description` is the question
    Laya answers, so "reach the exit" and "survive the boss" are separate
    decisions with separate models.
@@ -91,45 +105,49 @@ curriculum, recording, uploads and telemetry.
    distribution and a uniform one: 20% uniform while a state is being learned,
    5% once it is mastered.
 
+## How the advisor coaches
+
+Every CPU core but two runs a practice emulator without recording. A coach
+thread plays them all with one small actor-critic per state (`advisor/`): its
+input is the console RAM scaled to `[0, 1]` plus the state's facts hashed into
+64 slots, normalized by running statistics. Advisors act and learn on the
+accelerator; every 2048 decisions of a state become one PPO update (minibatch
+256), with imitation of the lab demonstrations until the state is mastered. The
+coach pauses while a lab run works on the game and saves `advisor.pt` next to
+each state's `laya.pt`.
+
+On the main emulator the advisor's view of the current state becomes a fact in
+Laya's text, for example `"advisor": "right 82%, jump 10%"`. Laya decides; the
+advice is only something it reads.
+
 ## How Laya learns
 
-After 64 decisions in a state, that state's rollout becomes one update
-(`GroupRelativeLearner`):
+Laya's reader stays frozen. Each state trains its own small heads with PPO once
+256 of its decisions on the main emulator are collected:
 
-- discounted rewards-to-go (γ = 0.99, reset at episode ends and state changes)
-  are normalized across the group into advantages; there is no value network
-- advantages are weighted by the ratio of Laya's probability to the sampled
-  behavior probability, which corrects for the uniform exploration mix
-- the loss is the weighted negative log-likelihood of the chosen actions minus
-  a small entropy bonus (0.001); gradients are clipped to norm 1.0
-- 8-bit AdamW updates the encoder and the decision head with separate learning
-  rates (1e-9 and 1e-8, scaled by the trust region)
+- the policy head is a trainable copy of Laya's option scorer and scores every
+  option from its marker vector
+- the value head reads the pooled vector together with every option's marker
+  vector, since the game facts live mostly in the markers
+- advantages use GAE (γ = 0.99, λ = 0.95). Losing a life, ending the game or
+  leaving the state ends a segment; hitting the time cap only cuts it, so the
+  value estimate carries on instead of counting the cap as a death
+- 4 epochs of minibatch 64 with ratio clip 0.2, value weight 0.5 and entropy
+  bonus 0.01; policy and value gradients are clipped to norm 0.5 separately so
+  large returns cannot starve the policy
+- an imitation loss pulls Laya toward the advisor's choice on every decision
+  and toward the lab demonstrations until the state is mastered
 
-The trust region keeps every update close to the policy that played. After a
-step it measures the KL divergence to the probabilities recorded during the
-rollout. Above twice the target of 0.01, it blends the weights back towards the
-pre-update snapshot (up to three backtracks, then a full revert). The learning
-rate scale then shrinks after oversized steps and grows after timid ones,
-bounded to `[1e-2, 1e3]`.
+A state is cut after 180 seconds of game time, counted in emulator frames, so a
+slow GPU never shortens what an attempt can achieve.
 
 ## One Laya per state
 
 `StateModels` keeps one checkpoint per state under
-`models/<game>/<State>/laya.pt`. A state transition ends that
-model's trajectory, loads the next state's checkpoint (a state without one
-starts from the pretrained Laya), and prefetches the following state in the
-background. Checkpoints hold all Laya weights, the optimizer, the trust region
-and the gradient scaler, and are written on a background thread to a temporary
-file that replaces the old one atomically.
-
-## Memory budget
-
-The whole model is trainable on a 6 GB GPU:
-
-- bf16 autocast, or fp16 with a `GradScaler` on GPUs without native bf16
-- gradient checkpointing in the encoder and the decision head
-- 8-bit AdamW states from bitsandbytes
-- minibatches of 16 on GPUs with at least 7.5 GB, otherwise 8
+`models/<game>/<State>/laya.pt`. Each state's heads stay in memory once loaded
+(a state without a checkpoint starts from Laya's pretrained scorer). Checkpoints hold the heads,
+their optimizer and the trained decision count, and are written on a
+background thread to a temporary file that replaces the old one atomically.
 
 ## Curriculum and rotation
 
@@ -237,6 +255,19 @@ LayaTrainer(AirstrikerWrapper, Path("config.yaml")).train()
 The ROM is imported through Stable Retro from `paths.roms`; the engine's own
 test suite needs no ROM.
 
+Before shipping new facts, probe them:
+
+```python
+from datenwissenschaften.probe.run import probe
+
+probe(AirstrikerWrapper, Path("config.yaml"), 300, 0)
+```
+
+The probe plays the given number of random decisions from every lab seed in
+`paths.curriculum` inside a scratch curriculum, then fits a ridge readout from
+Laya's features to every numeric fact and logs its held-out R². Any `Offset`
+below R² 0.5 raises `UnreadableFacts`.
+
 ## Configuration
 
 Every key in `config.example.yaml` is required; missing or malformed values
@@ -290,10 +321,13 @@ npm run build
 
 ## Limitations
 
-- Training runs one emulator per CPU core, minus two (on the stream is the
-  first one; the others practise in worker processes). Laya reads all their
-  situations in one batch per step; the GPU caps this at about 100 decisions
-  per second on an RTX 2070. Each state learns after 256 decisions.
+- Training runs one emulator per CPU core, minus two. Only the first one, on
+  the stream, is played by Laya, at the speed of one Laya read per decision;
+  the others are played by the advisors at emulator speed (about 750
+  decisions per second with ten practice emulators on a laptop RTX 3060).
+- The advisor only knows the RAM and the facts. A state whose reward never
+  pays for progress stays flat for both models; the stall watch flags it after
+  200 000 decisions.
 - Laya only knows what the game package describes. Unmapped RAM, such as an
   enemy that was never measured, is invisible to it.
 - Laya's 421M weights stay frozen; a state checkpoint stores only its small

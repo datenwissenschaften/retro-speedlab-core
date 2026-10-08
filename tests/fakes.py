@@ -22,6 +22,7 @@ MAX_LENGTH = 128
 ACTIONS = {"left": "move left", "right": "move right"}
 
 PRETRAINED_SEED = 7
+FRAME_RATE = 60.0
 
 
 class FakeTokenizer:
@@ -98,7 +99,7 @@ class FakeEmulator(gym.Env):
         self.statename = "Level1.state"
         self.movie = SimpleNamespace(set_state=lambda state: None)
         self.em = SimpleNamespace(
-            get_state=lambda: b"emulator", set_state=lambda state: None, get_screen_rate=lambda: 60.0
+            get_state=lambda: b"emulator", set_state=lambda state: None, get_screen_rate=lambda: FRAME_RATE
         )
         self.data = SimpleNamespace(reset=lambda: None, update_ram=lambda: None)
         self.action_space = gym.spaces.MultiBinary(2)
@@ -168,10 +169,10 @@ def write_config(tmp_path: Path) -> Path:
 
 def curriculum_run(root: Path, state_names: tuple[str, ...], seeds: Path) -> CurriculumRun:
     return CurriculumRun(
-        root, LevelTargets(state_names, {}), "Level1", seeds, LevelClock(root / "level_times.json", 60.0)
+        root, LevelTargets(state_names, {}), "Level1", seeds, LevelClock(root / "level_times.json", FRAME_RATE)
     )
 
 
 def fake_decision(action: int, probabilities: dict[str, float], behavior_probability: float) -> Decision:
     options = torch.zeros(len(probabilities), HIDDEN)
-    return Decision(action, probabilities, behavior_probability, 0.0, options, torch.zeros(HIDDEN))
+    return Decision(action, probabilities, behavior_probability, 0.0, options, torch.zeros(HIDDEN), None)

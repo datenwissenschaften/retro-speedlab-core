@@ -68,9 +68,6 @@ class ReverseCurriculum:
                 return state_name
         return None
 
-    def is_complete(self) -> bool:
-        return all(self.is_mastered(state_name) for state_name in self.state_names)
-
     def checkpoint(self, state_name: str) -> bytes:
         self._require_state(state_name)
         return self._checkpoint_path(state_name).read_bytes()

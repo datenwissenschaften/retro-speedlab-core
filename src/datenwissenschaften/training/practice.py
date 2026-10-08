@@ -2,8 +2,10 @@ import multiprocessing
 from dataclasses import dataclass
 from multiprocessing.connection import Connection
 
+import numpy as np
+
 from datenwissenschaften.environment.factory import make_environment
-from datenwissenschaften.environment.wrapper import Observation, StateMachineGymWrapper
+from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig
 
@@ -12,9 +14,10 @@ STOP_SECONDS = 30.0
 
 @dataclass(slots=True, frozen=True)
 class PracticeStep:
-    observation: Observation
+    inputs: np.ndarray
     reward: float
-    segment_ends: bool
+    terminal: bool
+    truncated: bool
     state: str
 
 
@@ -26,18 +29,17 @@ def practise(
     connection: Connection,
 ) -> None:
     setup_logging(config.log_level)
-    env = make_environment(wrapper_cls, config, worker)
+    env = make_environment(wrapper_cls, config, worker, False)
     env.speedrun = speedrun
-    observation, info = env.reset()
-    connection.send((observation, info["state"]))
+    _, info = env.reset()
+    connection.send((env.observer.inputs(env.read_ram()), info["state"]))
     while (action := connection.recv()) is not None:
         state = info["state"]
-        observation, reward, terminated, truncated, info = env.step(action)
-        done = terminated or truncated
-        segment_ends = done or info["state"] != state
-        if done:
-            observation, info = env.reset()
-        connection.send(PracticeStep(observation, reward, segment_ends, info["state"]))
+        _, reward, terminated, truncated, info = env.step(action)
+        terminal = terminated or info["state"] != state
+        if terminated or truncated:
+            _, info = env.reset()
+        connection.send(PracticeStep(env.observer.inputs(env.read_ram()), reward, terminal, truncated, info["state"]))
     env.close()
 
 
@@ -56,7 +58,7 @@ class PracticeEnvironments:
             self.connections.append(parent)
             self.processes.append(process)
         starts = [connection.recv() for connection in self.connections]
-        self.observations: list[Observation] = [observation for observation, _ in starts]
+        self.inputs: list[np.ndarray] = [inputs for inputs, _ in starts]
         self.states: list[str] = [state for _, state in starts]
 
     def send(self, actions: list[int]) -> None:
@@ -65,7 +67,7 @@ class PracticeEnvironments:
 
     def receive(self) -> list[PracticeStep]:
         steps: list[PracticeStep] = [connection.recv() for connection in self.connections]
-        self.observations = [step.observation for step in steps]
+        self.inputs = [step.inputs for step in steps]
         self.states = [step.state for step in steps]
         return steps
 

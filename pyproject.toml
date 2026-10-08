@@ -21,7 +21,6 @@ dependencies = [
     "torch==2.12.1",
     "loguru==0.7.3",
     "laya==0.3.20",
-    "bitsandbytes==0.50.2",
     "httpx==0.28.1",
     "python-box==7.4.1",
     "tenacity==9.1.4",

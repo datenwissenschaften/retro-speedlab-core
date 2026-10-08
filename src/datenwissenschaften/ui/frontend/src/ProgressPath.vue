@@ -9,12 +9,15 @@ const props = defineProps({
   levels: { type: Object, required: true },
   times: { type: Object, required: true },
   running: { type: [Object, null], required: true },
+  models: { type: Object, required: true },
 })
 
 const nodes = computed(() => pathNodes(props.curriculum, props.levels))
 const winWidth = phase => `${Math.round(Math.min(1, phase.wins / phase.win_target) * 100)}%`
-const note = phase => {
+const stalled = name => props.models[name]?.stalled === true
+const note = (name, phase) => {
   if (phase.mastered) return 'mastered'
+  if (stalled(name)) return 'stalled · not learning'
   const start = phase.has_checkpoint ? 'checkpoint ready' : 'no checkpoint yet'
   return phase.active ? `practising · ${phase.wins} / ${phase.win_target} wins` : start
 }
@@ -31,12 +34,12 @@ const runningHere = name => props.running?.level === name
       <li
         v-for="(node, index) in nodes"
         :key="node.name"
-        :class="['path-node', { reached: node.phase.active || node.phase.mastered, current: node.phase.active, mastered: node.phase.mastered, level: node.level }]"
+        :class="['path-node', { reached: node.phase.active || node.phase.mastered, current: node.phase.active, mastered: node.phase.mastered, level: node.level, stalled: stalled(node.name) }]"
       >
         <span class="path-dot">{{ node.phase.mastered ? '✓' : index + 1 }}</span>
         <strong class="path-label">{{ words(node.name) }}</strong>
         <span class="path-skill"><span :style="{ width: winWidth(node.phase) }"></span></span>
-        <small v-if="!node.level" class="path-note">{{ note(node.phase) }}</small>
+        <small v-if="!node.level" class="path-note">{{ note(node.name, node.phase) }}</small>
         <span v-else class="path-split">
           <b class="split-time">{{ runningHere(node.name) ? splitTime(running.seconds) : splitTime(best(node.name)) }}</b>
           <small v-if="runningHere(node.name)" class="path-note">running · best {{ splitTime(best(node.name)) }}</small>

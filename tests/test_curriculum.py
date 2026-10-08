@@ -92,7 +92,6 @@ def test_completed_curriculum_has_no_active_checkpoint_stage(tmp_path: Path):
         for _ in range(ReverseCurriculum.WIN_TARGET):
             curriculum.record_success(state_name, 4)
 
-    assert curriculum.is_complete() is True
     assert curriculum.active_state() is None
     assert not any(state["active"] for state in curriculum.progress().values())
 

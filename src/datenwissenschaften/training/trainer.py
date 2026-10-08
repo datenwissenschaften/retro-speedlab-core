@@ -5,6 +5,8 @@ from pathlib import Path
 import torch
 
 from datenwissenschaften.accelerator import configure_accelerator
+from datenwissenschaften.advisor.advisors import Advisors
+from datenwissenschaften.advisor.team import AdvisorTeam
 from datenwissenschaften.environment.curriculum_run import FULL_RUN
 from datenwissenschaften.environment.demonstration import load_demonstrations
 from datenwissenschaften.environment.factory import POWER_ON, make_environment
@@ -23,6 +25,7 @@ from datenwissenschaften.training.hooks import TrainingHook
 from datenwissenschaften.training.identity import TrainingIdentity
 from datenwissenschaften.training.knowledge import knowledge
 from datenwissenschaften.training.lab_run import LabRun
+from datenwissenschaften.training.lessons import Lessons
 from datenwissenschaften.training.live_stream_hook import LiveStreamHook
 from datenwissenschaften.training.practice import PracticeEnvironments
 from datenwissenschaften.training.report_upload_hook import ReportUploadHook
@@ -42,6 +45,12 @@ from datenwissenschaften.ui.telemetry import configure_history, level_full_run_w
 SESSION_SECONDS = 2 * 60 * 60
 BEATEN_FULL_RUN_WINS = 8
 RESERVED_CORES = 2
+ADVISOR_THREADS = 2
+
+
+def phases(wrapper_cls: type[StateMachineGymWrapper]) -> tuple[str, ...]:
+    classes = (wrapper_cls.start_state_cls, *wrapper_cls.state_classes)
+    return tuple(dict.fromkeys(state_cls.__name__ for state_cls in classes))
 
 
 class LayaTrainer:
@@ -54,12 +63,13 @@ class LayaTrainer:
         self.speedrun = False
 
     def train(self) -> None:
+        torch.set_num_threads(ADVISOR_THREADS)
         database = JsonDatabase(self.config.paths.database_path)
         configure_history(self.config.training.game_identity, database)
         replays = self.config.paths.cache_dir / "replays" / self.config.training.game_identity
         live_feed.keep_replays_in(replays, self._curricula())
         while True:
-            env = make_environment(self.wrapper_cls, self.config, MAIN_ENVIRONMENT)
+            env = make_environment(self.wrapper_cls, self.config, MAIN_ENVIRONMENT, True)
             env.speedrun = self.speedrun = level_full_run_wins(POWER_ON) >= BEATEN_FULL_RUN_WINS
             identity = TrainingIdentity(self.context, database)
             identity.require_compatible(env)
@@ -77,28 +87,31 @@ class LayaTrainer:
     ) -> ModelResetRequest | None:
         models = self._models()
         workers = range(MAIN_ENVIRONMENT + 1, len(os.sched_getaffinity(0)) - RESERVED_CORES)
-        self._publish_run(len(workers) + 1)
+        publish_run(self.wrapper_cls, self.context, self.speedrun, len(workers) + 1)
         publish_metadata("model", model_metadata(models), replace=True)
-        story = StoryBook(database, self.config.training.game_identity, self.context.savestate, self._phases())
+        story = StoryBook(
+            database, self.config.training.game_identity, self.context.savestate, phases(self.wrapper_cls)
+        )
         demonstrations = load_demonstrations(env, self.config.paths.demonstrations_dir)
         publish_metadata("knowledge", knowledge(env, self.config.laya.checkpoint, demonstrations), replace=True)
         deadline = time.monotonic() + seconds
+        lessons = Lessons(demonstrations, env.curriculum.curriculum)
+        lab_run = LabRun(self.config.paths.lab_run_marker)
+        actions = tuple(self.wrapper_cls.action_descriptions)
+        advisors = Advisors(actions, configure_accelerator(), self.context.advisor_path)
+        env.observer.advisor = advisors.advise
         practice = PracticeEnvironments(self.wrapper_cls, self.config, self.speedrun, workers)
+        team = AdvisorTeam(advisors, practice, lab_run, lessons)
         try:
             hooks = self._hooks(env, models, StoryTeller(story))
-            lab_run = LabRun(self.config.paths.lab_run_marker)
-            return TrainingSession(env, models, hooks, deadline, demonstrations, lab_run, practice).run()
+            return TrainingSession(env, models, hooks, deadline, lessons, lab_run, team.coach).run()
         finally:
-            practice.close()
+            team.close()
             models.close()
-
-    def _phases(self) -> tuple[str, ...]:
-        classes = (self.wrapper_cls.start_state_cls, *self.wrapper_cls.state_classes)
-        return tuple(dict.fromkeys(state_cls.__name__ for state_cls in classes))
 
     def _curricula(self) -> frozenset[str]:
         levels = level_map(self.wrapper_cls.levels, self.wrapper_cls.state_classes)
-        return frozenset((*self._phases(), *levels, FULL_RUN))
+        return frozenset((*phases(self.wrapper_cls), *levels, FULL_RUN))
 
     def _models(self) -> StateModels:
         network = LayaNetwork(
@@ -106,7 +119,7 @@ class LayaTrainer:
         )
         state_classes = (self.wrapper_cls.start_state_cls, *self.wrapper_cls.state_classes)
         agent = LayaAgent(network, tuple(state_cls.description for state_cls in state_classes))
-        return StateModels(agent, self.context, self._phases())
+        return StateModels(agent, self.context, phases(self.wrapper_cls))
 
     def _hooks(self, env: StateMachineGymWrapper, models: StateModels, teller: StoryTeller) -> list[TrainingHook]:
         frame_rate = env.unwrapped.em.get_screen_rate()
@@ -140,23 +153,24 @@ class LayaTrainer:
         start_ui(ui, self.context.record_root, reports_dir, report_digest(ui, self.context.game, reports_dir))
         self.ui_started = True
 
-    def _publish_run(self, emulators: int) -> None:
-        publish_metadata(
-            "run",
-            {
-                "game": self.context.game,
-                "savestate": self.context.savestate,
-                "speedrun": self.speedrun,
-                "emulators": emulators,
-            },
-        )
-        publish_metadata(
-            "environment",
-            {
-                "wrapper": self.wrapper_cls.__name__,
-                "states": [state_cls.__name__ for state_cls in self.wrapper_cls.state_classes],
-                "levels": level_map(self.wrapper_cls.levels, self.wrapper_cls.state_classes),
-                "actions": self.wrapper_cls.action_descriptions,
-                "frames_per_decision": self.wrapper_cls.action_table.shape[1],
-            },
-        )
+
+def publish_run(wrapper_cls: type[StateMachineGymWrapper], context: RunContext, speedrun: bool, emulators: int) -> None:
+    publish_metadata(
+        "run",
+        {
+            "game": context.game,
+            "savestate": context.savestate,
+            "speedrun": speedrun,
+            "emulators": emulators,
+        },
+    )
+    publish_metadata(
+        "environment",
+        {
+            "wrapper": wrapper_cls.__name__,
+            "states": [state_cls.__name__ for state_cls in wrapper_cls.state_classes],
+            "levels": level_map(wrapper_cls.levels, wrapper_cls.state_classes),
+            "actions": wrapper_cls.action_descriptions,
+            "frames_per_decision": wrapper_cls.action_table.shape[1],
+        },
+    )

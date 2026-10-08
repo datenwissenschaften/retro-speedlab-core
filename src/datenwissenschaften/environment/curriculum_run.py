@@ -74,7 +74,6 @@ class CurriculumRun:
             "curriculum_state": self.start_state,
             "curriculum_succeeded": succeeded,
             "curriculum_mastered": mastered,
-            "curriculum_complete": self.curriculum.is_complete(),
         }
 
     def fail(self, reward: float) -> None:

@@ -18,7 +18,7 @@ SESSION_STAMP = "%Y%m%dT%H%M%S"
 
 
 def make_environment(
-    wrapper_cls: type[StateMachineGymWrapper], config: RetroSpeedlabConfig, worker: int
+    wrapper_cls: type[StateMachineGymWrapper], config: RetroSpeedlabConfig, worker: int, record: bool
 ) -> StateMachineGymWrapper:
     training = config.training
     import_roms(config.paths.roms_path, config.paths.integrations_dir)
@@ -28,7 +28,7 @@ def make_environment(
         training.game,
         retro.State.NONE,
         render_mode="rgb_array",
-        record=str(record_dir),
+        record=str(record_dir) if record else False,
         use_restricted_actions=retro.Actions.ALL,
     )
     emulator = env.unwrapped

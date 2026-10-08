@@ -1,0 +1,39 @@
+from collections.abc import Callable
+from typing import Generic, TypeVar
+
+import numpy as np
+
+from datenwissenschaften.advisor.advice import Advice
+from datenwissenschaften.advisor.inputs import encode
+from datenwissenschaften.ram import RamInfo
+from datenwissenschaften.states.facts import Facts, render_facts
+from datenwissenschaften.states.machine import StateMachine
+
+T = TypeVar("T", bound=RamInfo)
+
+Observation = dict[str, str]
+Advise = Callable[[str, np.ndarray], Advice]
+
+
+class Observer(Generic[T]):
+    def __init__(self, read_bytes: Callable[[], np.ndarray], state_machine: StateMachine[T]) -> None:
+        self.read_bytes = read_bytes
+        self.state_machine = state_machine
+        self.advisor: Advise | None = None
+        self.advice: Advice | None = None
+
+    def facts(self, ram: T) -> Facts:
+        return {**ram.describe(), **self.state_machine.current_state.describe()}
+
+    def inputs(self, ram: T) -> np.ndarray:
+        return encode(self.read_bytes(), self.facts(ram))
+
+    def observation(self, ram: T) -> Observation:
+        facts = self.facts(ram)
+        if self.advisor is not None:
+            self.advice = self.advisor(self.state_machine.state_name, encode(self.read_bytes(), facts))
+            facts = {**facts, "advisor": self.advice}
+        return {"state": render_facts(facts), "question": self.state_machine.question}
+
+    def advised_action(self) -> int | None:
+        return None if self.advice is None else self.advice.action

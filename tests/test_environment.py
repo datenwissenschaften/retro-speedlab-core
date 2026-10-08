@@ -5,12 +5,12 @@ from pathlib import Path
 import fakes
 import numpy as np
 import pytest
-from fakes import FakeEmulator, FakeWrapper, curriculum_run, fake_environment, write_config
+from fakes import FRAME_RATE, FakeEmulator, FakeWrapper, curriculum_run, fake_environment, write_config
 
 from datenwissenschaften.curriculum import ReverseCurriculum
-from datenwissenschaften.environment import factory, wrapper
+from datenwissenschaften.environment import factory
 from datenwissenschaften.environment.recording import active_movie_path
-from datenwissenschaften.environment.wrapper import MAX_STATE_SECONDS, SPEEDRUN_FRAME_COST
+from datenwissenschaften.environment.wrapper import MAX_STATE_SECONDS, SPEEDRUN_FRAME_COST, state_class
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.states.landmarks import Landmarks
 
@@ -116,7 +116,8 @@ def test_falling_back_to_an_earlier_state_is_no_curriculum_success(tmp_path: Pat
 
 def test_unknown_curriculum_state_fails_fast(tmp_path: Path):
     with pytest.raises(ValueError, match="Unknown state"):
-        fake_environment(tmp_path, [(3, 0)])._state_class("Missing")
+        env = fake_environment(tmp_path, [(3, 0)])
+        state_class((env.start_state_cls, *env.state_classes), "Missing")
 
 
 def test_every_action_needs_a_description(tmp_path: Path):
@@ -172,7 +173,7 @@ def test_factory_starts_the_game_at_power_on_with_every_button(tmp_path: Path, m
     monkeypatch.setattr(factory.retro, "make", make)
     config = load_config(write_config(tmp_path))
 
-    env = factory.make_environment(FakeWrapper, config, 0)
+    env = factory.make_environment(FakeWrapper, config, 0, True)
 
     assert calls["roms"] == (config.paths.roms_path, config.paths.integrations_dir)
     assert (calls["game"], calls["state"]) == ("FakeGame-v0", factory.retro.State.NONE)
@@ -253,25 +254,24 @@ def test_stable_retros_done_condition_never_ends_an_attempt(tmp_path: Path):
     assert not truncated
 
 
-def test_a_curriculum_state_ends_after_three_real_minutes(tmp_path: Path, monkeypatch):
+def test_a_curriculum_state_ends_after_three_minutes_of_game_time(tmp_path: Path):
     env = fake_environment(tmp_path, [(3, 0)])
-    monkeypatch.setattr(wrapper, "monotonic", lambda: 0.0)
     env.reset()
 
     early = env.step(0)[3]
-    monkeypatch.setattr(wrapper, "monotonic", lambda: MAX_STATE_SECONDS)
+    env.state_frames = env.max_state_frames
     late = env.step(0)[3]
 
+    assert env.max_state_frames == MAX_STATE_SECONDS * FRAME_RATE
     assert (early, late) == (False, True)
 
 
-def test_entering_the_next_state_restarts_its_clock(tmp_path: Path, monkeypatch):
+def test_entering_the_next_state_restarts_its_clock(tmp_path: Path):
     env = fake_environment(tmp_path, [(3, 0), (3, 5)])
-    monkeypatch.setattr(wrapper, "monotonic", lambda: 0.0)
     env.reset()
-    monkeypatch.setattr(wrapper, "monotonic", lambda: MAX_STATE_SECONDS)
+    env.state_frames = env.max_state_frames
 
     _, _, _, truncated, info = env.step(0)
 
     assert info["state_transition"] == ("Survive", "Boss")
-    assert (truncated, env.state_started) == (False, MAX_STATE_SECONDS)
+    assert (truncated, env.state_frames) == (False, 0)

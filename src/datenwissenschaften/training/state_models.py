@@ -4,7 +4,7 @@ from datenwissenschaften.laya.agent import LayaAgent, Observation
 from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.laya.imitation import DemonstrationStep
 from datenwissenschaften.laya.policy import Policy
-from datenwissenschaften.laya.rollout import Rollout
+from datenwissenschaften.rollout import Rollout
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.model_store import ModelStore
 
@@ -15,7 +15,7 @@ class StateModels:
         self.context = context
         self.state_names = state_names
         self.policies: dict[str, Policy] = {}
-        self.rollouts: dict[tuple[str, int], Rollout] = {}
+        self.rollouts: dict[tuple[str, int], Rollout[Decision]] = {}
         self.store = ModelStore()
         self.active: str | None = None
 
@@ -38,18 +38,24 @@ class StateModels:
         self.active = state_name
 
     def decide(
-        self, observations: list[Observation], states: list[str], exploration: dict[str, float]
+        self,
+        observations: list[Observation],
+        states: list[str],
+        exploration: dict[str, float],
+        advice: list[int | None],
     ) -> list[Decision]:
         options, pooled = self.agent.read(observations)
         decisions: dict[int, Decision] = {}
         for state_name in dict.fromkeys(states):
             rows = [row for row, state in enumerate(states) if state == state_name]
             self.activate(state_name)
-            chosen = self.agent.decide((options[rows], pooled[rows]), exploration[state_name])
+            chosen = self.agent.decide(
+                (options[rows], pooled[rows]), exploration[state_name], [advice[row] for row in rows]
+            )
             decisions.update(zip(rows, chosen, strict=True))
         return [decisions[row] for row in range(len(states))]
 
-    def rollout(self, state_name: str, environment: int) -> Rollout:
+    def rollout(self, state_name: str, environment: int) -> Rollout[Decision]:
         return self.rollouts.setdefault((state_name, environment), Rollout())
 
     def collected(self, state_name: str) -> int:

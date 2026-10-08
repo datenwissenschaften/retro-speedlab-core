@@ -5,7 +5,7 @@ from typing import Any
 import torch
 
 from datenwissenschaften.laya.heads import Heads
-from datenwissenschaften.laya.ppo import PpoLearner
+from datenwissenschaften.ppo import PpoLearner
 
 
 @dataclass(slots=True)

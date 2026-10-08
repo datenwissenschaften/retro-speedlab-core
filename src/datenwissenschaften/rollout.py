@@ -1,11 +1,25 @@
+from typing import Generic, Protocol, TypeVar
+
 import torch
 
-from datenwissenschaften.laya.decision import Decision
+
+class Step(Protocol):
+    @property
+    def action(self) -> int: ...
+
+    @property
+    def behavior_probability(self) -> float: ...
+
+    @property
+    def value(self) -> float: ...
 
 
-class Rollout:
+S = TypeVar("S", bound=Step)
+
+
+class Rollout(Generic[S]):
     def __init__(self) -> None:
-        self.decisions: list[Decision] = []
+        self.decisions: list[S] = []
         self.rewards: list[float] = []
         self.dones: list[bool] = []
         self.cuts: list[bool] = []
@@ -14,8 +28,8 @@ class Rollout:
         return len(self.decisions)
 
     @classmethod
-    def joined(cls, parts: list["Rollout"]) -> "Rollout":
-        rollout = cls()
+    def joined(cls, parts: list["Rollout[S]"]) -> "Rollout[S]":
+        rollout: Rollout[S] = cls()
         for part in parts:
             rollout.decisions += part.decisions
             rollout.rewards += part.rewards
@@ -23,11 +37,11 @@ class Rollout:
             rollout.cuts += [*part.cuts[:-1], True]
         return rollout
 
-    def add(self, decision: Decision, reward: float, done: bool) -> None:
+    def add(self, decision: S, reward: float, terminal: bool, truncated: bool) -> None:
         self.decisions.append(decision)
         self.rewards.append(reward)
-        self.dones.append(done)
-        self.cuts.append(False)
+        self.dones.append(terminal)
+        self.cuts.append(truncated)
 
     def advantages(self, gamma: float, lam: float) -> tuple[torch.Tensor, torch.Tensor]:
         values = [decision.value for decision in self.decisions]
@@ -43,10 +57,8 @@ class Rollout:
         returns = advantages + torch.tensor(values)
         return advantages, returns
 
-    def features(self, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
-        options = torch.stack([decision.options for decision in self.decisions]).to(device)
-        pooled = torch.stack([decision.pooled for decision in self.decisions]).to(device)
-        return options, pooled
+    def values(self) -> torch.Tensor:
+        return torch.tensor([decision.value for decision in self.decisions])
 
     def actions(self, device: torch.device) -> torch.Tensor:
         return torch.tensor([decision.action for decision in self.decisions], device=device)

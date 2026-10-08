@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+import numpy as np
 import torch
 
 from datenwissenschaften.laya.heads import PolicyHead
@@ -12,6 +13,7 @@ class DemonstrationStep:
     state: str
     question: str
     action: int
+    inputs: np.ndarray
 
 
 def imitation_loss(policy: PolicyHead, options: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:

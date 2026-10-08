@@ -48,9 +48,10 @@ def replay(wrapper: StateMachineGymWrapper, buttons: np.ndarray) -> Demonstratio
     for start in range(0, len(buttons) - frames_per_decision + 1, frames_per_decision):
         chunk = buttons[start : start + frames_per_decision]
         if chunk.any():
-            observation = wrapper.observation(ram)
+            observation = wrapper.observer.observation(ram)
             action = int((wrapper.current_action_table() != chunk).sum(axis=(1, 2)).argmin())
-            step = DemonstrationStep(observation["state"], observation["question"], action)
+            inputs = wrapper.observer.inputs(ram)
+            step = DemonstrationStep(observation["state"], observation["question"], action, inputs)
             demonstrations.setdefault(wrapper.state_machine.state_name, []).append(step)
         for frame_buttons in chunk:
             frame, *_ = wrapper.env.step(frame_buttons)

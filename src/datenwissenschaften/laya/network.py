@@ -5,6 +5,8 @@ from torch import nn
 from datenwissenschaften.laya.precision import autocast_dtype
 from datenwissenschaften.laya.question import LayaQuestion
 
+Features = tuple[torch.Tensor, torch.Tensor]
+
 
 class LayaNetwork(nn.Module):
     def __init__(self, checkpoint: str, options: dict[str, str], device: str) -> None:
@@ -31,7 +33,7 @@ class LayaNetwork(nn.Module):
         return self.decision.scorer
 
     @torch.no_grad()
-    def features(self, states: list[str], questions: list[str]) -> tuple[torch.Tensor, torch.Tensor]:
+    def features(self, states: list[str], questions: list[str]) -> Features:
         batch, orders = self.question.encode(states, questions, self.device)
         model = self.decision
         with torch.autocast(self.device.type, dtype=self.dtype):
