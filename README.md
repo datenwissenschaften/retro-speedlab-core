@@ -102,8 +102,9 @@ curriculum, recording, uploads and telemetry.
 4. **Laya decides.** One forward pass returns a probability per option. The
    option order is shuffled deterministically per state text and question, so
    Laya cannot learn a positional bias. The agent samples from a mix of Laya's
-   distribution and a uniform one: 20% uniform while a state is being learned,
-   5% once it is mastered.
+   distribution and a uniform one: 5% uniform while a state is being learned,
+   1% once it is mastered. The advisors explore on the practice emulators, so
+   Laya's own attempts stay precise enough for platforming.
 
 ## How the advisor coaches
 

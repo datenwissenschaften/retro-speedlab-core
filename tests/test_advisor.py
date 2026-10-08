@@ -56,7 +56,7 @@ class EndlessPractice:
 
     def receive(self) -> list[PracticeStep]:
         self.steps += 1
-        return [PracticeStep(INPUTS, float(action), False, False, "Play") for action in self.actions]
+        return [PracticeStep(INPUTS, float(action), False, False, "Play", "Play") for action in self.actions]
 
 
 def test_the_coach_practises_until_stopped_and_learns_every_full_rollout(tmp_path: Path):
@@ -72,3 +72,26 @@ def test_the_coach_practises_until_stopped_and_learns_every_full_rollout(tmp_pat
     assert practice.steps >= ROLLOUT_STEPS // 2
     assert pool.models["Play"].num_timesteps >= ROLLOUT_STEPS
     assert torch.equal(pool.models["Play"].acting.policy[-1].weight, pool.models["Play"].learning.policy[-1].weight)
+
+
+class ExitingPractice(EndlessPractice):
+    def receive(self) -> list[PracticeStep]:
+        self.steps += 1
+        return [
+            PracticeStep(INPUTS, 1.0, True, False, "Door", "Play"),
+            PracticeStep(INPUTS, 0.0, False, False, "Play", "Play"),
+        ]
+
+
+def test_the_coach_counts_where_practice_leaves_each_state(tmp_path: Path):
+    pool, practice = advisors(tmp_path), ExitingPractice()
+    coach = Coach(pool, practice, LabRun(tmp_path / "no-lab-run"), lambda state: [])
+    deadline = time.monotonic() + COACH_WAIT_SECONDS
+    while practice.steps < 10 and time.monotonic() < deadline:
+        coach.check()
+        time.sleep(0.01)
+    coach.stop()
+    pool.close()
+
+    assert coach.exits["Play"]["Door"] >= 10
+    assert "Play" not in coach.exits["Play"]

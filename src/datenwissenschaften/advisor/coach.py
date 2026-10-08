@@ -1,4 +1,5 @@
 import threading
+from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 
@@ -28,6 +29,7 @@ class Coach:
         self.lab_run = lab_run
         self.lessons = lessons
         self.rollouts: dict[tuple[str, int], Rollout[AdvisorDecision]] = {}
+        self.exits: dict[str, Counter[str]] = {}
         self.stopping = threading.Event()
         self.worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="advisor-coach")
         self.running: Future[None] = self.worker.submit(self._coach)
@@ -54,6 +56,8 @@ class Coach:
             for worker, (state, decision, step) in enumerate(zip(states, decisions, steps, strict=True)):
                 rollout = self.rollouts.setdefault((state, worker), Rollout())
                 rollout.add(decision, step.reward, step.terminal, step.truncated)
+                if step.reached != state:
+                    self.exits.setdefault(state, Counter())[step.reached] += 1
             for state in dict.fromkeys(states):
                 self._learn(state)
 
@@ -63,4 +67,5 @@ class Coach:
             return
         rollout = Rollout.joined([self.rollouts.pop(key) for key in keys])
         metrics = self.advisors.learn(state, rollout, self.lessons(state))
-        publish_metadata("advisors", {state: {name: round(metrics[name], 3) for name in REPORTED}})
+        exits = dict(self.exits[state]) if state in self.exits else {}
+        publish_metadata("advisors", {state: {**{name: round(metrics[name], 3) for name in REPORTED}, "exits": exits}})

@@ -18,6 +18,7 @@ class PracticeStep:
     reward: float
     terminal: bool
     truncated: bool
+    reached: str
     state: str
 
 
@@ -36,10 +37,12 @@ def practise(
     while (action := connection.recv()) is not None:
         state = info["state"]
         _, reward, terminated, truncated, info = env.step(action)
-        terminal = terminated or info["state"] != state
+        reached = info["state"]
+        terminal = terminated or reached != state
         if terminated or truncated:
             _, info = env.reset()
-        connection.send(PracticeStep(env.observer.inputs(env.read_ram()), reward, terminal, truncated, info["state"]))
+        inputs = env.observer.inputs(env.read_ram())
+        connection.send(PracticeStep(inputs, reward, terminal, truncated, reached, info["state"]))
     env.close()
 
 

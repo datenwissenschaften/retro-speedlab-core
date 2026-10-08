@@ -10,8 +10,8 @@ from datenwissenschaften.training.state_models import StateModels
 from datenwissenschaften.ui.control import ModelResetRequest, consume_model_reset
 
 ROLLOUT_STEPS = 256
-EXPLORATION_WHILE_LEARNING = 0.2
-EXPLORATION_ONCE_MASTERED = 0.05
+EXPLORATION_WHILE_LEARNING = 0.05
+EXPLORATION_ONCE_MASTERED = 0.01
 MAIN_ENVIRONMENT = 0
 
 
