@@ -32,14 +32,16 @@ const fakeVideo = () => {
 }
 
 const installBrowser = responses => {
+  const requested = []
   globalThis.window = { setInterval: () => 0, clearInterval: () => {} }
   globalThis.URL = { createObjectURL: blob => `blob:${blob}`, revokeObjectURL: () => {} }
-  globalThis.fetch = async url => ({
+  globalThis.fetch = async url => (requested.push(url), {
     ok: url in responses,
     status: url in responses ? 200 : 404,
     json: async () => responses[url],
     blob: async () => responses[url],
   })
+  return requested
 }
 
 const player = (video, events) => createReplayPlayer({
@@ -108,5 +110,28 @@ test('J: an attempt that is gone before its video loaded is skipped while waitin
 
   assert.deepEqual(events, [['waiting']])
   assert.equal(video.played, 0)
+  replays.stop()
+})
+
+test('K: the next video downloads while the current attempt still plays', async () => {
+  const replay = { ...EPISODE, id: 2 }
+  const requested = installBrowser({
+    '/api/live/episode': { ...LATEST, replays: [replay] },
+    '/api/live/statuses?generation=g&episode=4&start=0': { statuses: STATUSES },
+    '/api/live/statuses?generation=g&episode=2&start=0': { statuses: STATUSES },
+    '/api/live/video?generation=g&episode=4': 'video-4',
+    '/api/live/video?generation=g&episode=2': 'video-2',
+  })
+  const video = fakeVideo()
+  const replays = player(video, [])
+  replays.start()
+  await settle()
+  const beforeEnd = [...requested]
+  video.end()
+  await settle()
+
+  assert.ok(beforeEnd.includes('/api/live/video?generation=g&episode=2'))
+  assert.equal(requested.filter(url => url === '/api/live/video?generation=g&episode=2').length, 1)
+  assert.equal(video.src, 'blob:video-2')
   replays.stop()
 })

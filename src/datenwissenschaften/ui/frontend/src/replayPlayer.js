@@ -21,6 +21,7 @@ export const createReplayPlayer = ({ video, onFrame, onEpisode, onEpisodeEnd, on
   let statuses = []
   let source = null
   let replaying = false
+  let upcomingLoad = null
   let timer
 
   const poll = async () => {
@@ -32,6 +33,7 @@ export const createReplayPlayer = ({ video, onFrame, onEpisode, onEpisodeEnd, on
       latest = payload.episode
       replays = payload.replays
       if (!episode && latest && latest.id !== shownLiveId) begin(latest, false)
+      else preload()
     } catch {
       onConnection(false)
     }
@@ -52,7 +54,45 @@ export const createReplayPlayer = ({ video, onFrame, onEpisode, onEpisodeEnd, on
     shownLiveId = null
     episode = null
     release()
+    discard()
     if (interrupted) onWaiting()
+  }
+
+  const download = async (next, from) => {
+    const loaded = []
+    while (loaded.length < next.frame_count) {
+      const payload = await fetchJson(`/api/live/statuses?generation=${from}&episode=${next.id}&start=${loaded.length}`)
+      loaded.push(...payload.statuses)
+    }
+    const blob = await fetchBlob(`/api/live/video?generation=${from}&episode=${next.id}`)
+    return { statuses: loaded, source: URL.createObjectURL(blob) }
+  }
+
+  const load = next => {
+    if (upcomingLoad?.id === next.id) return upcomingLoad.media
+    discard()
+    const media = download(next, generation)
+    upcomingLoad = { id: next.id, media }
+    media.catch(() => { if (upcomingLoad?.media === media) upcomingLoad = null })
+    return media
+  }
+
+  const discard = () => {
+    if (upcomingLoad) upcomingLoad.media.then(media => URL.revokeObjectURL(media.source), () => {})
+    upcomingLoad = null
+  }
+
+  const upcoming = () => {
+    const shown = replaying ? shownLiveId : episode.id
+    if (latest && latest.id !== shown) return { next: latest, replay: false }
+    if (replays.length) return { next: pickReplay(), replay: true }
+    return null
+  }
+
+  const preload = () => {
+    if (!source) return
+    const coming = upcoming()
+    if (coming) load(coming.next).catch(() => {})
   }
 
   const begin = async (next, replay) => {
@@ -60,17 +100,17 @@ export const createReplayPlayer = ({ video, onFrame, onEpisode, onEpisodeEnd, on
     episode = next
     replaying = replay
     try {
-      const loaded = []
-      while (loaded.length < next.frame_count) {
-        const payload = await fetchJson(`/api/live/statuses?generation=${generation}&episode=${next.id}&start=${loaded.length}`)
-        loaded.push(...payload.statuses)
+      const media = await load(next)
+      if (upcomingLoad?.media === media) upcomingLoad = null
+      if (episode !== next) {
+        URL.revokeObjectURL(media.source)
+        return
       }
-      const blob = await fetchBlob(`/api/live/video?generation=${generation}&episode=${next.id}`)
-      if (episode !== next) return
-      statuses = loaded
-      source = URL.createObjectURL(blob)
+      statuses = media.statuses
+      source = media.source
       onEpisode(next, replay, generation)
       play()
+      preload()
     } catch {
       if (episode !== next) return
       episode = null
@@ -97,8 +137,8 @@ export const createReplayPlayer = ({ video, onFrame, onEpisode, onEpisodeEnd, on
     if (!episode) return
     onEpisodeEnd(episode)
     if (!replaying) shownLiveId = episode.id
-    if (latest && latest.id !== shownLiveId) begin(latest, false)
-    else if (replays.length) begin(pickReplay(), true)
+    const coming = upcoming()
+    if (coming) begin(coming.next, coming.replay)
     else repeat()
   }
 
@@ -123,6 +163,7 @@ export const createReplayPlayer = ({ video, onFrame, onEpisode, onEpisodeEnd, on
       window.clearInterval(timer)
       video().removeEventListener('ended', finish)
       release()
+      discard()
     },
   }
 }
