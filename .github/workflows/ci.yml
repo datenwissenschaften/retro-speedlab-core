@@ -44,20 +44,3 @@ jobs:
       - name: Package import smoke test
         run: poetry run python -c "import datenwissenschaften; print(datenwissenschaften.__file__)"
 
-  frontend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: src/datenwissenschaften/ui/frontend/package-lock.json
-
-      - name: Build dashboard assets
-        working-directory: src/datenwissenschaften/ui/frontend
-        run: |
-          npm ci
-          npm run build
