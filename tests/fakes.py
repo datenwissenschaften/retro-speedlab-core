@@ -175,4 +175,7 @@ def curriculum_run(root: Path, state_names: tuple[str, ...], seeds: Path) -> Cur
 
 def fake_decision(action: int, probabilities: dict[str, float], behavior_probability: float) -> Decision:
     options = torch.zeros(len(probabilities), HIDDEN)
-    return Decision(action, probabilities, behavior_probability, 0.0, options, torch.zeros(HIDDEN), None)
+    policy_probability = list(probabilities.values())[action]
+    return Decision(
+        action, probabilities, behavior_probability, policy_probability, 0.0, options, torch.zeros(HIDDEN), None
+    )

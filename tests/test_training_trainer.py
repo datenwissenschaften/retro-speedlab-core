@@ -119,17 +119,17 @@ def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_pa
     assert published["environment"]["states"] == ["Survive", "Boss"]
 
 
-def test_video_playback_imports_roms_and_replays_headless(monkeypatch, tmp_path: Path):
-    played, imported = [], []
-    argv = ["playback", "--roms-dir", str(tmp_path), "--integrations-dir", "ints", "--no-audio", "run.bk2"]
+def test_video_playback_imports_roms_and_renders_every_movie(monkeypatch, tmp_path: Path):
+    rendered, imported = [], []
+    argv = ["playback", "--roms-dir", str(tmp_path), "--integrations-dir", "ints", "run.bk2"]
     monkeypatch.setattr(sys, "argv", argv)
     monkeypatch.setattr(video_playback, "import_roms", lambda *paths: imported.append(paths))
-    monkeypatch.setattr(video_playback, "play_movie", lambda movie, args, monitor: played.append(movie))
+    monkeypatch.setattr(video_playback, "render", rendered.append)
 
     video_playback.main()
 
     assert imported == [(tmp_path, Path("ints"))]
-    assert played == ["run.bk2"]
+    assert rendered == [Path("run.bk2")]
 
 
 def test_trainer_plays_the_full_game_and_speedruns_it_once_beaten(tmp_path: Path, monkeypatch):

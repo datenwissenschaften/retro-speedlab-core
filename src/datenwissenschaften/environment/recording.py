@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import numpy as np
+import stable_retro as retro
 from stable_retro import RetroEnv
 
 
@@ -21,3 +23,10 @@ def restore_emulator_state(emulator: RetroEnv, emulator_state: bytes) -> None:
         emulator.movie.set_state(emulator_state)
     emulator.data.reset()
     emulator.data.update_ram()
+
+
+def recorded_buttons(movie: retro.Movie, buttons: int) -> np.ndarray:
+    frames = []
+    while movie.step():
+        frames.append([movie.get_key(button, 0) for button in range(buttons)])
+    return np.asarray(frames[1:], dtype=np.int8)

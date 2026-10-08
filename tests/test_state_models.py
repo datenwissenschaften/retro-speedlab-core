@@ -82,8 +82,8 @@ def test_a_state_learns_from_the_rollouts_of_all_emulators(models: StateModels):
 def test_advantages_never_run_across_emulators():
     empty = torch.zeros(2, 4)
     parts = [Rollout(), Rollout()]
-    parts[0].add(Decision(0, {"left": 1.0}, 1.0, 0.5, empty, torch.zeros(4), None), 1.0, False, False)
-    parts[1].add(Decision(0, {"left": 1.0}, 1.0, 0.25, empty, torch.zeros(4), None), 0.0, False, False)
+    parts[0].add(Decision(0, {"left": 1.0}, 1.0, 1.0, 0.5, empty, torch.zeros(4), None), 1.0, False, False)
+    parts[1].add(Decision(0, {"left": 1.0}, 1.0, 1.0, 0.25, empty, torch.zeros(4), None), 0.0, False, False)
 
     advantages, _ = Rollout.joined(parts).advantages(GAMMA, LAMBDA)
 

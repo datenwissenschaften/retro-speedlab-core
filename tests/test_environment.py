@@ -10,7 +10,7 @@ from fakes import FRAME_RATE, FakeEmulator, FakeWrapper, curriculum_run, fake_en
 from datenwissenschaften.advisor.advice import Advice
 from datenwissenschaften.curriculum import ReverseCurriculum
 from datenwissenschaften.environment import factory
-from datenwissenschaften.environment.recording import active_movie_path
+from datenwissenschaften.environment.recording import active_movie_path, recorded_buttons
 from datenwissenschaften.environment.wrapper import MAX_STATE_SECONDS, SPEEDRUN_FRAME_COST, state_class
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.states.landmarks import Landmarks
@@ -300,3 +300,22 @@ def test_laya_reads_the_advised_move_first_in_its_own_words(tmp_path: Path):
 
     assert next(iter(json.loads(observation["state"]).items())) == ("advised", env.action_descriptions["right"])
     assert info["advice"] == 1
+
+
+class RecordedMovie:
+    def __init__(self, frames: list[list[int]]) -> None:
+        self.frames = frames
+        self.position = -1
+
+    def step(self) -> bool:
+        self.position += 1
+        return self.position < len(self.frames)
+
+    def get_key(self, button: int, player: int) -> int:
+        return self.frames[self.position][button]
+
+
+def test_replays_skip_the_frame_the_recorder_adds_before_the_first_decision():
+    buttons = recorded_buttons(RecordedMovie([[1, 1], [0, 1], [1, 0]]), 2)
+
+    assert buttons.tolist() == [[0, 1], [1, 0]]

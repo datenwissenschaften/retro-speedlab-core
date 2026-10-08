@@ -50,6 +50,7 @@ class LayaAgent:
                 action,
                 dict(zip(names, probabilities[row].tolist(), strict=True)),
                 float(behavior[row, action]),
+                float(probabilities[row, action]),
                 values[row],
                 options[row].cpu(),
                 pooled[row].cpu(),

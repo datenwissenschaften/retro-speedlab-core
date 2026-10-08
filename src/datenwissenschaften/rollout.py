@@ -11,6 +11,9 @@ class Step(Protocol):
     def behavior_probability(self) -> float: ...
 
     @property
+    def policy_probability(self) -> float: ...
+
+    @property
     def value(self) -> float: ...
 
 
@@ -65,3 +68,6 @@ class Rollout(Generic[S]):
 
     def behavior(self, device: torch.device) -> torch.Tensor:
         return torch.tensor([decision.behavior_probability for decision in self.decisions], device=device)
+
+    def policy(self, device: torch.device) -> torch.Tensor:
+        return torch.tensor([decision.policy_probability for decision in self.decisions], device=device)

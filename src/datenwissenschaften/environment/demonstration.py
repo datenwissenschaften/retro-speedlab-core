@@ -5,6 +5,7 @@ import stable_retro as retro
 from loguru import logger
 from stable_retro import RetroEnv
 
+from datenwissenschaften.environment.recording import recorded_buttons
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.laya.imitation import DemonstrationStep
 
@@ -33,10 +34,7 @@ def movie_buttons(path: Path, emulator: RetroEnv) -> np.ndarray:
         raise ValueError(f"{path.name} is a movie of {movie.get_game()}, not {emulator.gamename}.")
     if movie.get_state() != emulator.initial_state:
         raise ValueError(f"{path.name} does not start at power-on.")
-    frames = []
-    while movie.step():
-        frames.append([movie.get_key(button, 0) for button in range(emulator.num_buttons)])
-    return np.asarray(frames[1:], dtype=np.int8)
+    return recorded_buttons(movie, emulator.num_buttons)
 
 
 def replay(wrapper: StateMachineGymWrapper, buttons: np.ndarray) -> Demonstrations:

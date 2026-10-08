@@ -27,7 +27,9 @@ class PpoLearner:
 
     def update(self, rollout: Rollout[Step], evaluate: Evaluate, imitate: Imitate) -> dict[str, float]:
         device = next(self.parts[0].parameters()).device
-        actions, behavior = rollout.actions(device), rollout.behavior(device).log()
+        actions, old = rollout.actions(device), rollout.policy(device)
+        exploration_weight = (old / rollout.behavior(device)).clamp(max=1.0)
+        old = old.log()
         advantages, returns = (tensor.to(device) for tensor in rollout.advantages(GAMMA, LAMBDA))
         advantages = (advantages - advantages.mean()) / (advantages.std() + NORMALIZATION_EPSILON)
         names = ("policy_loss", "value_loss", "entropy", "approx_kl", "clip_fraction", "imitation_loss")
@@ -39,9 +41,10 @@ class PpoLearner:
             for index in torch.randperm(len(rollout), device=device).split(self.minibatch):
                 log_probs, values = evaluate(index)
                 chosen = log_probs.gather(1, actions[index, None]).squeeze(1)
-                ratio = (chosen - behavior[index]).exp()
+                ratio = (chosen - old[index]).exp()
                 clipped = ratio.clamp(1 - CLIP, 1 + CLIP)
-                policy_loss = -torch.min(ratio * advantages[index], clipped * advantages[index]).mean()
+                surrogate = torch.min(ratio * advantages[index], clipped * advantages[index])
+                policy_loss = -(exploration_weight[index] * surrogate).mean()
                 value_loss = (values - returns[index]).pow(2).mean()
                 entropy = -(log_probs.exp() * log_probs).sum(-1).mean()
                 imitation = imitate(index)
@@ -57,7 +60,7 @@ class PpoLearner:
                         policy_loss,
                         value_loss,
                         entropy,
-                        (behavior[index] - chosen).mean(),
+                        (old[index] - chosen).mean(),
                         ((ratio - 1).abs() > CLIP).float().mean(),
                         imitation,
                     ),

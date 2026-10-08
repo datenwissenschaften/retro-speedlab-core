@@ -8,6 +8,7 @@ class Decision:
     action: int
     probabilities: dict[str, float]
     behavior_probability: float
+    policy_probability: float
     value: float
     options: torch.Tensor
     pooled: torch.Tensor

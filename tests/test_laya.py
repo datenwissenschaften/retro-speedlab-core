@@ -129,7 +129,7 @@ def test_demonstrations_pull_the_policy_toward_their_moves(network: LayaNetwork)
 
 
 def decision_valued(value: float) -> Decision:
-    return Decision(0, {"left": 1.0, "right": 0.0}, 1.0, value, torch.zeros(2, 4), torch.zeros(4), None)
+    return Decision(0, {"left": 1.0, "right": 0.0}, 1.0, 1.0, value, torch.zeros(2, 4), torch.zeros(4), None)
 
 
 def test_advantages_follow_gae_and_stop_at_segment_ends():

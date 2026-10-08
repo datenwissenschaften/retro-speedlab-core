@@ -13,5 +13,6 @@ class Advice:
 class AdvisorDecision:
     action: int
     behavior_probability: float
+    policy_probability: float
     value: float
     inputs: np.ndarray

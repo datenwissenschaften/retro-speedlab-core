@@ -55,7 +55,7 @@ class Advisors:
             actions = torch.multinomial(probabilities, 1).squeeze(1).tolist()
             chosen = probabilities[torch.arange(len(rows)), actions].tolist()
             for row, action, probability, value in zip(rows, actions, chosen, values.tolist(), strict=True):
-                decisions[row] = AdvisorDecision(action, probability, value, inputs[row])
+                decisions[row] = AdvisorDecision(action, probability, probability, value, inputs[row])
         return [decisions[row] for row in range(len(states))]
 
     @torch.no_grad()

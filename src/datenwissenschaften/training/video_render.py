@@ -21,7 +21,6 @@ def render_video(paths: RetroSpeedlabPaths, recording: Path) -> Path:
         str(paths.roms_path),
         "--integrations-dir",
         str(paths.integrations_dir),
-        "--no-audio",
         str(recording),
     ]
     subprocess.run(playback, check=True, capture_output=True, text=True)
