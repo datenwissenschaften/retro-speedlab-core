@@ -158,7 +158,10 @@ const recent = computed(() => recentAttempts(latestEpisode.value, recentScores.v
 const replayStatus = computed(() => labRun.value ? 'Upgrading' : status(connected.value, replayEpisode.value))
 const replayIsBest = computed(() => replayEpisode.value !== null && holdsBest(replayEpisode.value, levelBest(replayEpisode.value.result.level)))
 const learningFor = computed(() => snapshot.value.started_at ? elapsed(snapshot.value.started_at, now.value) : '—')
-const inputs = computed(() => layaInputs(snapshot.value.metadata?.knowledge, snapshot.value.metadata?.model?.laya))
+const inputs = computed(() => {
+  const metadata = snapshot.value.metadata
+  return layaInputs(metadata?.knowledge, metadata?.model?.laya, metadata?.advisors, metadata?.run?.emulators)
+})
 const levels = computed(() => snapshot.value.metadata?.environment?.levels || {})
 const levelRun = computed(() => {
   const episode = replayEpisode.value

@@ -9,7 +9,10 @@ from datenwissenschaften.training.state_models import StateModels
 from datenwissenschaften.ui.telemetry import publish_metadata
 
 DISPLAY_NAME = "Laya"
-DESCRIPTION = "Laya reads the game frozen; small policy and value heads per state learn with PPO."
+DESCRIPTION = (
+    "Laya reads the game and the advice of a fast practice coach, then decides every move; "
+    "small heads per state learn with PPO and imitation."
+)
 
 
 def learning_metadata(models: StateModels) -> dict[str, float]:
