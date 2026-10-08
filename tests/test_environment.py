@@ -152,7 +152,8 @@ def test_training_memory_reset_rebuilds_the_curriculum_and_forgets_landmarks(tmp
     previous = env.curriculum.curriculum
     env.state_machine.landmarks.remember("door", (3, 4))
 
-    env.reset_training_memory()
+    env.curriculum.reset_memory()
+    env.state_machine.landmarks.forget()
 
     assert env.curriculum.curriculum is not previous
     assert env.state_machine.landmarks.recall("door") is None

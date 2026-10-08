@@ -19,7 +19,14 @@ class PracticeStep:
     terminal: bool
     truncated: bool
     reached: str
+    ended: bool
     state: str
+
+
+@dataclass(slots=True, frozen=True)
+class Restart:
+    state: str
+    emulator_state: bytes
 
 
 def practise(
@@ -34,15 +41,21 @@ def practise(
     env.speedrun = speedrun
     _, info = env.reset()
     connection.send((env.observer.inputs(env.read_ram()), info["state"]))
-    while (action := connection.recv()) is not None:
+    while (message := connection.recv()) is not None:
+        if isinstance(message, Restart):
+            frame, _ = env.env.reset()
+            _, info = env.start_from(message.state, message.emulator_state, frame)
+            connection.send((env.observer.inputs(env.read_ram()), info["state"]))
+            continue
         state = info["state"]
-        _, reward, terminated, truncated, info = env.step(action)
+        _, reward, terminated, truncated, info = env.step(message)
         reached = info["state"]
-        terminal = terminated or reached != state
-        if terminated or truncated:
+        ended = terminated or truncated
+        if ended:
             _, info = env.reset()
         inputs = env.observer.inputs(env.read_ram())
-        connection.send(PracticeStep(inputs, reward, terminal, truncated, reached, info["state"]))
+        step = PracticeStep(inputs, reward, terminated or reached != state, truncated, reached, ended, info["state"])
+        connection.send(step)
     env.close()
 
 
@@ -67,6 +80,10 @@ class PracticeEnvironments:
     def send(self, actions: list[int]) -> None:
         for connection, action in zip(self.connections, actions, strict=True):
             connection.send(action)
+
+    def restart(self, worker: int, state: str, emulator_state: bytes) -> None:
+        self.connections[worker].send(Restart(state, emulator_state))
+        self.inputs[worker], self.states[worker] = self.connections[worker].recv()
 
     def receive(self) -> list[PracticeStep]:
         steps: list[PracticeStep] = [connection.recv() for connection in self.connections]

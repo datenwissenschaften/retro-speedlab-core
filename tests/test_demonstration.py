@@ -40,7 +40,7 @@ def _emulator(tmp_path: Path):
 def test_replay_labels_each_decision_with_the_nearest_move_of_the_state_it_was_made_in(tmp_path: Path):
     env = fake_environment(tmp_path, SCRIPT)
 
-    demonstrations = replay(env, BUTTONS)
+    demonstrations, _ = replay(env, BUTTONS)
 
     assert [step.action for step in demonstrations["Survive"]] == [1]
     assert [step.action for step in demonstrations["Boss"]] == [0, 0]
@@ -56,11 +56,12 @@ def test_loading_replays_every_movie_without_recording_it(tmp_path: Path, monkey
     (tmp_path / "demos" / "menu.bk2").write_bytes(b"")
     monkeypatch.setattr(demonstration, "movie_buttons", lambda path, emulator: BUTTONS)
 
-    demonstrations = load_demonstrations(env, tmp_path / "demos")
+    demonstrations, starts = load_demonstrations(env, tmp_path / "demos")
 
     assert {state: len(steps) for state, steps in demonstrations.items()} == {"Survive": 1, "Boss": 2}
+    assert list(starts) == ["Survive"]
     assert env.env.unwrapped.movie_path == record_dir
-    assert load_demonstrations(env, tmp_path / "empty") == {}
+    assert load_demonstrations(env, tmp_path / "empty") == ({}, {})
 
 
 def test_movie_buttons_skip_the_reset_frame_and_require_a_power_on_movie_of_the_game(tmp_path: Path, monkeypatch):
@@ -87,10 +88,19 @@ def test_knowledge_lists_what_laya_learns_from_in_every_state(tmp_path: Path):
     (tmp_path / "seeds").mkdir()
     (tmp_path / "seeds" / "Boss.state").write_bytes(b"seed")
 
-    view = knowledge(env, "fake/laya", replay(fake_environment(tmp_path, SCRIPT), BUTTONS))
+    view = knowledge(env, "fake/laya", replay(fake_environment(tmp_path, SCRIPT), BUTTONS)[0])
 
     assert (view["checkpoint"], view["actions"]) == ("fake/laya", 2)
     assert view["states"] == [
         {"name": "Survive", "question": "Which move survives?", "seeded": False, "demonstrations": 1},
         {"name": "Boss", "question": "Which move beats the boss?", "seeded": True, "demonstrations": 2},
     ]
+
+
+def test_replay_keeps_start_points_only_for_stretches_that_leave_a_state_forward(tmp_path: Path):
+    env = fake_environment(tmp_path, SCRIPT)
+
+    _, starts = replay(env, BUTTONS)
+
+    assert list(starts) == ["Survive"]
+    assert len(starts["Survive"]) == 1

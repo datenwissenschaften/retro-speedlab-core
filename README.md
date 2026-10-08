@@ -117,6 +117,16 @@ accelerator; every 2048 decisions of a state become one PPO update (minibatch
 coach pauses while a lab run works on the game and saves `advisor.pt` next to
 each state's `laya.pt`.
 
+Hard stretches such as precise platforming are learned backwards (backplay).
+Replaying the lab's demonstrations from power-on keeps a start point every 4
+decisions of each stretch that leaves a state forward. A practice run that ends
+in such a state restarts from one of its last start points; once half of 20
+attempts leave the state forward, the start moves one point further back, until
+the whole stretch is covered. Only practice emulators use these start points;
+Laya's attempts always start at the curriculum's start points.
+`metadata.advisors.<State>` shows `backplay` (points covered / total) and
+`exits` (where practice runs leave the state).
+
 On the main emulator the advisor's top move becomes the first fact in Laya's
 text, in the words of that move's option, for example `"advised": "hold right"`.
 Laya decides; the advice is only something it reads. Placement matters: as the

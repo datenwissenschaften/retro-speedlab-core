@@ -75,12 +75,15 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         ensure_movie_directory(emulator)
         frame, _ = self.env.reset(**kwargs)
         self.frames = [frame]
-        return self.start_from(self.curriculum.begin_episode(), frame)
+        state = self.curriculum.begin_episode()
+        return self.start_from(state, None if state is None else self.curriculum.checkpoint(state), frame)
 
-    def start_from(self, checkpoint_state: str | None, frame: np.ndarray) -> tuple[Observation, dict[str, Any]]:
+    def start_from(
+        self, checkpoint_state: str | None, emulator_state: bytes | None, frame: np.ndarray
+    ) -> tuple[Observation, dict[str, Any]]:
         emulator = self.env.unwrapped
-        if checkpoint_state is not None:
-            restore_emulator_state(emulator, self.curriculum.checkpoint(checkpoint_state))
+        if checkpoint_state is not None and emulator_state is not None:
+            restore_emulator_state(emulator, emulator_state)
             frame, *_ = self.env.step(np.zeros_like(self.action_table[0][0]))
             self.frames = [frame]
         ram = self.read_ram()
@@ -138,10 +141,6 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
             "detections": self.state_machine.current_state.detections(),
             "advice": self.observer.advised_action(),
         }
-
-    def reset_training_memory(self) -> None:
-        self.curriculum.reset_memory()
-        self.state_machine.landmarks.forget()
 
     def read_ram(self) -> T:
         return self.ram_info_cls.from_ram(self.env.unwrapped.get_ram())

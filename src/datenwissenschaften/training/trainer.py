@@ -6,6 +6,7 @@ import torch
 
 from datenwissenschaften.accelerator import configure_accelerator
 from datenwissenschaften.advisor.advisors import Advisors
+from datenwissenschaften.advisor.backplay import Backplay
 from datenwissenschaften.advisor.team import AdvisorTeam
 from datenwissenschaften.environment.curriculum_run import FULL_RUN
 from datenwissenschaften.environment.demonstration import load_demonstrations
@@ -92,7 +93,7 @@ class LayaTrainer:
         story = StoryBook(
             database, self.config.training.game_identity, self.context.savestate, phases(self.wrapper_cls)
         )
-        demonstrations = load_demonstrations(env, self.config.paths.demonstrations_dir)
+        demonstrations, starts = load_demonstrations(env, self.config.paths.demonstrations_dir)
         publish_metadata("knowledge", knowledge(env, self.config.laya.checkpoint, demonstrations), replace=True)
         deadline = time.monotonic() + seconds
         lessons = Lessons(demonstrations, env.curriculum.curriculum)
@@ -101,7 +102,7 @@ class LayaTrainer:
         advisors = Advisors(actions, configure_accelerator(), self.context.advisor_path)
         env.observer.advisor = advisors.advise
         practice = PracticeEnvironments(self.wrapper_cls, self.config, self.speedrun, workers)
-        team = AdvisorTeam(advisors, practice, lab_run, lessons)
+        team = AdvisorTeam(advisors, practice, lab_run, lessons, Backplay(starts, phases(self.wrapper_cls)))
         try:
             hooks = self._hooks(env, models, StoryTeller(story))
             return TrainingSession(env, models, hooks, deadline, lessons, lab_run, team.coach).run()

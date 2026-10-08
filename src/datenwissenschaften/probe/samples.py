@@ -42,8 +42,9 @@ def collect_samples(
 
 
 def play_from(env: StateMachineGymWrapper, state: str, decisions: int, rng: np.random.Generator) -> list[Sample]:
+    start = env.curriculum.checkpoint(state)
     frame, _ = env.env.reset()
-    env.start_from(state, frame)
+    env.start_from(state, start, frame)
     samples: list[Sample] = []
     for _ in range(decisions):
         ram = env.read_ram()
@@ -52,7 +53,7 @@ def play_from(env: StateMachineGymWrapper, state: str, decisions: int, rng: np.r
         _, _, terminated, truncated, info = env.step(int(rng.integers(env.action_space.n)))
         if terminated or truncated or info["state"] != state:
             frame, _ = env.env.reset()
-            env.start_from(state, frame)
+            env.start_from(state, start, frame)
     return samples
 
 

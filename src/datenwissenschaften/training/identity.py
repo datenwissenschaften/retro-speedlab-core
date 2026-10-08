@@ -62,7 +62,8 @@ class TrainingIdentity:
         )
 
     def _forget(self, env: StateMachineGymWrapper) -> None:
-        env.reset_training_memory()
+        env.curriculum.reset_memory()
+        env.state_machine.landmarks.forget()
         training = self.context.config.training
         self.database.delete(story_key(level_identity(training.game_identity, self.context.savestate)))
 

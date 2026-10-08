@@ -27,7 +27,7 @@ class NoPractice:
 
 
 class NoTeam:
-    def __init__(self, advisors, practice, lab_run, lessons) -> None:
+    def __init__(self, advisors, practice, lab_run, lessons, backplay) -> None:
         self.coach = None
         self.closed = False
 
