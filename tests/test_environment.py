@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 from fakes import FRAME_RATE, FakeEmulator, FakeWrapper, curriculum_run, fake_environment, write_config
 
+from datenwissenschaften.advisor.advice import Advice
 from datenwissenschaften.curriculum import ReverseCurriculum
 from datenwissenschaften.environment import factory
 from datenwissenschaften.environment.recording import active_movie_path
@@ -289,3 +290,13 @@ def test_practice_emulators_save_start_points_but_never_count_wins(tmp_path: Pat
     assert run.curriculum.has_checkpoint("Boss")
     assert run.curriculum.wins("Survive") == 0
     assert run.curriculum.stagnation_evidence("Survive") == 0
+
+
+def test_laya_reads_the_advised_move_first_in_its_own_words(tmp_path: Path):
+    env = fake_environment(tmp_path, [(3, 0)])
+    env.observer.advisor = lambda state, inputs: Advice(1, {"left": 0.1, "right": 0.9})
+
+    observation, info = env.reset()
+
+    assert next(iter(json.loads(observation["state"]).items())) == ("advised", env.action_descriptions["right"])
+    assert info["advice"] == 1

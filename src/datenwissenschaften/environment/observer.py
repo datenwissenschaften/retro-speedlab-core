@@ -13,12 +13,15 @@ T = TypeVar("T", bound=RamInfo)
 
 Observation = dict[str, str]
 Advise = Callable[[str, np.ndarray], Advice]
-ADVISOR_FACT = "advisor"
+ADVISOR_FACT = "advised"
 
 
 class Observer(Generic[T]):
-    def __init__(self, read_bytes: Callable[[], np.ndarray], state_machine: StateMachine[T]) -> None:
+    def __init__(
+        self, read_bytes: Callable[[], np.ndarray], state_machine: StateMachine[T], action_descriptions: tuple[str, ...]
+    ) -> None:
         self.read_bytes = read_bytes
+        self.action_descriptions = action_descriptions
         self.state_machine = state_machine
         self.advisor: Advise | None = None
         self.advice: Advice | None = None
@@ -33,7 +36,7 @@ class Observer(Generic[T]):
         facts = self.facts(ram)
         if self.advisor is not None:
             self.advice = self.advisor(self.state_machine.state_name, encode(self.read_bytes(), facts))
-            facts = {**facts, ADVISOR_FACT: self.advice}
+            facts = {ADVISOR_FACT: self.action_descriptions[self.advice.action], **facts}
         return {"state": render_facts(facts), "question": self.state_machine.question}
 
     def advised_action(self) -> int | None:

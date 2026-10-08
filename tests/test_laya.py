@@ -170,3 +170,24 @@ def test_checkpoints_hold_the_heads_and_restart_returns_to_laya(network: LayaNet
     assert right_probability(agent) == pytest.approx(trained)
     assert agent.num_timesteps == DECISIONS
     assert agent.metadata()["trained_parameters"] < agent.metadata()["reader_parameters"] * 10
+
+
+def test_laya_reports_how_often_its_favourite_move_is_the_advised_one(network: LayaNetwork):
+    agent = LayaAgent(network, (QUESTION,))
+    rollout = Rollout()
+    for advice in (0, 1, None, 1):
+        decision = agent.act(OBSERVATION, 0.0, advice)
+        rollout.add(decision, 0.0, False, False)
+    favourite = max(rollout.decisions[0].probabilities, key=rollout.decisions[0].probabilities.__getitem__)
+    expected = sum(favourite == name for name in ("left", "right", "right")) / 3
+
+    agent.learn(rollout, [])
+
+    assert agent.last_update["advisor_agreement"] == pytest.approx(expected)
+
+
+def test_without_advice_there_is_no_agreement_to_report(network: LayaNetwork):
+    agent = LayaAgent(network, (QUESTION,))
+    agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 1.0}), [])
+
+    assert "advisor_agreement" not in agent.last_update

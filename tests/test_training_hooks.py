@@ -399,6 +399,6 @@ def test_a_beaten_level_drops_the_replays_of_its_states(monkeypatch):
 
 
 def test_the_stream_shows_every_fact_but_the_advisor():
-    text = '{"lives": 3, "to_target": "4 right, level", "advisor": "right 90%"}'
+    text = '{"advised": "hold right", "lives": 3, "to_target": "4 right, level"}'
 
     assert live_stream_hook.shown_facts(text) == {"lives": 3, "to_target": "4 right, level"}

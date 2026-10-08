@@ -86,9 +86,18 @@ class LayaAgent:
 
         self.policy.last_update = {
             **self.policy.learner.update(rollout, evaluate, imitate),
+            **self._agreement(rollout),
             "demonstration_decisions": 0 if demonstration is None else len(demonstration[1]),
         }
         self.policy.num_timesteps += len(rollout)
+
+    def _agreement(self, rollout: Rollout[Decision]) -> dict[str, float]:
+        names = list(self.network.question.options)
+        advised = [decision for decision in rollout.decisions if decision.advice is not None]
+        if not advised:
+            return {}
+        agreeing = sum(max(d.probabilities, key=d.probabilities.__getitem__) == names[d.advice] for d in advised)
+        return {"advisor_agreement": agreeing / len(advised)}
 
     def _demonstration(self, demonstrations: list[DemonstrationStep]) -> tuple[torch.Tensor, torch.Tensor] | None:
         if not demonstrations:

@@ -4,7 +4,6 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from datenwissenschaften.advisor.advice import Advice
 from datenwissenschaften.advisor.advisors import Advisors
 from datenwissenschaften.advisor.coach import ROLLOUT_STEPS, Coach
 from datenwissenschaften.advisor.inputs import FACT_SLOTS, RAM_SCALE, encode
@@ -29,12 +28,6 @@ def test_inputs_hold_the_scaled_ram_and_a_fixed_number_of_fact_slots():
     assert inputs.shape == (2 + FACT_SLOTS,)
     assert inputs[:2].tolist() == [0.0, 255 / RAM_SCALE]
     assert sorted(value for value in inputs[2:] if value) == [-4.0, 1.0, 2.0, 3.0]
-
-
-def test_advice_names_only_the_likely_moves():
-    advice = Advice(1, {"left": 0.05, "right": 0.82, "jump": 0.13})
-
-    assert str(advice) == "right 82%, jump 13%"
 
 
 def test_ppo_teaches_the_advisor_the_rewarded_move_and_saves_it(tmp_path: Path):

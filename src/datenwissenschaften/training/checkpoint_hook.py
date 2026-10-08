@@ -18,11 +18,14 @@ DESCRIPTION = (
 def learning_metadata(models: StateModels) -> dict[str, float]:
     update = models.agent.last_update
     uniform = math.log(len(models.agent.network.question.options))
-    return {
+    learning = {
         "num_timesteps": models.agent.num_timesteps,
         "entropy_share": round(update["entropy"] / uniform, 3),
         "explained_variance": round(update["explained_variance"], 3),
     }
+    if "advisor_agreement" in update:
+        learning["advisor_agreement"] = round(update["advisor_agreement"], 3)
+    return learning
 
 
 def model_metadata(models: StateModels) -> dict[str, object]:

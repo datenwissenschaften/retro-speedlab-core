@@ -68,7 +68,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         self.state_frames = 0
         self.max_state_frames = round(MAX_STATE_SECONDS * env.unwrapped.em.get_screen_rate())
         self.speedrun = False
-        self.observer = Observer[T](env.unwrapped.get_ram, self.state_machine)
+        self.observer = Observer[T](env.unwrapped.get_ram, self.state_machine, tuple(self.action_descriptions.values()))
 
     def reset(self, **kwargs: Any) -> tuple[Observation, dict[str, Any]]:
         emulator = self.env.unwrapped

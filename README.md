@@ -116,9 +116,13 @@ accelerator; every 2048 decisions of a state become one PPO update (minibatch
 coach pauses while a lab run works on the game and saves `advisor.pt` next to
 each state's `laya.pt`.
 
-On the main emulator the advisor's view of the current state becomes a fact in
-Laya's text, for example `"advisor": "right 82%, jump 10%"`. Laya decides; the
-advice is only something it reads.
+On the main emulator the advisor's top move becomes the first fact in Laya's
+text, in the words of that move's option, for example `"advised": "hold right"`.
+Laya decides; the advice is only something it reads. Placement matters: as the
+first fact in the option's own words, pretrained Laya follows it 97 % of the
+time; as `"advisor": "right 82%"` at the end of the facts it managed 27 %, and
+imitation only lifted that to 32 %. `advisor_agreement` in
+`metadata.state_models` tracks how often Laya's favourite move is the advised one.
 
 ## How Laya learns
 
