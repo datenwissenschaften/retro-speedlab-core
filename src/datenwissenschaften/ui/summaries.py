@@ -8,7 +8,6 @@ import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from datenwissenschaften.settings import UISettings
-from datenwissenschaften.ui.reports import list_reports
 
 OPENROUTER_KEY = "OPENROUTER_API_KEY"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -19,6 +18,7 @@ MIN_SUMMARY_LINES = 3
 SUMMARY_ATTEMPTS = 3
 RETRY_WAIT_SECONDS = 2
 SUMMARY_SUFFIX = ".summary.json"
+REPORT_SUFFIX = ".md"
 DECORATION = " \t-*•#>\"'`"
 CARD_RULES = (
     "Plain text only, without markdown, bullets, numbering, emojis or quotes. Never mention Claude, coding agents, "
@@ -90,10 +90,10 @@ class ReportDigest:
         self.summary = summary
 
     def latest(self) -> dict[str, Any]:
-        reports = list_reports(self.reports_dir)
+        reports = sorted(self.reports_dir.glob(f"*{REPORT_SUFFIX}"), key=lambda report: report.name)
         if not reports:
             raise FileNotFoundError(self.reports_dir)
-        return self.summary.of(self.reports_dir / str(reports[0]["name"]))
+        return self.summary.of(reports[-1])
 
 
 def report_digest(settings: UISettings, game: str, reports_dir: Path) -> ReportDigest | None:

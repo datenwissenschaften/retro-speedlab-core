@@ -30,8 +30,6 @@ def _document() -> dict[str, Any]:
         "upload": {"url": "https://example.test", "api_key": None},
         "ui": {
             "enable": True,
-            "host": "127.0.0.1",
-            "port": 18080,
             "max_episodes": 1000,
             "release": "local",
             "persona": "Retra",
@@ -54,7 +52,6 @@ def test_complete_config_loads(tmp_path: Path):
     assert config.training.game_identity == "TestGame"
     assert config.training.fingerprint is None
     assert config.laya.checkpoint == "convaiinnovations/laya"
-    assert config.ui.port == 18080
     assert config.log_level == "INFO"
 
 
@@ -81,15 +78,6 @@ def test_missing_laya_checkpoint_fails_fast(tmp_path: Path):
     del document["laya"]
 
     with pytest.raises(BoxKeyError):
-        load_config(_write(tmp_path, document))
-
-
-@pytest.mark.parametrize("port", [0, 70_000, True, "18080"])
-def test_invalid_ui_port_is_rejected(tmp_path: Path, port: Any):
-    document = _document()
-    document["ui"]["port"] = port
-
-    with pytest.raises(RuntimeError, match="ui.port"):
         load_config(_write(tmp_path, document))
 
 

@@ -70,4 +70,3 @@ exclude_lines = [
 [tool.poetry]
 package-mode = true
 packages = [{ include = "datenwissenschaften", from = "src" }]
-include = [{ path = "src/datenwissenschaften/ui/static", format = ["sdist", "wheel"] }]

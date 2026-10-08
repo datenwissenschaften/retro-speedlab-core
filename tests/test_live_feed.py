@@ -1,3 +1,4 @@
+import json
 import subprocess
 from pathlib import Path
 
@@ -7,7 +8,7 @@ import numpy as np
 import pytest
 
 from datenwissenschaften.ui import live
-from datenwissenschaften.ui.live import MAX_COMPLETED_EPISODES, MAX_STATUSES_PER_REQUEST, LiveFeed
+from datenwissenschaften.ui.live import MAX_COMPLETED_EPISODES, LiveFeed
 from datenwissenschaften.ui.replay_video import encode_video
 
 LOST = {"score": 1.0, "won": False, "new_best": False, "full_run": False, "succeeded": False, "curriculum": "Play"}
@@ -25,24 +26,21 @@ def play(feed: LiveFeed, episode_id: int, frames: int, result: dict) -> None:
     feed.finish_episode(episode_id, 60.0, result, {})
 
 
-def test_the_latest_attempts_are_kept_as_a_video_with_their_decisions_in_chunks():
+def test_the_latest_attempts_are_kept_as_a_video_and_their_decisions_under_one_content_key():
     feed = LiveFeed()
     generation = feed.latest_episode()["generation"]
-    empty = {"generation": generation, "episode": None, "replays": [], "summary": {}}
-    assert feed.latest_episode() == empty
+    assert feed.latest_episode() == {"generation": generation, "episode": None, "replays": [], "summary": {}}
     for episode_id in range(1, MAX_COMPLETED_EPISODES + 3):
-        play(feed, episode_id, MAX_STATUSES_PER_REQUEST + 5, LOST)
+        play(feed, episode_id, episode_id, LOST)
 
-    newest = MAX_COMPLETED_EPISODES + 2
-    rest = feed.episode_statuses(generation, newest, MAX_STATUSES_PER_REQUEST)
+    newest = feed.latest_episode()["episode"]
+    key = newest["key"]
 
-    assert len(feed.episode_statuses(generation, newest, 0)) == MAX_STATUSES_PER_REQUEST
-    first_of_rest = MAX_STATUSES_PER_REQUEST
-    assert [status["timesteps"] for status in rest] == list(range(first_of_rest, first_of_rest + 5))
-    assert feed.episode_video(generation, newest).startswith(b"mp4:jpeg")
-    assert feed.latest_episode()["episode"]["frame_count"] == MAX_STATUSES_PER_REQUEST + 5
+    assert feed.media(f"{key}.mp4") == b"mp4:" + b"jpeg" * newest["id"]
+    assert [status["timesteps"] for status in json.loads(feed.media(f"{key}.json"))] == list(range(newest["id"]))
+    assert len(feed.media_names()) == 2 * MAX_COMPLETED_EPISODES
     with pytest.raises(KeyError):
-        feed.episode_video(generation, 2)
+        feed.media("0" * 32 + ".mp4")
 
 
 def test_clearing_the_live_feed_starts_a_new_generation_without_old_attempts():
@@ -54,8 +52,8 @@ def test_clearing_the_live_feed_starts_a_new_generation_without_old_attempts():
     play(feed, 1, 1, {**LOST, "score": 3.0})
 
     assert feed.latest_episode()["generation"] != old
-    with pytest.raises(KeyError):
-        feed.episode_video(old, 1)
+    assert feed.latest_episode()["episode"]["result"]["score"] == 3.0
+    assert len(feed.media_names()) == 2
 
 
 CURRICULA = frozenset({"Play", "Grow", "Heavy"})
@@ -79,11 +77,13 @@ def test_the_best_replays_survive_a_restart_on_disk_and_go_with_a_reset(tmp_path
 
     restarted = LiveFeed()
     restarted.keep_replays_in(tmp_path / "replays", CURRICULA)
-    generation = restarted.latest_episode()["generation"]
+    replays = {replay["id"]: replay for replay in restarted.latest_episode()["replays"]}
 
-    replays = sorted((replay["result"]["curriculum"], replay["id"]) for replay in restarted.latest_episode()["replays"])
-    assert replays == [("Grow", 2), ("Play", 3)]
-    assert restarted.episode_video(generation, 3) == b"mp4:jpegjpeg"
+    assert sorted((replay["result"]["curriculum"], replay["id"]) for replay in replays.values()) == [
+        ("Grow", 2),
+        ("Play", 3),
+    ]
+    assert restarted.media(f"{replays[3]['key']}.mp4") == b"mp4:jpegjpeg"
     restarted.clear()
     assert list((tmp_path / "replays").iterdir()) == []
 

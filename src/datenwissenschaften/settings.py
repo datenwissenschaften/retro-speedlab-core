@@ -5,8 +5,6 @@ from typing import Any
 import yaml
 from box import Box
 
-MAX_PORT = 65_535
-
 
 @dataclass(frozen=True)
 class RetroSpeedlabPaths:
@@ -43,8 +41,6 @@ class UploadSettings:
 @dataclass(frozen=True)
 class UISettings:
     enabled: bool
-    host: str
-    port: int
     max_episodes: int
     release: str
     persona: str
@@ -97,8 +93,6 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
         ),
         ui=UISettings(
             enabled=_boolean(ui.enable, "ui.enable"),
-            host=_text(ui.host, "ui.host"),
-            port=_port(ui.port),
             max_episodes=_positive_int(ui.max_episodes, "ui.max_episodes"),
             release=_text(ui.release, "ui.release"),
             persona=_text(ui.persona, "ui.persona"),
@@ -135,13 +129,6 @@ def _positive_int(value: Any, name: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 1:
         raise RuntimeError(f"Configuration value '{name}' must be a positive integer.")
     return value
-
-
-def _port(value: Any) -> int:
-    port = _positive_int(value, "ui.port")
-    if port > MAX_PORT:
-        raise RuntimeError(f"Configuration value 'ui.port' must be at most {MAX_PORT}.")
-    return port
 
 
 def _path(value: Any, base_dir: Path) -> Path:

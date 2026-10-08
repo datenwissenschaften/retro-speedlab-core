@@ -39,9 +39,9 @@ from datenwissenschaften.training.upload_hook import UploadHook
 from datenwissenschaften.training.video_hook import BestVideoHook
 from datenwissenschaften.ui.control import ModelResetRequest, configure_training_control, perform_model_reset
 from datenwissenschaften.ui.live import live_feed
-from datenwissenschaften.ui.server import start_ui
+from datenwissenschaften.ui.relay import LiveRelay
 from datenwissenschaften.ui.summaries import report_digest
-from datenwissenschaften.ui.telemetry import configure_history, level_full_run_wins, publish_metadata
+from datenwissenschaften.ui.telemetry import configure_history, get_store, level_full_run_wins, publish_metadata
 
 SESSION_SECONDS = 2 * 60 * 60
 BEATEN_FULL_RUN_WINS = 8
@@ -126,6 +126,7 @@ class LayaTrainer:
     def _hooks(self, env: StateMachineGymWrapper, models: StateModels, teller: StoryTeller) -> list[TrainingHook]:
         frame_rate = env.unwrapped.em.get_screen_rate()
         stream = [LiveStreamHook(frame_rate, teller, self.context.savestate)]
+        digest = report_digest(self.config.ui, self.context.game, self.config.paths.reports_dir)
         return [
             *(stream if self.config.ui.twitch else []),
             TelemetryHook(self.context),
@@ -133,7 +134,7 @@ class LayaTrainer:
             BestVideoHook(self.context, self._curricula()),
             BeatenLevelHook(env.curriculum),
             UploadHook(self.context, models.agent, frame_rate, frozenset(env.curriculum.targets.levels)),
-            ReportUploadHook(self.context),
+            ReportUploadHook(self.context, digest),
             CurriculumUploadHook(self.context, env.curriculum),
         ]
 
@@ -151,8 +152,11 @@ class LayaTrainer:
         )
         if self.ui_started:
             return
-        reports_dir = self.config.paths.reports_dir
-        start_ui(ui, self.context.record_root, reports_dir, report_digest(ui, self.context.game, reports_dir))
+        upload = self.config.upload
+        if upload.api_key is None:
+            raise RuntimeError("ui.enable relays the stream to the backend and needs upload.api_key.")
+        get_store().resize(ui.max_episodes)
+        LiveRelay(upload.url, upload.api_key, ui, self.context.record_root).start()
         self.ui_started = True
 
 

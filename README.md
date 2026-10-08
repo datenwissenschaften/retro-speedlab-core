@@ -28,7 +28,7 @@ knowledge into a learning agent.
 - **Fits a consumer GPU**: the frozen reader runs under fp16 or bf16 autocast,
   and only the heads and the advisors (a few million weights each) are trained
 - **Probe and stall watch**: a probe measures which facts Laya can read back
-  from its features, and the dashboard flags states whose learning is flat
+  from its features, and the stream flags states whose learning is flat
 - **Power-on start like a real speedrun**: every attempt boots the game at its
   title screen with every button, levels are states of one full-game run
 - **Curriculum** with automatic savestates: once a phase is mastered,
@@ -38,8 +38,8 @@ knowledge into a learning agent.
   and boxes on the stream
 - `.bk2` recording of every attempt, MP4 rendering of the best attempts, and
   uploads of beaten levels and short lab reports to the Retro Speedlab API
-- Live dashboard and a 1920×1080 stream view for OBS, backed by a file-based
-  JSON database
+- Live relay of every attempt, its decisions and the training snapshot to the
+  Retro Speedlab backend, whose website plays them as the stream for OBS
 
 ## Architecture
 
@@ -57,7 +57,7 @@ flowchart TD
     Models["Checkpoint per state"]
     Curriculum["Reverse curriculum<br/>+ level rotation"]
     Rec["BK2 recordings · MP4 videos"]
-    UI["Dashboard · stream view"]
+    UI["Live relay<br/>snapshot · attempts · best videos"]
     API["Retro Speedlab API<br/>beaten levels · lab reports"]
 
     Game --> Env
@@ -210,14 +210,16 @@ curriculum state is rendered to MP4. With `upload.api_key` set:
 Failed uploads are retried after the next update; without an API key nothing
 is uploaded.
 
-## Dashboard and stream view
+## Live relay
 
-With `ui.enable: true` the dashboard runs at `http://127.0.0.1:18080`. It shows
-per-state and per-level statistics, the model, the curriculum and the lab
-reports, and offers a CSRF-protected model reset. `/stream` is a 1920×1080 page
-for OBS: training records every frame with the decision behind it, and the
-page replays that recording at a steady frame rate a few seconds behind live,
-so learning pauses never freeze the stream. With `twitch.enabled: true`, free
+With `ui.enable: true` and an upload key, training records every frame with the
+decision behind it and relays it to the Retro Speedlab backend (`upload.url`):
+every few seconds the training snapshot and the feed of the latest attempt, the
+best replays and the best attempt videos, and each attempt's video and
+decisions once, named by their content hash. The website's `/stream` page,
+opened with the stream key (`?api_key=`), replays them for OBS. A model reset
+requested at the backend (`POST /live/reset`) reaches the training through the
+same relay. The engine itself serves nothing. With `twitch.enabled: true`, free
 models on OpenRouter (`OPENROUTER_API_KEY`) write the short version of the
 latest lab report for the stream.
 
@@ -296,7 +298,7 @@ raise a `RuntimeError` when the configuration is loaded.
 | `training.fingerprint` | Changing it resets the game's models and curriculum |
 | `laya.checkpoint` | Laya model on the Hugging Face Hub or a local directory |
 | `upload.url`, `upload.api_key` | Retro Speedlab API; `null` disables uploads |
-| `ui.*` | Dashboard address, history size, release label and the persona shown on stream |
+| `ui.*` | Live relay on or off, history size, release label and the persona shown on stream |
 | `twitch.enabled`, `twitch.summary_models` | Short lab reports for the stream via OpenRouter |
 
 ## Testing
@@ -315,14 +317,6 @@ and configuration validation.
 ```bash
 poetry run ruff check .
 poetry run ruff format --check .
-```
-
-After modifying the Vue dashboard, rebuild its assets:
-
-```bash
-cd src/datenwissenschaften/ui/frontend
-npm ci
-npm run build
 ```
 
 ## Relationship to Retro Speedlab
@@ -351,8 +345,6 @@ npm run build
   memory.
 - Training is resumable, not bit-exact reproducible: sampling, CUDA kernels and
   the emulator are not seeded into one deterministic stream.
-- Binding the dashboard to `0.0.0.0` exposes it to the network without
-  authentication; keep `127.0.0.1` unless the network is trusted.
 
 ## License
 

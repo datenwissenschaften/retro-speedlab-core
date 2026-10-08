@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fakes import FakeWrapper, fake_environment, fake_laya_load, write_config
@@ -78,7 +79,8 @@ def test_identity_resets_training_when_the_model_layout_changes(tmp_path: Path, 
 
 def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_path: Path, monkeypatch):
     config_path = write_config(tmp_path)
-    config_path.write_text(config_path.read_text().replace("enable: false", "enable: true"), encoding="utf-8")
+    config = config_path.read_text().replace("enable: false", "enable: true")
+    config_path.write_text(config.replace("api_key: null", "api_key: upload-key"), encoding="utf-8")
     env = fake_environment(tmp_path, [(3, 0)])
     agents, ui = [], []
     monkeypatch.setattr(network_module.laya, "load", fake_laya_load)
@@ -89,7 +91,8 @@ def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_pa
     monkeypatch.setattr(trainer_module, "AdvisorTeam", NoTeam)
     monkeypatch.setattr(trainer_module, "configure_history", lambda *args, **kwargs: ui.append("history"))
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
-    monkeypatch.setattr(trainer_module, "start_ui", lambda settings, root, reports, digest: ui.append(root))
+    relay = SimpleNamespace(start=lambda: ui.append("relay"))
+    monkeypatch.setattr(trainer_module, "LiveRelay", lambda url, key, settings, root: relay)
     published = {}
     monkeypatch.setattr(
         trainer_module, "publish_metadata", lambda section, values, **kwargs: published.update({section: values})
@@ -114,7 +117,7 @@ def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_pa
         trainer.train()
 
     assert agents[0].network.checkpoint == "fake/laya"
-    assert ui == ["history", trainer.context.record_root]
+    assert ui == ["history", "relay"]
     assert published["run"]["game"] == "FakeGame-v0"
     assert published["environment"]["states"] == ["Survive", "Boss"]
 
@@ -133,6 +136,7 @@ def test_video_playback_imports_roms_and_renders_every_movie(monkeypatch, tmp_pa
 
 
 def test_trainer_plays_the_full_game_and_speedruns_it_once_beaten(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     config_path = write_config(tmp_path)
     sessions, outcomes, wins = [], iter([None, "reset"]), iter([0, trainer_module.BEATEN_FULL_RUN_WINS])
     monkeypatch.setattr(network_module.laya, "load", fake_laya_load)

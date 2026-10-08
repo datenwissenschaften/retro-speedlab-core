@@ -162,8 +162,9 @@ def test_live_stream_hook_records_every_frame_of_an_episode_with_its_result(monk
     hook.on_step(_transition())
     hook.on_episode_end(_episode("run.bk2", 4.0, True, True))
 
-    generation = feed.latest_episode()["generation"]
-    first, second = (feed.episode_statuses(generation, episode_id, 0) for episode_id in (42, 43))
+    newest = f"{feed.latest_episode()['episode']['key']}.json"
+    earlier = next(name for name in feed.media_names() if name.endswith(".json") and name != newest)
+    first, second = (json.loads(feed.media(name)) for name in (earlier, newest))
     status = first[0]
     assert (len(first), len(second)) == (2, 2)
     assert (status["action"], status["probabilities"]["right"]) == ("right", 0.7)
@@ -345,7 +346,7 @@ def test_report_upload_hook_uploads_new_and_changed_short_reports(context: RunCo
         "put",
         lambda url, **kwargs: puts.append((url, kwargs["json"])) or _response("PUT", url),
     )
-    hook = report_upload_hook.ReportUploadHook(context)
+    hook = report_upload_hook.ReportUploadHook(context, None)
     hook.settings = SimpleNamespace(url="https://upload.test", api_key="key")
 
     hook.on_update()

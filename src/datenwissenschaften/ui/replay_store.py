@@ -4,6 +4,8 @@ from typing import Any
 import msgspec
 from loguru import logger
 
+from datenwissenschaften.ui.media import episode_key
+
 REPLAY_SUFFIX = ".replay"
 PARTIAL_SUFFIX = ".partial"
 
@@ -29,6 +31,7 @@ class ReplayStore:
                 logger.info(f"Deleting the replay of {path.stem}: it never reached its goal")
                 path.unlink()
                 continue
+            episode["key"] = episode_key(episode)
             replays[episode["result"]["curriculum"]] = episode
         return replays
 

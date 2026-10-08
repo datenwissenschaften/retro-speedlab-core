@@ -5,11 +5,11 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from datenwissenschaften.ui.media import episode_key, episode_media, episode_media_names
 from datenwissenschaften.ui.replay_store import ReplayStore
 from datenwissenschaften.ui.replay_video import encode_video
 
 MAX_COMPLETED_EPISODES = 4
-MAX_STATUSES_PER_REQUEST = 600
 
 
 class LiveFeed:
@@ -68,6 +68,7 @@ class LiveFeed:
             "statuses": [frame["status"] for frame in frames],
             "video": encode_video([frame["image"] for frame in frames], frame_rate),
         }
+        episode["key"] = episode_key(episode)
         with self._lock:
             self._episodes.append(episode)
             self._keep_best(episode)
@@ -99,21 +100,19 @@ class LiveFeed:
                 "summary": dict(self._summary),
             }
 
-    def episode_statuses(self, generation: str, episode_id: int, start: int) -> list[dict[str, Any]]:
-        statuses = self._episode(generation, episode_id)["statuses"]
-        return [dict(status) for status in statuses[start : start + MAX_STATUSES_PER_REQUEST]]
-
-    def episode_video(self, generation: str, episode_id: int) -> bytes:
-        return self._episode(generation, episode_id)["video"]
-
-    def _episode(self, generation: str, episode_id: int) -> dict[str, Any]:
+    def media_names(self) -> set[str]:
         with self._lock:
-            if generation != self._generation:
-                raise KeyError(generation)
-            for episode in (*self._episodes, *self._replays.values()):
-                if episode["id"] == episode_id:
-                    return episode
-        raise KeyError(episode_id)
+            return {name for episode in self._all() for name in episode_media_names(episode)}
+
+    def media(self, name: str) -> bytes:
+        with self._lock:
+            episodes = [episode for episode in self._all() if name in episode_media_names(episode)]
+        if not episodes:
+            raise KeyError(name)
+        return episode_media(episodes[0], name)
+
+    def _all(self) -> list[dict[str, Any]]:
+        return [*self._episodes, *self._replays.values()]
 
 
 def _overview(episode: dict[str, Any]) -> dict[str, Any]:
@@ -122,6 +121,7 @@ def _overview(episode: dict[str, Any]) -> dict[str, Any]:
         "frame_rate": episode["frame_rate"],
         "frame_count": len(episode["statuses"]),
         "result": episode["result"],
+        "key": episode["key"],
     }
 
 

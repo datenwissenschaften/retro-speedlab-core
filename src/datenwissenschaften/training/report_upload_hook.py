@@ -7,14 +7,15 @@ from loguru import logger
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
-from datenwissenschaften.ui.summaries import SUMMARY_SUFFIX
+from datenwissenschaften.ui.summaries import SUMMARY_SUFFIX, ReportDigest
 
 TIMEOUT_SECONDS = 30
 
 
 class ReportUploadHook:
-    def __init__(self, context: RunContext) -> None:
+    def __init__(self, context: RunContext, digest: ReportDigest | None) -> None:
         self.context = context
+        self.digest = digest
         self.settings = context.config.upload
         self.uploaded: set[tuple[str, float]] = set()
 
@@ -30,11 +31,22 @@ class ReportUploadHook:
         reports_dir = self.context.config.paths.reports_dir
         if not reports_dir.is_dir():
             return
+        self._summarize_latest()
         try:
             for summary in sorted(reports_dir.glob(f"*{SUMMARY_SUFFIX}")):
                 self._upload_once(summary, json.loads(summary.read_text(encoding="utf-8"))["name"])
         except httpx.HTTPError as error:
             logger.error(f"Lab report upload failed: {error}")
+
+    def _summarize_latest(self) -> None:
+        if self.digest is None:
+            return
+        try:
+            self.digest.latest()
+        except FileNotFoundError:
+            return
+        except (httpx.HTTPError, KeyError, IndexError, ValueError) as error:
+            logger.warning(f"No summary of the latest lab report: {error}")
 
     def _upload_once(self, summary: Path, name: str) -> None:
         version = (str(summary), summary.stat().st_mtime)
