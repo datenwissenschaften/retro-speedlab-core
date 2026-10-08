@@ -169,7 +169,7 @@ def write_config(tmp_path: Path) -> Path:
 
 def curriculum_run(root: Path, state_names: tuple[str, ...], seeds: Path) -> CurriculumRun:
     return CurriculumRun(
-        root, LevelTargets(state_names, {}), "Level1", seeds, LevelClock(root / "level_times.json", FRAME_RATE)
+        root, LevelTargets(state_names, {}), "Level1", seeds, LevelClock(root / "level_times.json", FRAME_RATE), True
     )
 
 

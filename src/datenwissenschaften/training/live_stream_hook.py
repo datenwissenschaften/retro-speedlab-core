@@ -4,6 +4,7 @@ from collections import deque
 import cv2
 import numpy as np
 
+from datenwissenschaften.environment.observer import ADVISOR_FACT
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
 from datenwissenschaften.training.story_teller import StoryTeller
@@ -13,6 +14,10 @@ from datenwissenschaften.vision.overlay import draw_detections
 
 JPEG_QUALITY = 80
 RECENT_SCORES = 120
+
+
+def shown_facts(text: str) -> dict[str, object]:
+    return {name: value for name, value in json.loads(text).items() if name != ADVISOR_FACT}
 
 
 class LiveStreamHook:
@@ -43,7 +48,7 @@ class LiveStreamHook:
             "action": list(transition.decision.probabilities)[transition.decision.action],
             "probabilities": transition.decision.probabilities,
             "question": transition.observation["question"],
-            "ram": json.loads(transition.observation["state"]),
+            "ram": shown_facts(transition.observation["state"]),
         }
         detections = transition.info["detections"]
         for frame in transition.frames:

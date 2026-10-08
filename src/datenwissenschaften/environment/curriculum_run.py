@@ -11,7 +11,10 @@ FULL_RUN = "Full run"
 
 
 class CurriculumRun:
-    def __init__(self, root: Path, targets: LevelTargets, level: str, seeds_dir: Path, clock: LevelClock) -> None:
+    def __init__(
+        self, root: Path, targets: LevelTargets, level: str, seeds_dir: Path, clock: LevelClock, counts_outcomes: bool
+    ) -> None:
+        self.counts_outcomes = counts_outcomes
         self.root = root
         self.level = level
         self.state_names = targets.state_names
@@ -33,7 +36,7 @@ class CurriculumRun:
     def begin_episode(self) -> str | None:
         active_state = self.curriculum.active_state()
         self.start_state = active_state or FULL_RUN
-        self.outcome_recorded = active_state is None
+        self.outcome_recorded = active_state is None or not self.counts_outcomes
         self.episode_steps = 0
         self.segment_return = 0.0
         checkpoint_state = self.targets.start_checkpoint(active_state, self.curriculum)

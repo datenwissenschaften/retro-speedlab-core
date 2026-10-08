@@ -14,7 +14,7 @@ DEVELOPMENT_VERSION = "DEVELOPMENT"
 VERSION_KEY = "engine-version"
 FINGERPRINT_KEY = "database-fingerprint"
 MODEL_LAYOUT_KEY = "model-layout"
-MODEL_LAYOUT = "laya-decides-with-ppo-advisor"
+MODEL_LAYOUT = "laya-decides-with-ppo-advisor-laya-wins-only"
 MAJOR_MINOR = re.compile(r"^v?(\d+)\.(\d+)")
 
 

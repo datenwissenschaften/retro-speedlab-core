@@ -396,3 +396,9 @@ def test_a_beaten_level_drops_the_replays_of_its_states(monkeypatch):
     beaten_level_hook.BeatenLevelHook(curriculum).on_episode_end(_episode("run.bk2", 1.0, True, True))
 
     assert dropped == [("Survive", "Boss")]
+
+
+def test_the_stream_shows_every_fact_but_the_advisor():
+    text = '{"lives": 3, "to_target": "4 right, level", "advisor": "right 90%"}'
+
+    assert live_stream_hook.shown_facts(text) == {"lives": 3, "to_target": "4 right, level"}

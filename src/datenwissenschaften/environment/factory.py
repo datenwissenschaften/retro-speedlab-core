@@ -18,7 +18,7 @@ SESSION_STAMP = "%Y%m%dT%H%M%S"
 
 
 def make_environment(
-    wrapper_cls: type[StateMachineGymWrapper], config: RetroSpeedlabConfig, worker: int, record: bool
+    wrapper_cls: type[StateMachineGymWrapper], config: RetroSpeedlabConfig, worker: int, main: bool
 ) -> StateMachineGymWrapper:
     training = config.training
     import_roms(config.paths.roms_path, config.paths.integrations_dir)
@@ -28,7 +28,7 @@ def make_environment(
         training.game,
         retro.State.NONE,
         render_mode="rgb_array",
-        record=str(record_dir) if record else False,
+        record=str(record_dir) if main else False,
         use_restricted_actions=retro.Actions.ALL,
     )
     emulator = env.unwrapped
@@ -38,7 +38,7 @@ def make_environment(
     levels = level_map(wrapper_cls.levels, wrapper_cls.state_classes)
     targets = curriculum_targets(wrapper_cls.state_classes, levels)
     clock = LevelClock(root / LEVEL_TIMES_FILE, emulator.em.get_screen_rate())
-    curriculum = CurriculumRun(root, LevelTargets(targets, levels), POWER_ON, config.paths.curriculum_dir, clock)
+    curriculum = CurriculumRun(root, LevelTargets(targets, levels), POWER_ON, config.paths.curriculum_dir, clock, main)
     return wrapper_cls(env, curriculum, Landmarks(root / LANDMARKS_FILE), POWER_ON)
 
 

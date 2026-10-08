@@ -275,3 +275,17 @@ def test_entering_the_next_state_restarts_its_clock(tmp_path: Path):
 
     assert info["state_transition"] == ("Survive", "Boss")
     assert (truncated, env.state_frames) == (False, 0)
+
+
+def test_practice_emulators_save_start_points_but_never_count_wins(tmp_path: Path):
+    run = curriculum_run(tmp_path / "curriculum", ("Survive", "Boss"), tmp_path / "seeds")
+    run.counts_outcomes = False
+    run.begin_episode()
+
+    outcome = run.transition("Survive", "Boss", b"boss", 1.0)
+    run.fail(-1.0)
+
+    assert outcome == (False, False)
+    assert run.curriculum.has_checkpoint("Boss")
+    assert run.curriculum.wins("Survive") == 0
+    assert run.curriculum.stagnation_evidence("Survive") == 0

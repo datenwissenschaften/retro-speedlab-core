@@ -153,7 +153,8 @@ background thread to a temporary file that replaces the old one atomically.
 
 `ReverseCurriculum` masters the states of a level in order. When an attempt
 reaches a new state, the emulator state is saved as that state's checkpoint;
-eight wins master a state. A win only counts if it takes at most 25 % more
+eight wins master a state. Only Laya's attempts on the main emulator count as
+wins and failures; the practice emulators only add start points. A win only counts if it takes at most 25 % more
 steps than the median of that state's last 8 wins, so faster wins pull the
 limit down and mastery means fast and consistent, while one lucky fast win
 never blocks it. From then on attempts start from the checkpoint

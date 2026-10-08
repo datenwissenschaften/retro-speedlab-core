@@ -59,7 +59,12 @@ def run(tmp_path: Path, monkeypatch) -> CurriculumRun:
     levels = level_map(LEVELS, STATES)
     targets = LevelTargets(curriculum_targets(STATES, levels), levels)
     curriculum_run = CurriculumRun(
-        tmp_path / "curriculum", targets, "PowerOn", tmp_path / "seeds", LevelClock(tmp_path / "times.json", FRAME_RATE)
+        tmp_path / "curriculum",
+        targets,
+        "PowerOn",
+        tmp_path / "seeds",
+        LevelClock(tmp_path / "times.json", FRAME_RATE),
+        True,
     )
     curriculum_run.curriculum.save_checkpoint("Eat", b"eat", 0.0)
     curriculum_run.curriculum.save_checkpoint("Door", b"door", 0.0)
