@@ -43,3 +43,25 @@ def test_exploration_does_not_count_as_a_policy_step():
 
     assert metrics["clip_fraction"] < 0.05
     assert abs(metrics["approx_kl"]) < 0.01
+
+
+def test_an_explored_move_the_policy_had_ruled_out_does_not_poison_the_policy():
+    logits = nn.Parameter(torch.tensor([200.0] + [0.0] * (ACTIONS - 1)))
+    value = nn.Parameter(torch.zeros(()))
+    holder, critic = nn.Module(), nn.Module()
+    holder.logits, critic.value = logits, value
+    rollout: Rollout[Move] = Rollout()
+    for step in range(DECISIONS):
+        action = step % ACTIONS
+        policy = float(torch.softmax(logits.detach(), -1)[action])
+        rollout.add(
+            Move(action, (1 - EXPLORATION) * policy + EXPLORATION / ACTIONS, policy, 0.0), -float(action), False, False
+        )
+
+    def evaluate(index: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        return torch.log_softmax(logits, -1).expand(len(index), -1), value.expand(len(index))
+
+    metrics = PpoLearner((holder, critic), 1e-4, 64).update(rollout, evaluate, lambda index: value.new_zeros(()))
+
+    assert torch.isfinite(logits).all()
+    assert metrics["skipped_minibatches"] == 0

@@ -110,6 +110,7 @@ def test_ppo_makes_the_rewarded_move_likelier_and_learns_its_value(network: Laya
         "clip_fraction",
         "explained_variance",
         "imitation_loss",
+        "skipped_minibatches",
         "demonstration_decisions",
     }
     assert all(not parameter.requires_grad for parameter in network.parameters())
@@ -170,6 +171,24 @@ def test_checkpoints_hold_the_heads_and_restart_returns_to_laya(network: LayaNet
     assert right_probability(agent) == pytest.approx(trained)
     assert agent.num_timesteps == DECISIONS
     assert agent.metadata()["trained_parameters"] < agent.metadata()["reader_parameters"] * 10
+
+
+def test_a_checkpoint_with_a_broken_policy_head_restores_laya_judgement_and_keeps_the_value_head(network: LayaNetwork):
+    agent = LayaAgent(network, (QUESTION,))
+    pretrained = right_probability(agent)
+    agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 1.0}), [])
+    checkpoint = torch.load(io.BytesIO(agent.policy.checkpoint().getvalue()), map_location="cpu")
+    value = {name: tensor.clone() for name, tensor in checkpoint["heads"].items() if name.startswith("value.")}
+    for name, tensor in checkpoint["heads"].items():
+        if name.startswith("policy."):
+            tensor.fill_(float("nan"))
+
+    agent.restart()
+    agent.policy.restore(checkpoint)
+
+    assert right_probability(agent) == pytest.approx(pretrained)
+    assert all(torch.equal(agent.policy.heads.state_dict()[name].cpu(), tensor) for name, tensor in value.items())
+    assert agent.num_timesteps == DECISIONS
 
 
 def test_laya_reports_how_often_its_favourite_move_is_the_advised_one(network: LayaNetwork):

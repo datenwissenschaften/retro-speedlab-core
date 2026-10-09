@@ -14,6 +14,7 @@ VALUE_WEIGHT = 0.5
 ENTROPY_WEIGHT = 0.01
 MAX_GRADIENT_NORM = 0.5
 NORMALIZATION_EPSILON = 1e-8
+MAX_LOG_RATIO = 20.0
 
 Evaluate = Callable[[torch.Tensor], tuple[torch.Tensor, torch.Tensor]]
 Imitate = Callable[[torch.Tensor], torch.Tensor]
@@ -29,19 +30,20 @@ class PpoLearner:
         device = next(self.parts[0].parameters()).device
         actions, old = rollout.actions(device), rollout.policy(device)
         exploration_weight = (old / rollout.behavior(device)).clamp(max=1.0)
-        old = old.log()
+        old = old.clamp_min(torch.finfo(old.dtype).tiny).log()
         advantages, returns = (tensor.to(device) for tensor in rollout.advantages(GAMMA, LAMBDA))
         advantages = (advantages - advantages.mean()) / (advantages.std() + NORMALIZATION_EPSILON)
         names = ("policy_loss", "value_loss", "entropy", "approx_kl", "clip_fraction", "imitation_loss")
         totals = dict.fromkeys(names, 0.0)
         batches = 0
+        skipped = 0
         for part in self.parts:
             part.train()
         for _ in range(EPOCHS):
             for index in torch.randperm(len(rollout), device=device).split(self.minibatch):
                 log_probs, values = evaluate(index)
                 chosen = log_probs.gather(1, actions[index, None]).squeeze(1)
-                ratio = (chosen - old[index]).exp()
+                ratio = (chosen - old[index]).clamp(max=MAX_LOG_RATIO).exp()
                 clipped = ratio.clamp(1 - CLIP, 1 + CLIP)
                 surrogate = torch.min(ratio * advantages[index], clipped * advantages[index])
                 policy_loss = -(exploration_weight[index] * surrogate).mean()
@@ -50,6 +52,9 @@ class PpoLearner:
                 imitation = imitate(index)
                 loss = policy_loss + VALUE_WEIGHT * value_loss - ENTROPY_WEIGHT * entropy + imitation
                 self.optimizer.zero_grad(set_to_none=True)
+                if not loss.isfinite():
+                    skipped += 1
+                    continue
                 loss.backward()
                 for part in self.parts:
                     torch.nn.utils.clip_grad_norm_(part.parameters(), MAX_GRADIENT_NORM)
@@ -70,7 +75,8 @@ class PpoLearner:
                 batches += 1
         for part in self.parts:
             part.eval()
-        metrics = {name: total / batches for name, total in totals.items()}
+        metrics = {name: total / max(batches, 1) for name, total in totals.items()}
+        metrics["skipped_minibatches"] = skipped
         metrics["explained_variance"] = explained_variance(returns, rollout.values().to(device))
         return metrics
 
