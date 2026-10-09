@@ -130,6 +130,7 @@ def test_every_action_needs_a_description(tmp_path: Path):
             FakeEmulator(tmp_path, [(3, 0)]),
             curriculum_run(tmp_path, ("Survive",), tmp_path / "seeds"),
             Landmarks(tmp_path / "landmarks.json"),
+            fakes.fake_routes(tmp_path),
             "Level1",
         )
 
@@ -143,6 +144,7 @@ def test_actions_must_be_button_sequences(tmp_path: Path):
             FakeEmulator(tmp_path, [(3, 0)]),
             curriculum_run(tmp_path, ("Survive",), tmp_path / "seeds"),
             Landmarks(tmp_path / "landmarks.json"),
+            fakes.fake_routes(tmp_path),
             "Level1",
         )
 
@@ -220,6 +222,7 @@ def test_what_a_state_sees_becomes_part_of_layas_text(tmp_path: Path):
         FakeEmulator(tmp_path, [(3, 0), (3, 1)]),
         curriculum_run(tmp_path, ("Seeing", "Boss"), tmp_path / "seeds"),
         Landmarks(tmp_path / "landmarks.json"),
+        fakes.fake_routes(tmp_path),
         "Level1",
     )
 

@@ -21,6 +21,9 @@ knowledge into a learning agent.
 - **A fast advisor coaches Laya**: a small PPO network per state practises on
   every other CPU core at emulator speed; Laya reads its advice as one more
   fact and still makes every decision on the main emulator
+- **Route memory**: every forward exit of a state teaches each position on the
+  way the move of the fastest one, so Laya and the advisor read what to do
+  where they are, next to the live facts about food and enemies
 - **PPO and imitation on Laya's features**: Laya's small policy and value heads
   learn from their own play, the advisor's advice and lab demonstrations
 - **One Laya per state**: each phase of a level has its own question and its
@@ -134,6 +137,24 @@ first fact in the option's own words, pretrained Laya follows it 97 % of the
 time; as `"advisor": "right 82%"` at the end of the facts it managed 27 %, and
 imitation only lifted that to 32 %. `advisor_agreement` in
 `metadata.state_models` tracks how often Laya's favourite move is the advised one.
+
+## How the route is remembered
+
+A game that knows where the player is returns a `Position` (area, x, y, height,
+airborne) from `RamInfo.position()`. Every emulator keeps the trail of positions
+and moves of the current state; a respawn (a jump of more than 64 px or a new
+area) starts the trail over. When the state is left forward or the game is won,
+the trail goes into `<State>/route.json` in the model directory: each 8 px cell
+keeps the move of the trail that needed the fewest decisions from there to the
+exit. The emulators share the file under a lock and reload it every 10 seconds;
+a model reset deletes it with the rest of the model.
+
+The facts then say on the route `"route": "hold right"`, the move of the fastest
+pass, and off it `"to_route": "16 left, 4 below"`, the way to the nearest known
+cell of the same area. The route is per state, so a phase that eats and a phase
+that climbs over the same ground keep different moves. It knows the ground, not
+the moment: enemies and food move, so the game's own facts about them decide when
+to leave the route. `metadata.routes` counts the known cells per state.
 
 ## How Laya learns
 

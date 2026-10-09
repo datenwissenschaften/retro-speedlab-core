@@ -8,8 +8,10 @@ from datenwissenschaften.environment.level_clock import LevelClock
 from datenwissenschaften.environment.levels import LevelTargets, curriculum_targets, level_map
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.roms import import_roms
+from datenwissenschaften.route.route_map import RouteMap
 from datenwissenschaften.settings import RetroSpeedlabConfig
 from datenwissenschaften.states.landmarks import Landmarks
+from datenwissenschaften.training.context import RunContext
 
 LANDMARKS_FILE = "landmarks.json"
 LEVEL_TIMES_FILE = "level_times.json"
@@ -39,7 +41,8 @@ def make_environment(
     targets = curriculum_targets(wrapper_cls.state_classes, levels)
     clock = LevelClock(root / LEVEL_TIMES_FILE, emulator.em.get_screen_rate())
     curriculum = CurriculumRun(root, LevelTargets(targets, levels), POWER_ON, config.paths.curriculum_dir, clock, main)
-    return wrapper_cls(env, curriculum, Landmarks(root / LANDMARKS_FILE), POWER_ON)
+    routes = RouteMap(RunContext(config, POWER_ON).route_path, tuple(wrapper_cls.action_descriptions.values()))
+    return wrapper_cls(env, curriculum, Landmarks(root / LANDMARKS_FILE), routes, POWER_ON)
 
 
 def curriculum_root(config: RetroSpeedlabConfig) -> Path:

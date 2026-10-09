@@ -1,6 +1,8 @@
 from dataclasses import field, fields
 from typing import Any, Self, final
 
+from datenwissenschaften.route.position import Position
+
 
 def ram(address: int):
     return field(default=0, metadata={"address": address, "length": 1})
@@ -57,4 +59,7 @@ class RamInfo:
         return self.to_dict()
 
     def location(self) -> tuple[int, int] | None:
+        return None
+
+    def position(self) -> Position | None:
         return None

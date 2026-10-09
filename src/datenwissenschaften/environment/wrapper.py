@@ -9,6 +9,9 @@ from datenwissenschaften.environment.levels import Levels, level_map
 from datenwissenschaften.environment.observer import Observation, Observer
 from datenwissenschaften.environment.recording import active_movie_path, ensure_movie_directory, restore_emulator_state
 from datenwissenschaften.ram import RamInfo
+from datenwissenschaften.route.position import Position
+from datenwissenschaften.route.route_map import RouteMap
+from datenwissenschaften.route.state_route import Step, teleported
 from datenwissenschaften.states.landmarks import Landmarks
 from datenwissenschaften.states.machine import StateMachine
 from datenwissenschaften.states.state import State
@@ -53,8 +56,11 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
     action_table: np.ndarray
     action_descriptions: dict[str, str]
     levels: Levels
+    ram: T
 
-    def __init__(self, env: gym.Env, curriculum: CurriculumRun, landmarks: Landmarks, initial_savestate: str) -> None:
+    def __init__(
+        self, env: gym.Env, curriculum: CurriculumRun, landmarks: Landmarks, routes: RouteMap, initial_savestate: str
+    ) -> None:
         super().__init__(env)
         require_action_table(self.action_table, self.action_descriptions)
         level_map(self.levels, self.state_classes)
@@ -68,7 +74,10 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         self.state_frames = 0
         self.max_state_frames = round(MAX_STATE_SECONDS * env.unwrapped.em.get_screen_rate())
         self.speedrun = False
-        self.observer = Observer[T](env.unwrapped.get_ram, self.state_machine, tuple(self.action_descriptions.values()))
+        self.routes = routes
+        self.trail: list[Step] = []
+        actions = tuple(self.action_descriptions.values())
+        self.observer = Observer[T](env.unwrapped.get_ram, self.state_machine, actions, routes)
 
     def reset(self, **kwargs: Any) -> tuple[Observation, dict[str, Any]]:
         emulator = self.env.unwrapped
@@ -91,6 +100,8 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         state_type = None if checkpoint_state is None else state_class(state_classes, checkpoint_state)
         self.state_machine.reset(ram, frame, state_type)
         self.state_frames = 0
+        self.ram = ram
+        self.trail = []
         self._episode_info = {
             "started_from_initial_savestate": checkpoint_state is None,
             "episode_start_state": checkpoint_state or self.initial_savestate,
@@ -103,6 +114,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
     def step(self, action: int) -> tuple[Observation, float, bool, bool, dict[str, Any]]:
         reward, terminated, truncated = 0.0, False, False
         transition: tuple[str, str] | None = None
+        state, position = self.state_machine.state_name, self.ram.position()
         succeeded, mastered = False, False
         self.frames = []
         for buttons in self.current_action_table()[action]:
@@ -126,11 +138,25 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
                 break
 
         won = self.state_machine.current_state._won()
+        self._follow_route(state, position, action, transition, won)
+        self.ram = ram
         outcome = self.curriculum.finish_step(won, terminated or truncated, reward, transition, (succeeded, mastered))
         terminated = terminated or won
         observation = self.observer.observation(ram)
         info = {**self._step_view(), **outcome, **step_details(ram, won, transition), **self._episode_info}
         return observation, reward, terminated, truncated, info
+
+    def _follow_route(
+        self, state: str, position: Position | None, action: int, transition: tuple[str, str] | None, won: bool
+    ) -> None:
+        if position is not None:
+            if self.trail and teleported(self.trail[-1][0], position):
+                self.trail = []
+            self.trail.append((position, action))
+        if won or (transition is not None and self.curriculum.moves_forward(*transition)):
+            self.routes.record(state, self.trail)
+        if transition is not None:
+            self.trail = []
 
     def current_action_table(self) -> np.ndarray:
         return self.action_table

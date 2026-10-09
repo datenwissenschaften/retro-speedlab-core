@@ -13,6 +13,7 @@ from datenwissenschaften.environment.levels import LevelTargets
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.ram import RamInfo, ram
+from datenwissenschaften.route.route_map import RouteMap
 from datenwissenschaften.states.landmarks import Landmarks
 from datenwissenschaften.states.state import State
 
@@ -143,7 +144,11 @@ class FakeWrapper(StateMachineGymWrapper[FakeRam]):
 def fake_environment(tmp_path: Path, script: list[tuple[int, int]]) -> FakeWrapper:
     emulator = FakeEmulator(tmp_path / "recordings", script)
     curriculum = curriculum_run(tmp_path / "curriculum", ("Survive", "Boss"), tmp_path / "seeds")
-    return FakeWrapper(emulator, curriculum, Landmarks(tmp_path / "landmarks.json"), "Level1")
+    return FakeWrapper(emulator, curriculum, Landmarks(tmp_path / "landmarks.json"), fake_routes(tmp_path), "Level1")
+
+
+def fake_routes(tmp_path: Path) -> RouteMap:
+    return RouteMap(lambda state: tmp_path / "models" / state / "route.json", tuple(ACTIONS.values()))
 
 
 def write_config(tmp_path: Path) -> Path:

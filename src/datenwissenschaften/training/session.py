@@ -8,6 +8,7 @@ from datenwissenschaften.training.lab_run import LabRun
 from datenwissenschaften.training.lessons import Lessons
 from datenwissenschaften.training.state_models import StateModels
 from datenwissenschaften.ui.control import ModelResetRequest, consume_model_reset
+from datenwissenschaften.ui.telemetry import publish_metadata
 
 ROLLOUT_STEPS = 256
 EXPLORATION_WHILE_LEARNING = 0.05
@@ -56,6 +57,7 @@ class TrainingSession:
                 hook.on_step(transition)
             if done:
                 episode.duration_seconds = time.monotonic() - started_at
+                publish_metadata("routes", self.env.routes.summary(), replace=True)
                 for hook in self.hooks:
                     hook.on_episode_end(episode)
                 self.episodes += 1

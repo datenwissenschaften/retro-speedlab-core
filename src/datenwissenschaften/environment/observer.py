@@ -6,6 +6,7 @@ import numpy as np
 from datenwissenschaften.advisor.advice import Advice
 from datenwissenschaften.advisor.inputs import encode
 from datenwissenschaften.ram import RamInfo
+from datenwissenschaften.route.route_map import RouteMap
 from datenwissenschaften.states.facts import Facts, render_facts
 from datenwissenschaften.states.machine import StateMachine
 
@@ -18,16 +19,23 @@ ADVISOR_FACT = "advised"
 
 class Observer(Generic[T]):
     def __init__(
-        self, read_bytes: Callable[[], np.ndarray], state_machine: StateMachine[T], action_descriptions: tuple[str, ...]
+        self,
+        read_bytes: Callable[[], np.ndarray],
+        state_machine: StateMachine[T],
+        action_descriptions: tuple[str, ...],
+        routes: RouteMap,
     ) -> None:
         self.read_bytes = read_bytes
+        self.routes = routes
         self.action_descriptions = action_descriptions
         self.state_machine = state_machine
         self.advisor: Advise | None = None
         self.advice: Advice | None = None
 
     def facts(self, ram: T) -> Facts:
-        return {**ram.describe(), **self.state_machine.current_state.describe()}
+        state = self.state_machine
+        route = self.routes.facts(state.state_name, ram.position())
+        return {**ram.describe(), **state.current_state.describe(), **route}
 
     def inputs(self, ram: T) -> np.ndarray:
         return encode(self.read_bytes(), self.facts(ram))
