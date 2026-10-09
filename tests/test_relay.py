@@ -37,9 +37,9 @@ def test_the_relay_uploads_each_attempt_once_before_the_feed_names_it(monkeypatc
     pusher._push_feed(backend([f"{key}.mp4"], requests, None))
     pusher._push_feed(backend([], requests, None))
 
-    uploads = [(path, body) for method, path, body in requests if method == "PUT" and "/media/" in path]
+    uploads = [(path, body) for method, path, body in requests if method == "PUT" and "/parts/" in path]
     pushed = json.loads(gzip.decompress(next(body for method, path, body in requests if path == "/live/feed")))
-    assert [path for path, _ in uploads] == [f"/live/media/{key}.json"]
+    assert [path for path, _ in uploads] == [f"/live/media/{key}.json/parts/0"]
     assert json.loads(gzip.decompress(uploads[0][1])) == [{"action": "right"}]
     assert pushed["episode"]["key"] == key
     assert [method for method, path, _ in requests if path == "/live/media"] == ["GET", "PUT"]
@@ -58,4 +58,17 @@ def test_a_reset_requested_through_the_backend_reaches_the_training(monkeypatch,
         ("PUT", "/live/snapshot"),
         ("GET", "/live/reset"),
         ("DELETE", "/live/reset"),
+    ]
+
+
+def test_large_media_goes_up_in_parts_below_the_waf_body_limit(monkeypatch):
+    requests: list[tuple[str, str, bytes]] = []
+    monkeypatch.setattr(relay, "PART_BYTES", 4)
+
+    relay._upload(backend([], requests, None), "name.mp4", b"0123456789")
+
+    assert [(path, body) for _, path, body in requests] == [
+        ("/live/media/name.mp4/parts/0", b"0123"),
+        ("/live/media/name.mp4/parts/1", b"4567"),
+        ("/live/media/name.mp4/parts/2", b"89"),
     ]

@@ -19,6 +19,7 @@ from datenwissenschaften.ui.persona import persona_tag
 from datenwissenschaften.ui.telemetry import get_store
 
 RELAY_SECONDS = 3.0
+PART_BYTES = 8 * 1024 * 1024
 TIMEOUT_SECONDS = 120.0
 
 
@@ -85,7 +86,7 @@ class LiveRelay:
                 continue
             if name.endswith(STATUSES_SUFFIX):
                 body = gzip.compress(body)
-            client.put(f"/media/{name}", content=body).raise_for_status()
+            _upload(client, name, body)
             self.held.add(name)
         feed = _held_feed(live_feed.latest_episode(), self.held)
         _put_document(client, "/feed", {**feed, "attempts": [metadata for metadata, _ in attempts.values()]})
@@ -103,6 +104,14 @@ def _held_feed(feed: dict[str, Any], held: set[str]) -> dict[str, Any]:
         "episode": feed["episode"] if ready(feed["episode"]) else None,
         "replays": [replay for replay in feed["replays"] if ready(replay)],
     }
+
+
+def _upload(client: httpx.Client, name: str, body: bytes) -> None:
+    starts = range(0, len(body), PART_BYTES)
+    for index, start in enumerate(starts):
+        last = index == len(starts) - 1
+        part = body[start : start + PART_BYTES]
+        client.put(f"/media/{name}/parts/{index}", params={"last": last}, content=part).raise_for_status()
 
 
 def _put_document(client: httpx.Client, path: str, document: dict[str, Any]) -> None:
