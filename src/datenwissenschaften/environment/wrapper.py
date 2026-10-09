@@ -39,6 +39,11 @@ def state_class(state_classes: tuple[type[State[T]], ...], state_name: str) -> t
     raise ValueError(f"Unknown state: {state_name}")
 
 
+def lost_life(before: RamInfo, after: RamInfo) -> bool:
+    lives_before, lives_after = before.remaining_lives(), after.remaining_lives()
+    return lives_before is not None and lives_after is not None and lives_after < lives_before
+
+
 def step_details(ram: RamInfo, won: bool, transition: tuple[str, str] | None) -> dict[str, Any]:
     return {
         "won": won,
@@ -125,7 +130,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
             ram = self.read_ram()
             state_reward, state_terminated, state_truncated = self.state_machine.step(ram, frame)
             reward += state_reward - (SPEEDRUN_FRAME_COST if self.speedrun else 0.0)
-            terminated = state_terminated
+            terminated = state_terminated or lost_life(self.ram, ram)
             truncated = env_truncated or state_truncated
             transition = self.state_machine.last_transition
             if transition is not None:

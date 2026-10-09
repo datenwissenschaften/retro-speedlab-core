@@ -24,6 +24,9 @@ knowledge into a learning agent.
 - **Route memory**: every forward exit of a state teaches each position on the
   way the move of the fastest one, so Laya and the advisor read what to do
   where they are, next to the live facts about food and enemies
+- **A lost life ends the episode**: a game that counts lives in
+  `RamInfo.remaining_lives()` ends every attempt on the frame the count drops,
+  so the advisor and Laya learn that dying is the end instead of a detour
 - **PPO and imitation on Laya's features**: Laya's small policy and value heads
   learn from their own play, the advisor's advice and lab demonstrations
 - **One Laya per state**: each phase of a level has its own question and its
@@ -155,6 +158,11 @@ cell of the same area. The route is per state, so a phase that eats and a phase
 that climbs over the same ground keep different moves. It knows the ground, not
 the moment: enemies and food move, so the game's own facts about them decide when
 to leave the route. `metadata.routes` counts the known cells per state.
+
+A game that returns its life count from `RamInfo.remaining_lives()` ends the
+episode on the frame that count drops: the attempt fails, the route trail is
+dropped, and the next attempt starts from the state's seed instead of playing on
+after a respawn. Games that return `None` play on until their own game over.
 
 ## How Laya learns
 

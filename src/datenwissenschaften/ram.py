@@ -63,3 +63,6 @@ class RamInfo:
 
     def position(self) -> Position | None:
         return None
+
+    def remaining_lives(self) -> int | None:
+        return None
