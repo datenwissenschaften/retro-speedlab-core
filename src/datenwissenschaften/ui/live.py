@@ -6,6 +6,7 @@ from typing import Any
 from uuid import uuid4
 
 from datenwissenschaften.ui.media import episode_key, episode_media, episode_media_names
+from datenwissenschaften.ui.replay_rotation import ReplayRotation
 from datenwissenschaften.ui.replay_store import ReplayStore
 from datenwissenschaften.ui.replay_video import encode_video
 
@@ -15,26 +16,22 @@ MAX_COMPLETED_EPISODES = 4
 class LiveFeed:
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._store: ReplayStore | None = None
+        self._replays = ReplayRotation()
         self._start_generation()
 
     def keep_replays_in(self, directory: Path, curricula: frozenset[str]) -> None:
         with self._lock:
-            self._store = ReplayStore(directory)
-            self._replays = {name: replay for name, replay in self._replays.items() if name in curricula}
-            self._replays.update(self._store.load(curricula))
+            self._replays.persist_in(ReplayStore(directory), curricula)
 
     def clear(self) -> None:
         with self._lock:
             self._start_generation()
-            if self._store is not None:
-                self._store.clear()
+            self._replays.clear()
 
     def _start_generation(self) -> None:
         self._generation = uuid4().hex
         self._recording: list[dict[str, Any]] = []
         self._episodes: deque[dict[str, Any]] = deque(maxlen=MAX_COMPLETED_EPISODES)
-        self._replays: dict[str, dict[str, Any]] = {}
         self._summary: dict[str, Any] = {}
 
     def record(self, jpeg: bytes, status: dict[str, Any]) -> None:
@@ -71,32 +68,18 @@ class LiveFeed:
         episode["key"] = episode_key(episode)
         with self._lock:
             self._episodes.append(episode)
-            self._keep_best(episode)
-
-    def _keep_best(self, episode: dict[str, Any]) -> None:
-        if not episode["result"]["succeeded"]:
-            return
-        curriculum = episode["result"]["curriculum"]
-        if curriculum not in self._replays or len(episode["statuses"]) < len(self._replays[curriculum]["statuses"]):
-            self._replays[curriculum] = episode
-            if self._store is not None:
-                self._store.save(curriculum, episode)
+            self._replays.keep(episode)
 
     def drop_replays(self, curricula: tuple[str, ...]) -> None:
         with self._lock:
-            for curriculum in curricula:
-                if curriculum not in self._replays:
-                    continue
-                del self._replays[curriculum]
-                if self._store is not None:
-                    self._store.delete(curriculum)
+            self._replays.drop(curricula)
 
     def latest_episode(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "generation": self._generation,
                 "episode": _overview(self._episodes[-1]) if self._episodes else None,
-                "replays": [_overview(episode) for episode in self._replays.values()],
+                "replays": [_overview(episode) for episode in self._replays.episodes()],
                 "summary": dict(self._summary),
             }
 
@@ -112,7 +95,7 @@ class LiveFeed:
         return episode_media(episodes[0], name)
 
     def _all(self) -> list[dict[str, Any]]:
-        return [*self._episodes, *self._replays.values()]
+        return [*self._episodes, *self._replays.episodes()]
 
 
 def _overview(episode: dict[str, Any]) -> dict[str, Any]:
