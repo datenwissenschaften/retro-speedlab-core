@@ -7,6 +7,7 @@ from datenwissenschaften.curriculum import ReverseCurriculum
 from datenwissenschaften.environment import level_clock as level_clock_module
 from datenwissenschaften.environment.curriculum_run import CurriculumRun
 from datenwissenschaften.environment.level_clock import LevelClock
+from datenwissenschaften.environment.level_review import REVIEW_INTERVAL
 from datenwissenschaften.environment.levels import LevelTargets, curriculum_targets, level_map
 from datenwissenschaften.states.state import State
 
@@ -156,3 +157,27 @@ def test_once_every_target_of_a_curriculum_that_beats_the_game_is_mastered_attem
     assert run.begin_episode() is None
     assert run.finish_step(False, True, 0.0, None, (False, False))["curriculum_state"] == "Full run"
     assert run.transition("Door", "Next", b"next", 0.0) == (False, False)
+
+
+def test_every_tenth_attempt_practises_a_beaten_level_again(tmp_path: Path, monkeypatch):
+    run = level_run(tmp_path, monkeypatch, False)
+    for _ in range(ReverseCurriculum.WIN_TARGET):
+        run.curriculum.record_success("Level 1", 1)
+
+    targets = []
+    for _ in range(REVIEW_INTERVAL):
+        run.begin_episode()
+        targets.append(run.start_state)
+
+    assert targets == ["Next"] * (REVIEW_INTERVAL - 1) + ["Level 1"]
+    assert run.finish_step(True, True, 0.0, None, (False, False))["curriculum_state"] == "Level 1"
+    assert run.curriculum.active_state() == "Next"
+
+
+def test_a_level_not_yet_beaten_is_never_practised_again(run: CurriculumRun):
+    targets = set()
+    for _ in range(REVIEW_INTERVAL):
+        run.begin_episode()
+        targets.add(run.start_state)
+
+    assert targets == {"Level 1"}

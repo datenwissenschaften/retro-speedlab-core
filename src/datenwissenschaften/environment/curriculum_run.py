@@ -4,6 +4,7 @@ from loguru import logger
 
 from datenwissenschaften.curriculum import ReverseCurriculum
 from datenwissenschaften.environment.level_clock import LevelClock
+from datenwissenschaften.environment.level_review import LevelReview
 from datenwissenschaften.environment.levels import LevelTargets
 from datenwissenschaften.ui.telemetry import publish_metadata
 
@@ -19,6 +20,7 @@ class CurriculumRun:
         self.level = level
         self.state_names = targets.state_names
         self.targets = targets
+        self.review = LevelReview(tuple(targets.levels))
         self.clock = clock
         self.seeds_dir = seeds_dir
         self.curriculum = seeded(ReverseCurriculum(root, self.state_names), self.state_names, seeds_dir)
@@ -44,6 +46,9 @@ class CurriculumRun:
         return checkpoint_state
 
     def _target(self) -> str | None:
+        return self.review.target(self._frontier(), self.curriculum)
+
+    def _frontier(self) -> str | None:
         active_state = self.curriculum.active_state()
         if active_state is not None or self.targets.beats_game:
             return active_state
