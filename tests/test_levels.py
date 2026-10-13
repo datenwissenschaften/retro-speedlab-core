@@ -55,9 +55,13 @@ def test_levels_must_name_neighbouring_states(levels, message):
 
 @pytest.fixture
 def run(tmp_path: Path, monkeypatch) -> CurriculumRun:
+    return level_run(tmp_path, monkeypatch, True)
+
+
+def level_run(tmp_path: Path, monkeypatch, beats_game: bool) -> CurriculumRun:
     monkeypatch.setattr(level_clock_module, "publish_metadata", lambda section, values, replace: None)
     levels = level_map(LEVELS, STATES)
-    targets = LevelTargets(curriculum_targets(STATES, levels), levels)
+    targets = LevelTargets(curriculum_targets(STATES, levels), levels, beats_game)
     curriculum_run = CurriculumRun(
         tmp_path / "curriculum",
         targets,
@@ -129,7 +133,22 @@ def test_a_level_run_from_power_on_times_the_level_from_its_first_state(run: Cur
     assert run.clock.times()["Level 1"]["last_seconds"] == 10.0
 
 
-def test_once_every_target_is_mastered_attempts_are_full_runs(run: CurriculumRun):
+def test_a_curriculum_that_stops_before_the_end_of_the_game_keeps_practising_its_last_target(
+    tmp_path: Path, monkeypatch
+):
+    run = level_run(tmp_path, monkeypatch, False)
+    run.curriculum.save_checkpoint("Next", b"next", 0.0)
+    for target in ("Level 1", "Next"):
+        for _ in range(ReverseCurriculum.WIN_TARGET):
+            run.curriculum.record_success(target, 1)
+
+    assert run.begin_episode() == "Next"
+    assert run.finish_step(False, True, 0.0, None, (False, False))["curriculum_state"] == "Next"
+
+
+def test_once_every_target_of_a_curriculum_that_beats_the_game_is_mastered_attempts_are_full_runs(
+    run: CurriculumRun,
+):
     for target in ("Level 1", "Next"):
         for _ in range(ReverseCurriculum.WIN_TARGET):
             run.curriculum.record_success(target, 1)

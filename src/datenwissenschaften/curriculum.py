@@ -52,16 +52,7 @@ class ReverseCurriculum:
         self._require_state(state_name)
         return self._checkpoint_path(state_name).is_file()
 
-    def episode_start_state(self) -> str | None:
-        """Return the checkpoint state to restore for the current target.
-
-        Normally this is the unmastered target itself. If that checkpoint was
-        rejected, fall back through mastered states until a usable checkpoint
-        is found. ``None`` means the configured initial savestate is required.
-        """
-        target_state = self.active_state()
-        if target_state is None:
-            return None
+    def episode_start_state(self, target_state: str) -> str | None:
         target_index = self.state_names.index(target_state)
         for state_name in reversed(self.state_names[1 : target_index + 1]):
             if self.has_checkpoint(state_name):

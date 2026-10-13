@@ -40,7 +40,14 @@ def make_environment(
     levels = level_map(wrapper_cls.levels, wrapper_cls.state_classes)
     targets = curriculum_targets(wrapper_cls.state_classes, levels)
     clock = LevelClock(root / LEVEL_TIMES_FILE, emulator.em.get_screen_rate())
-    curriculum = CurriculumRun(root, LevelTargets(targets, levels), POWER_ON, config.paths.curriculum_dir, clock, main)
+    curriculum = CurriculumRun(
+        root,
+        LevelTargets(targets, levels, wrapper_cls.curriculum_beats_game),
+        POWER_ON,
+        config.paths.curriculum_dir,
+        clock,
+        main,
+    )
     routes = RouteMap(RunContext(config, POWER_ON).route_path, tuple(wrapper_cls.action_descriptions.values()))
     return wrapper_cls(env, curriculum, Landmarks(root / LANDMARKS_FILE), routes, POWER_ON)
 

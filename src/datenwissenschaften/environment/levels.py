@@ -33,9 +33,10 @@ def curriculum_targets(state_classes: Sequence[type[State]], levels: dict[str, t
 
 
 class LevelTargets:
-    def __init__(self, state_names: tuple[str, ...], levels: dict[str, tuple[str, ...]]) -> None:
+    def __init__(self, state_names: tuple[str, ...], levels: dict[str, tuple[str, ...]], beats_game: bool) -> None:
         self.state_names = state_names
         self.levels = levels
+        self.beats_game = beats_game
 
     def is_level(self, target: str | None) -> bool:
         return target in self.levels
@@ -49,9 +50,9 @@ class LevelTargets:
         members = self.levels[target]
         return previous_state in members and new_state not in members
 
-    def start_checkpoint(self, active_state: str | None, curriculum: ReverseCurriculum) -> str | None:
-        if not self.is_level(active_state):
-            return curriculum.episode_start_state()
-        first = self.state_names.index(self.levels[active_state][0])
+    def start_checkpoint(self, target: str, curriculum: ReverseCurriculum) -> str | None:
+        if not self.is_level(target):
+            return curriculum.episode_start_state(target)
+        first = self.state_names.index(self.levels[target][0])
         candidates = reversed(self.state_names[1 : first + 1])
         return next((state for state in candidates if curriculum.has_checkpoint(state)), None)

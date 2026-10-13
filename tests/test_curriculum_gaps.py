@@ -19,22 +19,13 @@ def test_save_checkpoint_does_not_overwrite_an_existing_checkpoint(tmp_path):
     assert curriculum.checkpoint("Finish") == b"first"
 
 
-def test_episode_start_state_is_none_once_the_curriculum_is_complete(tmp_path):
-    curriculum = ReverseCurriculum(tmp_path, ("Start", "Finish"))
-    for state_name in ("Start", "Finish"):
-        for _ in range(64):
-            curriculum.record_success(state_name, 4)
-
-    assert curriculum.episode_start_state() is None
-
-
 def test_episode_start_state_is_none_without_any_earlier_checkpoint(tmp_path):
     curriculum = ReverseCurriculum(tmp_path, ("Start", "Middle", "Finish"))
     for _ in range(64):
         curriculum.record_success("Start", 4)
 
     assert curriculum.active_state() == "Middle"
-    assert curriculum.episode_start_state() is None
+    assert curriculum.episode_start_state("Middle") is None
 
 
 def test_record_success_is_a_no_op_once_mastered(tmp_path):

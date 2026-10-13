@@ -139,6 +139,7 @@ class FakeWrapper(StateMachineGymWrapper[FakeRam]):
     action_table = np.array([[[1, 0]], [[0, 1]]], dtype=np.int8)
     action_descriptions = ACTIONS
     levels = ()
+    curriculum_beats_game = True
 
 
 def fake_environment(tmp_path: Path, script: list[tuple[int, int]]) -> FakeWrapper:
@@ -174,7 +175,12 @@ def write_config(tmp_path: Path) -> Path:
 
 def curriculum_run(root: Path, state_names: tuple[str, ...], seeds: Path) -> CurriculumRun:
     return CurriculumRun(
-        root, LevelTargets(state_names, {}), "Level1", seeds, LevelClock(root / "level_times.json", FRAME_RATE), True
+        root,
+        LevelTargets(state_names, {}, True),
+        "Level1",
+        seeds,
+        LevelClock(root / "level_times.json", FRAME_RATE),
+        True,
     )
 
 

@@ -34,14 +34,20 @@ class CurriculumRun:
         self.publish()
 
     def begin_episode(self) -> str | None:
-        active_state = self.curriculum.active_state()
-        self.start_state = active_state or FULL_RUN
-        self.outcome_recorded = active_state is None or not self.counts_outcomes
+        target = self._target()
+        self.start_state = target or FULL_RUN
+        self.outcome_recorded = target is None or not self.counts_outcomes
         self.episode_steps = 0
         self.segment_return = 0.0
-        checkpoint_state = self.targets.start_checkpoint(active_state, self.curriculum)
+        checkpoint_state = None if target is None else self.targets.start_checkpoint(target, self.curriculum)
         self.episode_score = 0.0 if checkpoint_state is None else self.curriculum.entry_score(checkpoint_state)
         return checkpoint_state
+
+    def _target(self) -> str | None:
+        active_state = self.curriculum.active_state()
+        if active_state is not None or self.targets.beats_game:
+            return active_state
+        return self.state_names[-1]
 
     def checkpoint(self, state_name: str) -> bytes:
         return self.curriculum.checkpoint(state_name)

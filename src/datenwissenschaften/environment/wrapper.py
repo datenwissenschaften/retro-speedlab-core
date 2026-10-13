@@ -61,6 +61,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
     action_table: np.ndarray
     action_descriptions: dict[str, str]
     levels: Levels
+    curriculum_beats_game: bool
     ram: T
 
     def __init__(

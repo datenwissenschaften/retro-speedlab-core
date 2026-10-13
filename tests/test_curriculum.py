@@ -36,7 +36,7 @@ def test_bad_checkpoint_recovers_from_nearest_mastered_checkpoint(tmp_path: Path
     curriculum._checkpoint_path("Finish").unlink()
 
     assert curriculum.active_state() == "Finish"
-    assert curriculum.episode_start_state() == "Middle"
+    assert curriculum.episode_start_state("Finish") == "Middle"
     assert curriculum.is_mastered("Middle") is True
 
 
@@ -49,7 +49,7 @@ def test_mastered_checkpoint_is_not_used_when_target_checkpoint_is_healthy(tmp_p
             curriculum.record_success(state_name, 4)
 
     assert curriculum.active_state() == "Finish"
-    assert curriculum.episode_start_state() == "Finish"
+    assert curriculum.episode_start_state("Finish") == "Finish"
 
 
 def test_curriculum_counts_wins_across_failures(tmp_path: Path):
