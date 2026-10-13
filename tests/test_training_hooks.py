@@ -415,13 +415,26 @@ def test_a_beaten_level_drops_the_replays_of_its_states(monkeypatch):
     dropped = []
     monkeypatch.setattr(beaten_level_hook.live_feed, "drop_replays", dropped.append)
     curriculum = SimpleNamespace(
-        targets=SimpleNamespace(levels={"Level 1": ("Survive", "Boss"), "Level 2": ("Climb",)}),
+        targets=SimpleNamespace(levels={"Level 1": ("Survive", "Boss"), "Level 2": ("Climb",)}, beats_game=True),
         curriculum=SimpleNamespace(is_mastered=lambda name: name == "Level 1"),
     )
 
     beaten_level_hook.BeatenLevelHook(curriculum).on_episode_end(_episode("run.bk2", 1.0, True, True))
 
     assert dropped == [("Survive", "Boss")]
+
+
+def test_a_beaten_level_keeps_its_replays_while_full_runs_wait_for_the_curriculum(monkeypatch):
+    dropped = []
+    monkeypatch.setattr(beaten_level_hook.live_feed, "drop_replays", dropped.append)
+    curriculum = SimpleNamespace(
+        targets=SimpleNamespace(levels={"Level 1": ("Survive", "Boss")}, beats_game=False),
+        curriculum=SimpleNamespace(is_mastered=lambda name: True),
+    )
+
+    beaten_level_hook.BeatenLevelHook(curriculum).on_episode_end(_episode("run.bk2", 1.0, True, True))
+
+    assert dropped == []
 
 
 def test_the_stream_shows_every_fact_but_the_advisor():

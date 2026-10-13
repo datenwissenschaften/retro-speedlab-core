@@ -12,6 +12,8 @@ class BeatenLevelHook:
         pass
 
     def on_episode_end(self, episode: EpisodeRecord) -> None:
+        if not self.curriculum.targets.beats_game:
+            return
         for level, members in self.curriculum.targets.levels.items():
             if self.curriculum.curriculum.is_mastered(level):
                 live_feed.drop_replays(members)
