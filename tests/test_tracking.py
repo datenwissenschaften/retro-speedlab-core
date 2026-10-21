@@ -96,23 +96,32 @@ def test_an_unreachable_server_leaves_the_session_untracked(monkeypatch):
     assert start_tracking(TrackingSettings("https://training.test", "token"), "Game-v0", "local", {}) is None
 
 
-def test_the_hook_logs_every_episode_and_every_update_per_state(monkeypatch):
+def test_the_hook_logs_five_headline_metrics(monkeypatch):
     logged: list[tuple[dict[str, float], int]] = []
     run = SimpleNamespace(log=lambda metrics, step: logged.append((metrics, step)))
-    models = SimpleNamespace(require_active=lambda: "Survive")
     monkeypatch.setattr(
         "datenwissenschaften.training.tracking_hook.learning_metadata",
-        lambda models: {"num_timesteps": 512, "entropy_share": 0.5, "explained_variance": 0.25},
+        lambda models: {"num_timesteps": 512, "entropy_share": 0.25, "explained_variance": 0.5},
     )
-    hook = TrackingHook(run, models)
+    hook = TrackingHook(run, SimpleNamespace(), ("Menu", "Level1", "Boss"))
 
     hook.on_episode_end(episode())
     hook.on_update()
+    hook.on_update()
 
-    assert logged[0][1] == 3
-    assert logged[0][0]["score/Level1"] == 7.0
-    assert logged[0][0]["episode/curriculum_succeeded"] == 1.0
-    assert logged[1] == ({"Survive/entropy_share": 0.5, "Survive/explained_variance": 0.25}, 512)
+    assert logged[0] == ({"progress": 1.0, "success": 1.0, "score": 7.0, "decisions_per_second": 3.2}, 3)
+    assert logged[1:] == [({"confidence": 0.75}, 1), ({"confidence": 0.75}, 2)]
+
+
+def test_an_attempt_without_duration_has_no_speed():
+    logged: list[dict[str, float]] = []
+    run = SimpleNamespace(log=lambda metrics, step: logged.append(metrics))
+    record = episode()
+    record.duration_seconds = 0.0
+
+    TrackingHook(run, SimpleNamespace(), ("Menu", "Level1")).on_episode_end(record)
+
+    assert "decisions_per_second" not in logged[0]
 
 
 def test_a_failed_run_keeps_its_error_and_ends_failed(monkeypatch):

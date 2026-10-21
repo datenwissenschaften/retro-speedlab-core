@@ -124,7 +124,7 @@ class LayaTrainer:
             self.config.ui.release,
             self._parameters(len(workers) + 1),
         )
-        tracked = [] if tracking is None else [TrackingHook(tracking, models)]
+        tracked = [] if tracking is None else [TrackingHook(tracking, models, phases(self.wrapper_cls))]
         try:
             with ending(tracking):
                 hooks = [*self._hooks(env, models, StoryTeller(story)), *tracked]
