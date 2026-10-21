@@ -49,12 +49,18 @@ class UISettings:
 
 
 @dataclass(frozen=True)
+class LabSettings:
+    stall_hours: int
+
+
+@dataclass(frozen=True)
 class RetroSpeedlabConfig:
     paths: RetroSpeedlabPaths
     training: TrainingSettings
     laya: LayaSettings
     upload: UploadSettings
     ui: UISettings
+    lab: LabSettings
     log_level: str
 
 
@@ -99,6 +105,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             twitch=_boolean(document.twitch.enabled, "twitch.enabled"),
             summary_models=_texts(document.twitch.summary_models, "twitch.summary_models"),
         ),
+        lab=LabSettings(stall_hours=_positive_int(document.agent.stall_hours, "agent.stall_hours")),
         log_level=_text(document.log_level, "log_level").upper(),
     )
 

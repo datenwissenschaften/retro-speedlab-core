@@ -102,12 +102,6 @@ def test_reset_for_restart_without_redis_configured_still_runs_cleanup():
     assert cleanup_calls == [True]
 
 
-def test_resize_is_a_noop():
-    store = TelemetryStore()
-
-    assert store.resize(10) is None
-
-
 def test_module_level_helpers_delegate_to_the_shared_store(monkeypatch):
     fake_store = TelemetryStore()
     monkeypatch.setattr(telemetry_module, "_store", fake_store)

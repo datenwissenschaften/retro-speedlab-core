@@ -3,7 +3,6 @@ import json
 from pathlib import Path
 
 import httpx
-import pytest
 
 from datenwissenschaften.settings import UISettings
 from datenwissenschaften.ui import live, relay
@@ -111,28 +110,21 @@ def test_the_snapshot_names_the_release_and_its_persona():
     assert len(server["persona_tag"]) == 6
 
 
-class Stop(Exception):
-    pass
-
-
-def test_the_relay_keeps_pushing_after_the_backend_is_unreachable(monkeypatch, tmp_path: Path):
+def test_the_relay_keeps_pushing_after_the_backend_is_unreachable_until_it_stops(monkeypatch, tmp_path: Path):
     outcomes = [httpx.ConnectError("down"), None, None]
     pushes: list[httpx.Client] = []
+    pusher = relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path)
+    monkeypatch.setattr(relay, "RELAY_SECONDS", 0.0)
 
     def push(client: httpx.Client) -> None:
         pushes.append(client)
         outcome = outcomes.pop(0)
+        if not outcomes:
+            pusher.stop()
         if outcome is not None:
             raise outcome
 
-    def sleep(seconds: float) -> None:
-        if not outcomes:
-            raise Stop
-
-    monkeypatch.setattr(relay.time, "sleep", sleep)
-
-    with pytest.raises(Stop):
-        relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path)._repeat(push)
+    pusher._repeat(push)
 
     assert len(pushes) == 3
 

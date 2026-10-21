@@ -77,7 +77,7 @@ def test_identity_resets_training_when_the_model_layout_changes(tmp_path: Path, 
     assert database.get("model-layout:FakeGame-v0") == MODEL_LAYOUT
 
 
-def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_path: Path, monkeypatch):
+def test_a_session_builds_laya_resumes_checkpoints_and_stops_its_relay_before_a_reset(tmp_path: Path, monkeypatch):
     config_path = write_config(tmp_path)
     config = config_path.read_text().replace("enable: false", "enable: true")
     config_path.write_text(config.replace("api_key: null", "api_key: upload-key"), encoding="utf-8")
@@ -91,7 +91,7 @@ def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_pa
     monkeypatch.setattr(trainer_module, "AdvisorTeam", NoTeam)
     monkeypatch.setattr(trainer_module, "configure_history", lambda *args, **kwargs: ui.append("history"))
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
-    relay = SimpleNamespace(start=lambda: ui.append("relay"))
+    relay = SimpleNamespace(start=lambda: ui.append("relay"), stop=lambda: ui.append("stop"))
     monkeypatch.setattr(trainer_module, "LiveRelay", lambda url, key, settings, root: relay)
     published = {}
     monkeypatch.setattr(
@@ -114,10 +114,10 @@ def test_trainer_builds_laya_resumes_checkpoints_and_restarts_after_reset(tmp_pa
     models.close()
 
     with pytest.raises(StopTraining):
-        trainer.train()
+        trainer.train_session()
 
     assert agents[0].network.checkpoint == "fake/laya"
-    assert ui == ["history", "relay"]
+    assert ui == ["history", "relay", "stop"]
     assert published["run"]["game"] == "FakeGame-v0"
     assert published["environment"]["states"] == ["Survive", "Boss"]
 
@@ -160,8 +160,9 @@ def test_trainer_plays_the_full_game_and_speedruns_it_once_beaten(tmp_path: Path
     monkeypatch.setattr(trainer_module, "perform_model_reset", stop)
     trainer = trainer_module.LayaTrainer(FakeWrapper, config_path)
 
+    trainer.train_session()
     with pytest.raises(StopTraining):
-        trainer.train()
+        trainer.train_session()
 
     assert sessions == [False, True]
     assert trainer.context.model_dir.name == "FakeGame-v0"

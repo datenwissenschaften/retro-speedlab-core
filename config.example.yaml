@@ -19,6 +19,9 @@ laya:
 
 log_level: INFO
 
+agent:
+  stall_hours: 2
+
 upload:
   url: https://api.retrospeedlab.com
   api_key: null

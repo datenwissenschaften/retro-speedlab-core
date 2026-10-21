@@ -284,8 +284,10 @@ from pathlib import Path
 
 import numpy as np
 
+import flyte
+
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
-from datenwissenschaften.training.trainer import LayaTrainer
+from datenwissenschaften.workflow.training import training
 
 
 class AirstrikerWrapper(StateMachineGymWrapper[AirstrikerRam]):
@@ -296,7 +298,8 @@ class AirstrikerWrapper(StateMachineGymWrapper[AirstrikerRam]):
     action_descriptions = {"fire": "hold position and shoot straight ahead"}
 
 
-LayaTrainer(AirstrikerWrapper, Path("config.yaml")).train()
+flyte.init()
+flyte.run(training, wrapper="airstriker:AirstrikerWrapper", config="config.yaml")
 ```
 
 The ROM is imported through Stable Retro from `paths.roms`; the engine's own

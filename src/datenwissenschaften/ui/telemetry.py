@@ -192,9 +192,6 @@ class TelemetryStore:
         self._persist_event = threading.Event()
         self._writer_thread: threading.Thread | None = None
 
-    def resize(self, max_episodes: int | None) -> None:
-        return None
-
     def configure_history(self, scope: str, database: JsonDatabase) -> None:
         history_key = f"history:{scope}"
         self.flush()

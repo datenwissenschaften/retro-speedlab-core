@@ -41,7 +41,7 @@ from datenwissenschaften.ui.control import ModelResetRequest, configure_training
 from datenwissenschaften.ui.live import live_feed
 from datenwissenschaften.ui.relay import LiveRelay
 from datenwissenschaften.ui.summaries import report_digest
-from datenwissenschaften.ui.telemetry import configure_history, get_store, level_full_run_wins, publish_metadata
+from datenwissenschaften.ui.telemetry import configure_history, level_full_run_wins, publish_metadata
 
 SESSION_SECONDS = 2 * 60 * 60
 BEATEN_FULL_RUN_WINS = 8
@@ -60,28 +60,30 @@ class LayaTrainer:
         setup_logging(self.config.log_level)
         self.context = RunContext(self.config, POWER_ON)
         self.wrapper_cls = wrapper_cls
-        self.ui_started = False
         self.speedrun = False
 
-    def train(self) -> None:
+    def train_session(self) -> None:
         torch.set_num_threads(ADVISOR_THREADS)
         database = JsonDatabase(self.config.paths.database_path)
         configure_history(self.config.training.game_identity, database)
         replays = self.config.paths.cache_dir / "replays" / self.config.training.game_identity
         live_feed.keep_replays_in(replays, self._curricula())
-        while True:
-            env = make_environment(self.wrapper_cls, self.config, MAIN_ENVIRONMENT, True)
-            env.speedrun = self.speedrun = level_full_run_wins(POWER_ON) >= BEATEN_FULL_RUN_WINS
-            identity = TrainingIdentity(self.context, database)
-            identity.require_compatible(env)
-            self._start_ui(identity, env, database)
-            env.curriculum.publish()
+        env = make_environment(self.wrapper_cls, self.config, MAIN_ENVIRONMENT, True)
+        env.speedrun = self.speedrun = level_full_run_wins(POWER_ON) >= BEATEN_FULL_RUN_WINS
+        identity = TrainingIdentity(self.context, database)
+        identity.require_compatible(env)
+        relay = self._start_ui(identity, env)
+        env.curriculum.publish()
+        try:
             request = self._train_level(env, database, SESSION_SECONDS)
+        finally:
             env.close()
-            torch.cuda.empty_cache()
-            if request is not None:
-                perform_model_reset(request)
-                live_feed.clear()
+            if relay is not None:
+                relay.stop()
+        torch.cuda.empty_cache()
+        if request is not None:
+            perform_model_reset(request)
+            live_feed.clear()
 
     def _train_level(
         self, env: StateMachineGymWrapper, database: JsonDatabase, seconds: float
@@ -138,10 +140,10 @@ class LayaTrainer:
             CurriculumUploadHook(self.context, env.curriculum),
         ]
 
-    def _start_ui(self, identity: TrainingIdentity, env: StateMachineGymWrapper, database: JsonDatabase) -> None:
+    def _start_ui(self, identity: TrainingIdentity, env: StateMachineGymWrapper) -> LiveRelay | None:
         ui = self.config.ui
         if not ui.enabled:
-            return
+            return None
         reset = identity.reset_request(env)
         configure_training_control(
             game=reset.game,
@@ -150,14 +152,12 @@ class LayaTrainer:
             artifact_dirs=reset.artifact_dirs,
             on_reset=reset.on_reset,
         )
-        if self.ui_started:
-            return
         upload = self.config.upload
         if upload.api_key is None:
             raise RuntimeError("ui.enable relays the stream to the backend and needs upload.api_key.")
-        get_store().resize(ui.max_episodes)
-        LiveRelay(upload.url, upload.api_key, ui, self.context.record_root).start()
-        self.ui_started = True
+        relay = LiveRelay(upload.url, upload.api_key, ui, self.context.record_root)
+        relay.start()
+        return relay
 
 
 def publish_run(wrapper_cls: type[StateMachineGymWrapper], context: RunContext, speedrun: bool, emulators: int) -> None:

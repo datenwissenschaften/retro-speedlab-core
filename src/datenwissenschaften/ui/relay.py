@@ -1,7 +1,6 @@
 import gzip
 import json
 import threading
-import time
 from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -41,15 +40,19 @@ class LiveRelay:
         self.record_root = record_root
         self.held: set[str] | None = None
         self.kept: set[str] = set()
+        self.stopped = threading.Event()
 
     def start(self) -> None:
         for push in (self._push_snapshot, self._push_feed):
             threading.Thread(target=self._repeat, args=(push,), name=f"relay{push.__name__}", daemon=True).start()
 
+    def stop(self) -> None:
+        self.stopped.set()
+
     def _repeat(self, push: Callable[[httpx.Client], None]) -> None:
         failing = False
         with httpx.Client(base_url=self.url, headers={"X-API-Key": self.api_key}, timeout=TIMEOUT_SECONDS) as client:
-            while True:
+            while not self.stopped.is_set():
                 try:
                     push(client)
                     if failing:
@@ -59,7 +62,7 @@ class LiveRelay:
                     if not failing:
                         logger.warning(f"The live relay cannot reach the backend: {error}")
                     failing = True
-                time.sleep(RELAY_SECONDS)
+                self.stopped.wait(RELAY_SECONDS)
 
     def _push_snapshot(self, client: httpx.Client) -> None:
         _put_document(client, "/snapshot", stream_snapshot(self.ui))

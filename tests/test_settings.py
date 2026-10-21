@@ -35,6 +35,7 @@ def _document() -> dict[str, Any]:
             "persona": "Retra",
         },
         "twitch": {"enabled": True, "summary_models": ["test/model:free"]},
+        "agent": {"stall_hours": 2},
         "log_level": "info",
     }
 
@@ -52,6 +53,7 @@ def test_complete_config_loads(tmp_path: Path):
     assert config.training.game_identity == "TestGame"
     assert config.training.fingerprint is None
     assert config.laya.checkpoint == "convaiinnovations/laya"
+    assert config.lab.stall_hours == 2
     assert config.log_level == "INFO"
 
 
