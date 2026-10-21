@@ -124,7 +124,7 @@ class LayaTrainer:
             self.config.ui.release,
             self._parameters(len(workers) + 1),
         )
-        tracked = [] if tracking is None else [TrackingHook(tracking, models, phases(self.wrapper_cls))]
+        tracked = [] if tracking is None else [TrackingHook(tracking, models, phases(self.wrapper_cls), self._levels())]
         try:
             with ending(tracking):
                 hooks = [*self._hooks(env, models, StoryTeller(story)), *tracked]
@@ -142,9 +142,11 @@ class LayaTrainer:
             "emulators": str(emulators),
         }
 
+    def _levels(self) -> dict[str, tuple[str, ...]]:
+        return level_map(self.wrapper_cls.levels, self.wrapper_cls.state_classes)
+
     def _curricula(self) -> frozenset[str]:
-        levels = level_map(self.wrapper_cls.levels, self.wrapper_cls.state_classes)
-        return frozenset((*phases(self.wrapper_cls), *levels, FULL_RUN))
+        return frozenset((*phases(self.wrapper_cls), *self._levels(), FULL_RUN))
 
     def _models(self) -> StateModels:
         return state_models(self.wrapper_cls, laya_network(self.wrapper_cls, self.config), self.context)

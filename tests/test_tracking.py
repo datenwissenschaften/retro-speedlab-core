@@ -10,7 +10,7 @@ from datenwissenschaften.tracking import task_run as task_run_module
 from datenwissenschaften.tracking.run import ACTIVE_RUNS, TrackingRun, ending, kill_active_runs, start_tracking
 from datenwissenschaften.tracking.task_run import task_run
 from datenwissenschaften.training.episode_record import EpisodeRecord
-from datenwissenschaften.training.tracking_hook import TrackingHook
+from datenwissenschaften.training.tracking_hook import TrackingHook, chart_group
 
 
 class FakeClient:
@@ -103,16 +103,16 @@ def test_the_hook_logs_each_levels_attempts_and_the_overall_speed_and_confidence
         "datenwissenschaften.training.tracking_hook.learning_metadata",
         lambda models: {"num_timesteps": 512, "entropy_share": 0.25, "explained_variance": 0.5},
     )
-    hook = TrackingHook(run, SimpleNamespace(), ("Menu", "Level1", "Boss"))
+    hook = TrackingHook(run, SimpleNamespace(), ("Menu", "Level1", "Boss"), {"Level 1": ("Level1",)})
 
     hook.on_episode_end(episode())
     hook.on_episode_end(episode())
     hook.on_update()
 
     assert logged == [
-        ({"Level1/progress": 1.0, "Level1/success": 1.0, "Level1/score": 7.0}, 1),
+        ({"Level 1/Level1/progress": 1.0, "Level 1/Level1/success": 1.0, "Level 1/Level1/score": 7.0}, 1),
         ({"decisions_per_second": 3.2}, 3),
-        ({"Level1/progress": 1.0, "Level1/success": 1.0, "Level1/score": 7.0}, 2),
+        ({"Level 1/Level1/progress": 1.0, "Level 1/Level1/success": 1.0, "Level 1/Level1/score": 7.0}, 2),
         ({"decisions_per_second": 3.2}, 3),
         ({"confidence": 0.75}, 1),
     ]
@@ -124,9 +124,9 @@ def test_an_attempt_without_duration_has_no_speed():
     record = episode()
     record.duration_seconds = 0.0
 
-    TrackingHook(run, SimpleNamespace(), ("Menu", "Level1")).on_episode_end(record)
+    TrackingHook(run, SimpleNamespace(), ("Menu", "Level1"), {"Level 1": ("Level1",)}).on_episode_end(record)
 
-    assert logged == [{"Level1/progress": 1.0, "Level1/success": 1.0, "Level1/score": 7.0}]
+    assert logged == [{"Level 1/Level1/progress": 1.0, "Level 1/Level1/success": 1.0, "Level 1/Level1/score": 7.0}]
 
 
 def test_a_failed_run_keeps_its_error_and_ends_failed(monkeypatch):
@@ -221,3 +221,11 @@ def test_ending_ends_the_run_by_how_the_block_exits_and_passes_without_one(monke
 
     assert ended[0] is None
     assert isinstance(ended[1], KeyboardInterrupt)
+
+
+def test_charts_group_every_part_under_its_level_and_full_runs_on_their_own():
+    levels = {"Level 1": ("Grow", "Scale"), "Level 3": ("Jump3",)}
+
+    assert chart_group("Jump3", levels) == "Level 3/Jump3"
+    assert chart_group("Level 1", levels) == "Level 1/whole level"
+    assert chart_group("Full run", levels) == "Full run"

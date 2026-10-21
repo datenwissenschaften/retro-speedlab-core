@@ -263,8 +263,10 @@ win happened for `agent.stall_hours` hours. Every task runs locally with
 
 With `tracking.token` set, every session is an [MLflow](https://mlflow.org) run
 at `tracking.url`. Every attempt counts toward the part it practised, as
-`<part>/progress` (the furthest state it reaches), `<part>/success` (1 when it
-clears the part) and `<part>/score`, so MLflow groups the charts by level.
+`<level>/<part>/progress` (the furthest state it reaches), `<level>/<part>/success`
+(1 when it clears the part) and `<level>/<part>/score`, so MLflow groups the
+charts by level; a whole level is `<level>/whole level` and a run from power-on
+is `Full run`.
 Two lines cover the whole session: `decisions_per_second` and, after every
 learning update, `confidence` (one minus the entropy share of the state that
 learned). The A/B test plays
