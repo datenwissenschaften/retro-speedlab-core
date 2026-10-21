@@ -248,6 +248,11 @@ def _response(method: str, url: str, **kwargs) -> httpx.Response:
     return httpx.Response(200, request=httpx.Request(method, url))
 
 
+def _reports(names: list[tuple[str, str]]) -> httpx.Response:
+    request = httpx.Request("GET", "https://upload.test/reports")
+    return httpx.Response(200, request=request, json=[{"game": game, "name": name} for game, name in names])
+
+
 def test_upload_hook_uploads_only_complete_winning_runs(context: RunContext, monkeypatch, tmp_path: Path):
     recording = tmp_path / "win.bk2"
     recording.with_suffix(".mp4").write_bytes(b"video")
@@ -346,6 +351,7 @@ def test_report_upload_hook_uploads_new_and_changed_short_reports(context: RunCo
         "put",
         lambda url, **kwargs: puts.append((url, kwargs["json"])) or _response("PUT", url),
     )
+    monkeypatch.setattr(report_upload_hook.httpx, "get", lambda url, **kwargs: _reports([]))
     hook = report_upload_hook.ReportUploadHook(context, None)
     hook.settings = SimpleNamespace(url="https://upload.test", api_key="key")
 
@@ -441,3 +447,28 @@ def test_the_stream_shows_every_fact_but_the_advisor():
     text = '{"advised": "hold right", "lives": 3, "to_target": "4 right, level"}'
 
     assert live_stream_hook.shown_facts(text) == {"lives": 3, "to_target": "4 right, level"}
+
+
+def test_report_upload_hook_summarizes_only_the_reports_the_website_lacks(context: RunContext, monkeypatch):
+    context.config.paths.reports_dir.mkdir(parents=True, exist_ok=True)
+    asked: list[set[str]] = []
+    digest = SimpleNamespace(
+        summaries=lambda published: (
+            asked.append(set(published)) or [{"name": "2026-10-21T1445.md", "headline": "Up", "lines": ["a"]}]
+        )
+    )
+    puts = []
+    published = [("FakeGame-v0", "2026-10-21T0830.md"), ("OtherGame-v0", "2026-10-21T1445.md")]
+    monkeypatch.setattr(report_upload_hook.httpx, "get", lambda url, **kwargs: _reports(published))
+    monkeypatch.setattr(
+        report_upload_hook.httpx, "put", lambda url, **kwargs: puts.append(url) or _response("PUT", url)
+    )
+    hook = report_upload_hook.ReportUploadHook(context, digest)
+    hook.settings = SimpleNamespace(url="https://upload.test", api_key="key")
+
+    hook.on_update()
+    hook.on_update()
+
+    assert asked[0] == {"2026-10-21T0830.md"}
+    assert asked[1] == {"2026-10-21T0830.md", "2026-10-21T1445.md"}
+    assert puts == ["https://upload.test/reports/FakeGame-v0/2026-10-21T1445.md"]

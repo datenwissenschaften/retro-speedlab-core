@@ -1,5 +1,5 @@
 import json
-from pathlib import Path
+from typing import Any
 
 import httpx
 from loguru import logger
@@ -17,7 +17,8 @@ class ReportUploadHook:
         self.context = context
         self.digest = digest
         self.settings = context.config.upload
-        self.uploaded: set[tuple[str, float]] = set()
+        self.published: set[str] | None = None
+        self.uploaded: set[str] = set()
 
     def on_step(self, transition: Transition) -> None:
         pass
@@ -28,37 +29,41 @@ class ReportUploadHook:
     def on_update(self) -> None:
         if self.settings.api_key is None:
             return
-        reports_dir = self.context.config.paths.reports_dir
-        if not reports_dir.is_dir():
+        if not self.context.config.paths.reports_dir.is_dir():
             return
-        self._summarize_latest()
         try:
-            for summary in sorted(reports_dir.glob(f"*{SUMMARY_SUFFIX}")):
-                self._upload_once(summary, json.loads(summary.read_text(encoding="utf-8"))["name"])
+            if self.published is None:
+                self.published = self._published()
+            for summary in self._summaries(self.published):
+                self._upload_once(summary)
         except httpx.HTTPError as error:
             logger.error(f"Lab report upload failed: {error}")
+        except (KeyError, IndexError, ValueError) as error:
+            logger.warning(f"No summary of a lab report: {error}")
 
-    def _summarize_latest(self) -> None:
-        if self.digest is None:
-            return
-        try:
-            self.digest.latest()
-        except FileNotFoundError:
-            return
-        except (httpx.HTTPError, KeyError, IndexError, ValueError) as error:
-            logger.warning(f"No summary of the latest lab report: {error}")
+    def _published(self) -> set[str]:
+        response = httpx.get(f"{self.settings.url}/reports", timeout=TIMEOUT_SECONDS)
+        response.raise_for_status()
+        return {report["name"] for report in response.json() if report["game"] == self.context.game}
 
-    def _upload_once(self, summary: Path, name: str) -> None:
-        version = (str(summary), summary.stat().st_mtime)
+    def _summaries(self, published: set[str]) -> list[dict[str, Any]]:
+        if self.digest is not None:
+            return self.digest.summaries(published)
+        summaries = sorted(self.context.config.paths.reports_dir.glob(f"*{SUMMARY_SUFFIX}"))
+        return [json.loads(summary.read_text(encoding="utf-8")) for summary in summaries]
+
+    def _upload_once(self, summary: dict[str, Any]) -> None:
+        version = json.dumps(summary, sort_keys=True)
         if version in self.uploaded:
             return
-        content = json.loads(summary.read_text(encoding="utf-8"))
+        name = summary["name"]
         response = httpx.put(
             f"{self.settings.url}/reports/{self.context.game}/{name}",
-            json={"headline": content["headline"], "lines": content["lines"]},
+            json={"headline": summary["headline"], "lines": summary["lines"]},
             headers={"X-API-Key": self.settings.api_key},
             timeout=TIMEOUT_SECONDS,
         )
         response.raise_for_status()
         self.uploaded.add(version)
+        self.published = (self.published or set()) | {name}
         logger.info(f"Short lab report {name} uploaded.")

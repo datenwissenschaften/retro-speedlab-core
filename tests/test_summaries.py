@@ -7,6 +7,7 @@ import pytest
 from datenwissenschaften.ui import summaries
 from datenwissenschaften.ui.summaries import CachedSummary, ReportDigest
 
+LINE_BREAK = chr(10)
 SUMMARY = [
     "Laya Meets The Nibbleys",
     "Today's update shows Laya the nearest nibbley.",
@@ -32,14 +33,24 @@ def test_the_summary_is_written_next_to_the_newest_report_and_reused(tmp_path: P
     (tmp_path / "2026-10-01.md").write_text("old", encoding="utf-8")
     (tmp_path / "2026-10-02.md").write_text("new", encoding="utf-8")
     summarizer = CountingSummarizer()
-    digest = digest_of(tmp_path, summarizer)
+    published = {"2026-10-01.md"}
 
-    first = digest.latest()
-    again = digest_of(tmp_path, summarizer).latest()
+    first = digest_of(tmp_path, summarizer).summaries(published)
+    again = digest_of(tmp_path, summarizer).summaries(published)
 
-    assert first == again == {"name": "2026-10-02.md", "headline": SUMMARY[0], "lines": SUMMARY[1:]}
-    assert json.loads((tmp_path / "2026-10-02.summary.json").read_text(encoding="utf-8")) == first
+    assert first == again == [{"name": "2026-10-02.md", "headline": SUMMARY[0], "lines": SUMMARY[1:]}]
+    assert json.loads((tmp_path / "2026-10-02.summary.json").read_text(encoding="utf-8")) == first[0]
     assert summarizer.reports == ["new"]
+
+
+def test_every_report_the_website_lacks_is_summarized_and_the_newest_always(tmp_path: Path):
+    for name in ("2026-10-01.md", "2026-10-02.md", "2026-10-03.md"):
+        (tmp_path / name).write_text(name, encoding="utf-8")
+    summarizer = CountingSummarizer()
+
+    summaries_due = digest_of(tmp_path, summarizer).summaries({"2026-10-01.md", "2026-10-03.md"})
+
+    assert [summary["name"] for summary in summaries_due] == ["2026-10-02.md", "2026-10-03.md"]
 
 
 def test_a_report_changed_after_its_summary_is_summarized_again(tmp_path: Path):
@@ -47,28 +58,39 @@ def test_a_report_changed_after_its_summary_is_summarized_again(tmp_path: Path):
     report.write_text("morning", encoding="utf-8")
     summarizer = CountingSummarizer()
     digest = digest_of(tmp_path, summarizer)
-    digest.latest()
+    digest.summaries(set())
     summary = tmp_path / "2026-10-02.summary.json"
     os.utime(summary, (report.stat().st_mtime - 60, report.stat().st_mtime - 60))
     report.write_text("evening", encoding="utf-8")
 
-    digest.latest()
+    digest.summaries(set())
 
     assert summarizer.reports == ["morning", "evening"]
 
 
 def test_without_a_report_there_is_no_summary(tmp_path: Path):
-    with pytest.raises(FileNotFoundError):
-        digest_of(tmp_path, CountingSummarizer()).latest()
+    assert digest_of(tmp_path, CountingSummarizer()).summaries(set()) == []
 
 
 def test_a_timed_report_of_the_day_is_newer_than_the_dated_one(tmp_path: Path):
-    for name in ("2026-10-02T2130.md", "2026-10-03.md", "2026-10-03T0930.md"):
+    names = ("2026-10-02T2130.md", "2026-10-03.md", "2026-10-03T0930.md")
+    for name in names:
         (tmp_path / name).write_text(name, encoding="utf-8")
     summarizer = CountingSummarizer()
 
-    assert digest_of(tmp_path, summarizer).latest()["name"] == "2026-10-03T0930.md"
+    assert digest_of(tmp_path, summarizer).summaries(set(names))[-1]["name"] == "2026-10-03T0930.md"
     assert summarizer.reports == ["2026-10-03T0930.md"]
+
+
+class FakeModels:
+    def __init__(self, ids: list[str]) -> None:
+        self.ids = ids
+
+    def raise_for_status(self) -> None:
+        pass
+
+    def json(self) -> dict:
+        return {"data": [{"id": model} for model in self.ids]}
 
 
 class FakeResponse:
@@ -90,6 +112,7 @@ def replying(monkeypatch, *contents: str) -> list[str]:
         return FakeResponse(next(replies))
 
     monkeypatch.setattr(summaries.httpx, "post", post)
+    monkeypatch.setattr(summaries.httpx, "get", lambda url, **kwargs: FakeModels(["model"]))
     monkeypatch.setattr(summaries.Summarizer.summarize.retry, "sleep", lambda seconds: None)
     return asked
 
@@ -116,3 +139,25 @@ def test_the_summary_gives_up_after_its_attempts(monkeypatch):
     with pytest.raises(ValueError, match="summary lines"):
         summaries.Summarizer("rules", ("model",), "key").summarize("report")
     assert len(asked) == summaries.SUMMARY_ATTEMPTS
+
+
+def test_models_openrouter_withdrew_are_left_out_of_the_request(monkeypatch):
+    sent = []
+    monkeypatch.setattr(summaries.httpx, "get", lambda url, **kwargs: FakeModels(["kept", "other"]))
+    monkeypatch.setattr(
+        summaries.httpx,
+        "post",
+        lambda url, **kwargs: sent.append(kwargs["json"]["models"]) or FakeResponse(LINE_BREAK.join(SUMMARY)),
+    )
+
+    summaries.Summarizer("rules", ("gone", "kept"), "key").summarize("report")
+
+    assert sent == [["kept"]]
+
+
+def test_without_any_offered_model_there_is_no_summary(monkeypatch):
+    monkeypatch.setattr(summaries.httpx, "get", lambda url, **kwargs: FakeModels(["other"]))
+    monkeypatch.setattr(summaries.Summarizer.summarize.retry, "sleep", lambda seconds: None)
+
+    with pytest.raises(ValueError):
+        summaries.Summarizer("rules", ("gone",), "key").summarize("report")

@@ -5,12 +5,14 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from loguru import logger
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from datenwissenschaften.settings import UISettings
 
 OPENROUTER_KEY = "OPENROUTER_API_KEY"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 TIMEOUT_SECONDS = 60
 MAX_TOKENS = 300
 SUMMARY_LINES = 4
@@ -49,7 +51,7 @@ class Summarizer:
             OPENROUTER_URL,
             headers={"Authorization": f"Bearer {self.api_key}"},
             json={
-                "models": list(self.models),
+                "models": self._offered(),
                 "max_tokens": MAX_TOKENS,
                 "reasoning": {"enabled": False},
                 "messages": [
@@ -65,6 +67,18 @@ class Summarizer:
         if len(lines) < MIN_SUMMARY_LINES:
             raise ValueError(f"Expected {SUMMARY_LINES} summary lines, got: {content!r}")
         return lines[:SUMMARY_LINES]
+
+    def _offered(self) -> list[str]:
+        response = httpx.get(OPENROUTER_MODELS_URL, timeout=TIMEOUT_SECONDS)
+        response.raise_for_status()
+        listed = {model["id"] for model in response.json()["data"]}
+        withdrawn = [model for model in self.models if model not in listed]
+        if withdrawn:
+            logger.warning(f"OpenRouter no longer offers {', '.join(withdrawn)}; update twitch.summary_models")
+        offered = [model for model in self.models if model in listed]
+        if not offered:
+            raise ValueError("OpenRouter offers none of twitch.summary_models")
+        return offered
 
 
 class CachedSummary:
@@ -89,11 +103,13 @@ class ReportDigest:
         self.reports_dir = reports_dir
         self.summary = summary
 
-    def latest(self) -> dict[str, Any]:
-        reports = sorted(self.reports_dir.glob(f"*{REPORT_SUFFIX}"), key=lambda report: report.name)
-        if not reports:
-            raise FileNotFoundError(self.reports_dir)
-        return self.summary.of(reports[-1])
+    def reports(self) -> list[Path]:
+        return sorted(self.reports_dir.glob(f"*{REPORT_SUFFIX}"), key=lambda report: report.name)
+
+    def summaries(self, published: set[str]) -> list[dict[str, Any]]:
+        reports = self.reports()
+        due = [report for report in reports[:-1] if report.name not in published] + reports[-1:]
+        return [self.summary.of(report) for report in due]
 
 
 def report_digest(settings: UISettings, game: str, reports_dir: Path) -> ReportDigest | None:
