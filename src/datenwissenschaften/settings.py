@@ -54,6 +54,12 @@ class LabSettings:
 
 
 @dataclass(frozen=True)
+class TrackingSettings:
+    url: str
+    token: str | None
+
+
+@dataclass(frozen=True)
 class RetroSpeedlabConfig:
     paths: RetroSpeedlabPaths
     training: TrainingSettings
@@ -61,6 +67,7 @@ class RetroSpeedlabConfig:
     upload: UploadSettings
     ui: UISettings
     lab: LabSettings
+    tracking: TrackingSettings
     log_level: str
 
 
@@ -106,6 +113,10 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             summary_models=_texts(document.twitch.summary_models, "twitch.summary_models"),
         ),
         lab=LabSettings(stall_hours=_positive_int(document.agent.stall_hours, "agent.stall_hours")),
+        tracking=TrackingSettings(
+            url=_text(document.tracking.url, "tracking.url"),
+            token=_optional_text(document.tracking.token, "tracking.token"),
+        ),
         log_level=_text(document.log_level, "log_level").upper(),
     )
 

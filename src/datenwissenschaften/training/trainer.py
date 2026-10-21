@@ -18,12 +18,13 @@ from datenwissenschaften.laya.network import LayaNetwork
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.settings import load_config
+from datenwissenschaften.tracking.run import start_tracking
 from datenwissenschaften.training.beaten_level_hook import BeatenLevelHook
 from datenwissenschaften.training.checkpoint_hook import CheckpointHook, model_metadata
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.curriculum_upload_hook import CurriculumUploadHook
 from datenwissenschaften.training.hooks import TrainingHook
-from datenwissenschaften.training.identity import TrainingIdentity
+from datenwissenschaften.training.identity import TrainingIdentity, engine_version
 from datenwissenschaften.training.knowledge import knowledge
 from datenwissenschaften.training.lab_run import LabRun
 from datenwissenschaften.training.lessons import Lessons
@@ -35,6 +36,7 @@ from datenwissenschaften.training.state_models import StateModels
 from datenwissenschaften.training.story_book import StoryBook
 from datenwissenschaften.training.story_teller import StoryTeller
 from datenwissenschaften.training.telemetry_hook import TelemetryHook
+from datenwissenschaften.training.tracking_hook import TrackingHook
 from datenwissenschaften.training.upload_hook import UploadHook
 from datenwissenschaften.training.video_hook import BestVideoHook
 from datenwissenschaften.ui.control import ModelResetRequest, configure_training_control, perform_model_reset
@@ -106,12 +108,27 @@ class LayaTrainer:
         practice = PracticeEnvironments(self.wrapper_cls, self.config, self.speedrun, workers)
         backplay = Backplay(starts, phases(self.wrapper_cls), self.context.backplay_path)
         team = AdvisorTeam(advisors, practice, lab_run, lessons, backplay)
+        tracking = start_tracking(
+            self.config.tracking, self.context.game, self.config.ui.release, self._parameters(len(workers) + 1)
+        )
+        tracked = [] if tracking is None else [TrackingHook(tracking, models)]
         try:
-            hooks = self._hooks(env, models, StoryTeller(story))
+            hooks = [*self._hooks(env, models, StoryTeller(story)), *tracked]
             return TrainingSession(env, models, hooks, deadline, lessons, lab_run, team.coach).run()
         finally:
+            if tracking is not None:
+                tracking.finish()
             team.close()
             models.close()
+
+    def _parameters(self, emulators: int) -> dict[str, str]:
+        return {
+            "engine": engine_version(),
+            "release": self.config.ui.release,
+            "laya": self.config.laya.checkpoint,
+            "speedrun": str(self.speedrun),
+            "emulators": str(emulators),
+        }
 
     def _curricula(self) -> frozenset[str]:
         levels = level_map(self.wrapper_cls.levels, self.wrapper_cls.state_classes)
