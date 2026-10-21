@@ -106,10 +106,12 @@ class ReportDigest:
     def reports(self) -> list[Path]:
         return sorted(self.reports_dir.glob(f"*{REPORT_SUFFIX}"), key=lambda report: report.name)
 
-    def summaries(self, published: set[str]) -> list[dict[str, Any]]:
+    def due(self, published: set[str]) -> list[Path]:
         reports = self.reports()
-        due = [report for report in reports[:-1] if report.name not in published] + reports[-1:]
-        return [self.summary.of(report) for report in due]
+        return reports[-1:] + [report for report in reversed(reports[:-1]) if report.name not in published]
+
+    def of(self, report: Path) -> dict[str, Any]:
+        return self.summary.of(report)
 
 
 def report_digest(settings: UISettings, game: str, reports_dir: Path) -> ReportDigest | None:

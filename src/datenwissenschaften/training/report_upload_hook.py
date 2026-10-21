@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -34,23 +35,34 @@ class ReportUploadHook:
         try:
             if self.published is None:
                 self.published = self._published()
-            for summary in self._summaries(self.published):
-                self._upload_once(summary)
         except httpx.HTTPError as error:
-            logger.error(f"Lab report upload failed: {error}")
-        except (KeyError, IndexError, ValueError) as error:
-            logger.warning(f"No summary of a lab report: {error}")
+            logger.error(f"Published lab reports unavailable: {error}")
+            return
+        for source in self._sources(self.published):
+            self._upload(source)
 
     def _published(self) -> set[str]:
         response = httpx.get(f"{self.settings.url}/reports", timeout=TIMEOUT_SECONDS)
         response.raise_for_status()
         return {report["name"] for report in response.json() if report["game"] == self.context.game}
 
-    def _summaries(self, published: set[str]) -> list[dict[str, Any]]:
+    def _sources(self, published: set[str]) -> list[Path]:
         if self.digest is not None:
-            return self.digest.summaries(published)
-        summaries = sorted(self.context.config.paths.reports_dir.glob(f"*{SUMMARY_SUFFIX}"))
-        return [json.loads(summary.read_text(encoding="utf-8")) for summary in summaries]
+            return self.digest.due(published)
+        return sorted(self.context.config.paths.reports_dir.glob(f"*{SUMMARY_SUFFIX}"))
+
+    def _summary(self, source: Path) -> dict[str, Any]:
+        if self.digest is not None:
+            return self.digest.of(source)
+        return json.loads(source.read_text(encoding="utf-8"))
+
+    def _upload(self, source: Path) -> None:
+        try:
+            self._upload_once(self._summary(source))
+        except httpx.HTTPError as error:
+            logger.error(f"Lab report {source.name} upload failed: {error}")
+        except (KeyError, IndexError, ValueError) as error:
+            logger.warning(f"No summary of lab report {source.name}: {error}")
 
     def _upload_once(self, summary: dict[str, Any]) -> None:
         version = json.dumps(summary, sort_keys=True)

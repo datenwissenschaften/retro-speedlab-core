@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -29,28 +30,31 @@ def digest_of(tmp_path: Path, summarizer: CountingSummarizer) -> ReportDigest:
     return ReportDigest(tmp_path, CachedSummary(summarizer))
 
 
+def summaries_of(digest: ReportDigest, published: set[str]) -> list[dict[str, Any]]:
+    return [digest.of(report) for report in digest.due(published)]
+
+
 def test_the_summary_is_written_next_to_the_newest_report_and_reused(tmp_path: Path):
     (tmp_path / "2026-10-01.md").write_text("old", encoding="utf-8")
     (tmp_path / "2026-10-02.md").write_text("new", encoding="utf-8")
     summarizer = CountingSummarizer()
     published = {"2026-10-01.md"}
 
-    first = digest_of(tmp_path, summarizer).summaries(published)
-    again = digest_of(tmp_path, summarizer).summaries(published)
+    first = summaries_of(digest_of(tmp_path, summarizer), published)
+    again = summaries_of(digest_of(tmp_path, summarizer), published)
 
     assert first == again == [{"name": "2026-10-02.md", "headline": SUMMARY[0], "lines": SUMMARY[1:]}]
     assert json.loads((tmp_path / "2026-10-02.summary.json").read_text(encoding="utf-8")) == first[0]
     assert summarizer.reports == ["new"]
 
 
-def test_every_report_the_website_lacks_is_summarized_and_the_newest_always(tmp_path: Path):
-    for name in ("2026-10-01.md", "2026-10-02.md", "2026-10-03.md"):
+def test_the_newest_report_and_every_report_the_website_lacks_are_due_newest_first(tmp_path: Path):
+    for name in ("2026-10-01.md", "2026-10-02.md", "2026-10-03.md", "2026-10-04.md"):
         (tmp_path / name).write_text(name, encoding="utf-8")
-    summarizer = CountingSummarizer()
 
-    summaries_due = digest_of(tmp_path, summarizer).summaries({"2026-10-01.md", "2026-10-03.md"})
+    due = digest_of(tmp_path, CountingSummarizer()).due({"2026-10-02.md", "2026-10-04.md"})
 
-    assert [summary["name"] for summary in summaries_due] == ["2026-10-02.md", "2026-10-03.md"]
+    assert [report.name for report in due] == ["2026-10-04.md", "2026-10-03.md", "2026-10-01.md"]
 
 
 def test_a_report_changed_after_its_summary_is_summarized_again(tmp_path: Path):
@@ -58,28 +62,28 @@ def test_a_report_changed_after_its_summary_is_summarized_again(tmp_path: Path):
     report.write_text("morning", encoding="utf-8")
     summarizer = CountingSummarizer()
     digest = digest_of(tmp_path, summarizer)
-    digest.summaries(set())
+    digest.of(report)
     summary = tmp_path / "2026-10-02.summary.json"
     os.utime(summary, (report.stat().st_mtime - 60, report.stat().st_mtime - 60))
     report.write_text("evening", encoding="utf-8")
 
-    digest.summaries(set())
+    digest.of(report)
 
     assert summarizer.reports == ["morning", "evening"]
 
 
-def test_without_a_report_there_is_no_summary(tmp_path: Path):
-    assert digest_of(tmp_path, CountingSummarizer()).summaries(set()) == []
+def test_without_a_report_nothing_is_due(tmp_path: Path):
+    assert digest_of(tmp_path, CountingSummarizer()).due(set()) == []
 
 
 def test_a_timed_report_of_the_day_is_newer_than_the_dated_one(tmp_path: Path):
     names = ("2026-10-02T2130.md", "2026-10-03.md", "2026-10-03T0930.md")
     for name in names:
         (tmp_path / name).write_text(name, encoding="utf-8")
-    summarizer = CountingSummarizer()
 
-    assert digest_of(tmp_path, summarizer).summaries(set(names))[-1]["name"] == "2026-10-03T0930.md"
-    assert summarizer.reports == ["2026-10-03T0930.md"]
+    assert [report.name for report in digest_of(tmp_path, CountingSummarizer()).due(set(names))] == [
+        "2026-10-03T0930.md"
+    ]
 
 
 class FakeModels:

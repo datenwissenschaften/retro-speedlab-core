@@ -449,15 +449,23 @@ def test_the_stream_shows_every_fact_but_the_advisor():
     assert live_stream_hook.shown_facts(text) == {"lives": 3, "to_target": "4 right, level"}
 
 
-def test_report_upload_hook_summarizes_only_the_reports_the_website_lacks(context: RunContext, monkeypatch):
+class FakeDigest:
+    def __init__(self, failing: set[str]) -> None:
+        self.failing = failing
+        self.asked: list[set[str]] = []
+
+    def due(self, published: set[str]) -> list[Path]:
+        self.asked.append(set(published))
+        return [Path(name) for name in ("2026-10-21T1730.md", "2026-10-21T1445.md") if name not in published]
+
+    def of(self, report: Path) -> dict[str, object]:
+        if report.name in self.failing:
+            raise ValueError("Expected 4 summary lines")
+        return {"name": report.name, "headline": "Up", "lines": ["a"]}
+
+
+def _report_upload_hook(context: RunContext, monkeypatch, digest: FakeDigest, puts: list[str]):
     context.config.paths.reports_dir.mkdir(parents=True, exist_ok=True)
-    asked: list[set[str]] = []
-    digest = SimpleNamespace(
-        summaries=lambda published: (
-            asked.append(set(published)) or [{"name": "2026-10-21T1445.md", "headline": "Up", "lines": ["a"]}]
-        )
-    )
-    puts = []
     published = [("FakeGame-v0", "2026-10-21T0830.md"), ("OtherGame-v0", "2026-10-21T1445.md")]
     monkeypatch.setattr(report_upload_hook.httpx, "get", lambda url, **kwargs: _reports(published))
     monkeypatch.setattr(
@@ -465,10 +473,28 @@ def test_report_upload_hook_summarizes_only_the_reports_the_website_lacks(contex
     )
     hook = report_upload_hook.ReportUploadHook(context, digest)
     hook.settings = SimpleNamespace(url="https://upload.test", api_key="key")
+    return hook
+
+
+def test_report_upload_hook_summarizes_only_the_reports_the_website_lacks(context: RunContext, monkeypatch):
+    digest, puts = FakeDigest(set()), []
+    hook = _report_upload_hook(context, monkeypatch, digest, puts)
 
     hook.on_update()
     hook.on_update()
 
-    assert asked[0] == {"2026-10-21T0830.md"}
-    assert asked[1] == {"2026-10-21T0830.md", "2026-10-21T1445.md"}
+    assert digest.asked[0] == {"2026-10-21T0830.md"}
+    assert digest.asked[1] == {"2026-10-21T0830.md", "2026-10-21T1445.md", "2026-10-21T1730.md"}
+    assert puts == [
+        "https://upload.test/reports/FakeGame-v0/2026-10-21T1730.md",
+        "https://upload.test/reports/FakeGame-v0/2026-10-21T1445.md",
+    ]
+
+
+def test_a_report_without_a_summary_does_not_hold_back_the_others(context: RunContext, monkeypatch):
+    puts: list[str] = []
+    hook = _report_upload_hook(context, monkeypatch, FakeDigest({"2026-10-21T1730.md"}), puts)
+
+    hook.on_update()
+
     assert puts == ["https://upload.test/reports/FakeGame-v0/2026-10-21T1445.md"]
