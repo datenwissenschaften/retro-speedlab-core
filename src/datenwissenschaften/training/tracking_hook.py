@@ -1,3 +1,5 @@
+from collections import Counter
+
 from datenwissenschaften.tracking.run import TrackingRun
 from datenwissenschaften.training.checkpoint_hook import learning_metadata
 from datenwissenschaften.training.episode_record import EpisodeRecord
@@ -10,20 +12,23 @@ class TrackingHook:
         self.run = run
         self.models = models
         self.phases = phases
+        self.attempts: Counter[str] = Counter()
         self.updates = 0
 
     def on_step(self, transition: Transition) -> None:
         pass
 
     def on_episode_end(self, episode: EpisodeRecord) -> None:
+        level = episode.curriculum_state
+        self.attempts[level] += 1
         metrics = {
-            "progress": float(self.phases.index(episode.final_state)),
-            "success": float(episode.curriculum_succeeded),
-            "score": episode.score,
+            f"{level}/progress": float(self.phases.index(episode.final_state)),
+            f"{level}/success": float(episode.curriculum_succeeded),
+            f"{level}/score": episode.score,
         }
+        self.run.log(metrics, self.attempts[level])
         if episode.duration_seconds > 0:
-            metrics["decisions_per_second"] = episode.step_count / episode.duration_seconds
-        self.run.log(metrics, episode.episode_index)
+            self.run.log({"decisions_per_second": episode.step_count / episode.duration_seconds}, episode.episode_index)
 
     def on_update(self) -> None:
         self.updates += 1

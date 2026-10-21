@@ -262,10 +262,12 @@ win happened for `agent.stall_hours` hours. Every task runs locally with
 `flyte run --local` and declares its GPU, so it can move to a Flyte cluster.
 
 With `tracking.token` set, every session is an [MLflow](https://mlflow.org) run
-at `tracking.url` with five metrics: `progress` (the furthest state an
-attempt reaches), `success` (1 when it clears its practice target), `score`,
-`decisions_per_second` and, after every learning update, `confidence` (one
-minus the entropy share of the state that learned). The A/B test plays
+at `tracking.url`. Every attempt counts toward the part it practised, as
+`<part>/progress` (the furthest state it reaches), `<part>/success` (1 when it
+clears the part) and `<part>/score`, so MLflow groups the charts by level.
+Two lines cover the whole session: `decisions_per_second` and, after every
+learning update, `confidence` (one minus the entropy share of the state that
+learned). The A/B test plays
 both models greedily from the same starts (power-on and the curriculum
 frontier) and logs to the `<game> A/B` experiment the mean score and progress
 before and after, a bootstrap confidence interval for the difference and the

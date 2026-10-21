@@ -96,7 +96,7 @@ def test_an_unreachable_server_leaves_the_session_untracked(monkeypatch):
     assert start_tracking(TrackingSettings("https://training.test", "token"), "Game-v0", "local", {}) is None
 
 
-def test_the_hook_logs_five_headline_metrics(monkeypatch):
+def test_the_hook_logs_each_levels_attempts_and_the_overall_speed_and_confidence(monkeypatch):
     logged: list[tuple[dict[str, float], int]] = []
     run = SimpleNamespace(log=lambda metrics, step: logged.append((metrics, step)))
     monkeypatch.setattr(
@@ -106,11 +106,16 @@ def test_the_hook_logs_five_headline_metrics(monkeypatch):
     hook = TrackingHook(run, SimpleNamespace(), ("Menu", "Level1", "Boss"))
 
     hook.on_episode_end(episode())
-    hook.on_update()
+    hook.on_episode_end(episode())
     hook.on_update()
 
-    assert logged[0] == ({"progress": 1.0, "success": 1.0, "score": 7.0, "decisions_per_second": 3.2}, 3)
-    assert logged[1:] == [({"confidence": 0.75}, 1), ({"confidence": 0.75}, 2)]
+    assert logged == [
+        ({"Level1/progress": 1.0, "Level1/success": 1.0, "Level1/score": 7.0}, 1),
+        ({"decisions_per_second": 3.2}, 3),
+        ({"Level1/progress": 1.0, "Level1/success": 1.0, "Level1/score": 7.0}, 2),
+        ({"decisions_per_second": 3.2}, 3),
+        ({"confidence": 0.75}, 1),
+    ]
 
 
 def test_an_attempt_without_duration_has_no_speed():
@@ -121,7 +126,7 @@ def test_an_attempt_without_duration_has_no_speed():
 
     TrackingHook(run, SimpleNamespace(), ("Menu", "Level1")).on_episode_end(record)
 
-    assert "decisions_per_second" not in logged[0]
+    assert logged == [{"Level1/progress": 1.0, "Level1/success": 1.0, "Level1/score": 7.0}]
 
 
 def test_a_failed_run_keeps_its_error_and_ends_failed(monkeypatch):
