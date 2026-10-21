@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 from loguru import logger
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from datenwissenschaften.settings import UISettings
 
@@ -34,6 +34,14 @@ REPORT_INSTRUCTIONS = (
 )
 
 
+def rate_limited(error: BaseException) -> bool:
+    return isinstance(error, httpx.HTTPStatusError) and error.response.status_code == httpx.codes.TOO_MANY_REQUESTS
+
+
+def worth_retrying(error: BaseException) -> bool:
+    return isinstance(error, (ValueError, httpx.HTTPError)) and not rate_limited(error)
+
+
 class Summarizer:
     def __init__(self, instructions: str, models: tuple[str, ...], api_key: str) -> None:
         self.instructions = instructions
@@ -41,7 +49,7 @@ class Summarizer:
         self.api_key = api_key
 
     @retry(
-        retry=retry_if_exception_type((ValueError, httpx.HTTPError)),
+        retry=retry_if_exception(worth_retrying),
         stop=stop_after_attempt(SUMMARY_ATTEMPTS),
         wait=wait_exponential(multiplier=RETRY_WAIT_SECONDS),
         reraise=True,

@@ -165,3 +165,20 @@ def test_without_any_offered_model_there_is_no_summary(monkeypatch):
 
     with pytest.raises(ValueError):
         summaries.Summarizer("rules", ("gone",), "key").summarize("report")
+
+
+def test_a_rate_limited_summary_is_not_asked_again(monkeypatch):
+    asked = []
+    request = summaries.httpx.Request("POST", summaries.OPENROUTER_URL)
+
+    def post(url: str, **kwargs) -> summaries.httpx.Response:
+        asked.append(url)
+        return summaries.httpx.Response(summaries.httpx.codes.TOO_MANY_REQUESTS, request=request)
+
+    monkeypatch.setattr(summaries.httpx, "post", post)
+    monkeypatch.setattr(summaries.httpx, "get", lambda url, **kwargs: FakeModels(["model"]))
+    monkeypatch.setattr(summaries.Summarizer.summarize.retry, "sleep", lambda seconds: None)
+
+    with pytest.raises(summaries.httpx.HTTPStatusError):
+        summaries.Summarizer("rules", ("model",), "key").summarize("report")
+    assert len(asked) == 1

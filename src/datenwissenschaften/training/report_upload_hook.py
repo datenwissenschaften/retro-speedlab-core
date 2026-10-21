@@ -1,4 +1,5 @@
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -8,9 +9,10 @@ from loguru import logger
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
-from datenwissenschaften.ui.summaries import SUMMARY_SUFFIX, ReportDigest
+from datenwissenschaften.ui.summaries import SUMMARY_SUFFIX, ReportDigest, rate_limited
 
 TIMEOUT_SECONDS = 30
+RATE_LIMIT_PAUSE_SECONDS = 15 * 60
 
 
 class ReportUploadHook:
@@ -20,6 +22,7 @@ class ReportUploadHook:
         self.settings = context.config.upload
         self.published: set[str] | None = None
         self.uploaded: set[str] = set()
+        self.retry_at = 0.0
 
     def on_step(self, transition: Transition) -> None:
         pass
@@ -32,6 +35,8 @@ class ReportUploadHook:
             return
         if not self.context.config.paths.reports_dir.is_dir():
             return
+        if time.monotonic() < self.retry_at:
+            return
         try:
             if self.published is None:
                 self.published = self._published()
@@ -39,7 +44,8 @@ class ReportUploadHook:
             logger.error(f"Published lab reports unavailable: {error}")
             return
         for source in self._sources(self.published):
-            self._upload(source)
+            if not self._upload(source):
+                return
 
     def _published(self) -> set[str]:
         response = httpx.get(f"{self.settings.url}/reports", timeout=TIMEOUT_SECONDS)
@@ -56,13 +62,18 @@ class ReportUploadHook:
             return self.digest.of(source)
         return json.loads(source.read_text(encoding="utf-8"))
 
-    def _upload(self, source: Path) -> None:
+    def _upload(self, source: Path) -> bool:
         try:
             self._upload_once(self._summary(source))
         except httpx.HTTPError as error:
+            if rate_limited(error):
+                self.retry_at = time.monotonic() + RATE_LIMIT_PAUSE_SECONDS
+                logger.warning(f"Lab reports paused for {RATE_LIMIT_PAUSE_SECONDS // 60} minutes: {error}")
+                return False
             logger.error(f"Lab report {source.name} upload failed: {error}")
         except (KeyError, IndexError, ValueError) as error:
             logger.warning(f"No summary of lab report {source.name}: {error}")
+        return True
 
     def _upload_once(self, summary: dict[str, Any]) -> None:
         version = json.dumps(summary, sort_keys=True)

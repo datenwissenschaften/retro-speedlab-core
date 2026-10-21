@@ -498,3 +498,24 @@ def test_a_report_without_a_summary_does_not_hold_back_the_others(context: RunCo
     hook.on_update()
 
     assert puts == ["https://upload.test/reports/FakeGame-v0/2026-10-21T1445.md"]
+
+
+class RateLimitedDigest(FakeDigest):
+    def of(self, report: Path) -> dict[str, object]:
+        self.asked.append({report.name})
+        request = httpx.Request("POST", "https://openrouter.test")
+        response = httpx.Response(httpx.codes.TOO_MANY_REQUESTS, request=request)
+        raise httpx.HTTPStatusError("429 Too Many Requests", request=request, response=response)
+
+
+def test_a_rate_limit_pauses_the_lab_reports(context: RunContext, monkeypatch):
+    digest, puts = RateLimitedDigest(set()), []
+    hook = _report_upload_hook(context, monkeypatch, digest, puts)
+    clock = iter([1000.0, 1000.0, 1000.0 + report_upload_hook.RATE_LIMIT_PAUSE_SECONDS - 1])
+    monkeypatch.setattr(report_upload_hook.time, "monotonic", lambda: next(clock))
+
+    hook.on_update()
+    hook.on_update()
+
+    assert digest.asked == [{"2026-10-21T0830.md"}, {"2026-10-21T1730.md"}]
+    assert puts == []
