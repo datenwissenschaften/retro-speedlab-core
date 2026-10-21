@@ -10,6 +10,8 @@ from datenwissenschaften.settings import TrackingSettings
 
 TOKEN_VARIABLE = "MLFLOW_TRACKING_TOKEN"
 MILLISECONDS_PER_SECOND = 1000
+ERROR_TAG = "error"
+MAX_TAG_LENGTH = 5000
 
 
 class TrackingRun:
@@ -31,8 +33,15 @@ class TrackingRun:
         self.client.log_batch(self.run_id, metrics=entries, synchronous=False)
 
     def finish(self) -> None:
+        self._end(RunStatus.FINISHED)
+
+    def fail(self, error: BaseException) -> None:
+        self.client.set_tag(self.run_id, ERROR_TAG, f"{type(error).__name__}: {error}"[:MAX_TAG_LENGTH])
+        self._end(RunStatus.FAILED)
+
+    def _end(self, status: int) -> None:
         flush_async_logging()
-        self.client.set_terminated(self.run_id, RunStatus.to_string(RunStatus.FINISHED))
+        self.client.set_terminated(self.run_id, RunStatus.to_string(status))
 
 
 def start_tracking(
@@ -44,5 +53,5 @@ def start_tracking(
     try:
         return TrackingRun.start(MlflowClient(tracking_uri=settings.url), experiment, name, parameters)
     except MlflowException as error:
-        logger.warning(f"MLflow at {settings.url} is unreachable, this session is not tracked: {error}")
+        logger.warning(f"MLflow at {settings.url} is unreachable, this run is not tracked: {error}")
         return None

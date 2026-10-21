@@ -6,6 +6,7 @@ from loguru import logger
 
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
+from datenwissenschaften.tracking.task_run import task_run
 from datenwissenschaften.workflow.environment import speedlab
 
 SECONDS_PER_MINUTE = 60
@@ -35,11 +36,12 @@ def lab_run_due(config: str) -> bool:
 
 
 @speedlab.task
-def lab_run(project: str) -> None:
-    subprocess.run([Path(project) / "agent" / "daily.sh"], check=True)
+def lab_run(config: str, project: str) -> None:
+    with task_run(Path(config), "lab_run"):
+        subprocess.run([Path(project) / "agent" / "daily.sh"], check=True)
 
 
 @speedlab.task
 def lab(config: str, project: str) -> None:
     if lab_run_due(config):
-        lab_run(project)
+        lab_run(config, project)

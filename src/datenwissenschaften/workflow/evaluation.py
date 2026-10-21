@@ -4,6 +4,7 @@ from pathlib import Path
 from datenwissenschaften.evaluation.ab_test import ABTest
 from datenwissenschaften.evaluation.snapshot import snapshot_models
 from datenwissenschaften.settings import load_config
+from datenwissenschaften.tracking.task_run import task_run
 from datenwissenschaften.workflow.environment import speedlab
 from datenwissenschaften.workflow.wrapper import wrapper_class
 
@@ -16,6 +17,7 @@ def snapshot(config: str) -> str:
 @speedlab.task
 def ab_test(wrapper: str, config: str, before: str) -> None:
     try:
-        ABTest(wrapper_class(wrapper), load_config(Path(config))).run(Path(before))
+        with task_run(Path(config), "ab_test"):
+            ABTest(wrapper_class(wrapper), load_config(Path(config))).run(Path(before))
     finally:
         shutil.rmtree(before)

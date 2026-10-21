@@ -39,9 +39,11 @@ def test_a_session_task_trains_one_session_of_the_named_wrapper(tmp_path: Path, 
 
     monkeypatch.setattr(training_module, "LayaTrainer", Trainer)
 
-    training_module.train_session("fakes:FakeWrapper", str(tmp_path / "config.yaml"))
+    config = write_config(tmp_path)
 
-    assert sessions == [(FakeWrapper, tmp_path / "config.yaml")]
+    training_module.train_session("fakes:FakeWrapper", str(config))
+
+    assert sessions == [(FakeWrapper, config)]
 
 
 def test_training_snapshots_the_models_trains_a_session_and_ab_tests_it_again_and_again(monkeypatch):

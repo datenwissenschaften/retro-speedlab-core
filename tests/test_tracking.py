@@ -1,10 +1,13 @@
 from types import SimpleNamespace
 
+from fakes import write_config
 from mlflow.exceptions import MlflowException
 
 from datenwissenschaften.settings import TrackingSettings
 from datenwissenschaften.tracking import run as run_module
+from datenwissenschaften.tracking import task_run as task_run_module
 from datenwissenschaften.tracking.run import TrackingRun, start_tracking
+from datenwissenschaften.tracking.task_run import task_run
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.tracking_hook import TrackingHook
 
@@ -14,6 +17,7 @@ class FakeClient:
         self.experiments = experiments
         self.batches: list[dict] = []
         self.terminated: list[tuple[str, str]] = []
+        self.tags: list[tuple[str, str, str]] = []
 
     def get_experiment_by_name(self, name: str) -> SimpleNamespace | None:
         if name not in self.experiments:
@@ -32,6 +36,9 @@ class FakeClient:
 
     def set_terminated(self, run_id: str, status: str) -> None:
         self.terminated.append((run_id, status))
+
+    def set_tag(self, run_id: str, key: str, value: str) -> None:
+        self.tags.append((run_id, key, value))
 
 
 def episode() -> EpisodeRecord:
@@ -101,3 +108,48 @@ def test_the_hook_logs_every_episode_and_every_update_per_state(monkeypatch):
     assert logged[0][0]["score/Level1"] == 7.0
     assert logged[0][0]["episode/curriculum_succeeded"] == 1.0
     assert logged[1] == ({"Survive/entropy_share": 0.5, "Survive/explained_variance": 0.25}, 512)
+
+
+def test_a_failed_run_keeps_its_error_and_ends_failed(monkeypatch):
+    monkeypatch.setattr(run_module, "flush_async_logging", lambda: None)
+    client = FakeClient({})
+
+    TrackingRun(client, "run").fail(ValueError("no ROM"))
+
+    assert client.tags == [("run", "error", "ValueError: no ROM")]
+    assert client.terminated == [("run", "FAILED")]
+
+
+def test_every_task_is_a_run_in_the_games_task_experiment_that_ends_with_the_task(tmp_path, monkeypatch):
+    started, ended = [], []
+    run = SimpleNamespace(finish=lambda: ended.append("FINISHED"), fail=lambda error: ended.append(str(error)))
+
+    def start(settings, experiment: str, name: str, parameters: dict[str, str]) -> SimpleNamespace:
+        started.append((experiment, name, parameters))
+        return run
+
+    monkeypatch.setattr(task_run_module, "start_tracking", start)
+    config = write_config(tmp_path)
+
+    with task_run(config, "train_session"):
+        pass
+    try:
+        with task_run(config, "ab_test"):
+            raise RuntimeError("emulator crashed")
+    except RuntimeError:
+        pass
+
+    assert started == [
+        ("FakeGame-v0 tasks", "train_session", {"release": "local"}),
+        ("FakeGame-v0 tasks", "ab_test", {"release": "local"}),
+    ]
+    assert ended == ["FINISHED", "emulator crashed"]
+
+
+def test_an_untracked_task_still_runs(tmp_path):
+    ran = []
+
+    with task_run(write_config(tmp_path), "lab_run"):
+        ran.append(True)
+
+    assert ran == [True]
