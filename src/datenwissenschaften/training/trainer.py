@@ -18,7 +18,7 @@ from datenwissenschaften.laya.network import LayaNetwork
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.persistence import JsonDatabase
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
-from datenwissenschaften.tracking.run import start_tracking
+from datenwissenschaften.tracking.run import ending, start_tracking
 from datenwissenschaften.training.beaten_level_hook import BeatenLevelHook
 from datenwissenschaften.training.checkpoint_hook import CheckpointHook, model_metadata
 from datenwissenschaften.training.context import RunContext
@@ -126,11 +126,10 @@ class LayaTrainer:
         )
         tracked = [] if tracking is None else [TrackingHook(tracking, models)]
         try:
-            hooks = [*self._hooks(env, models, StoryTeller(story)), *tracked]
-            return TrainingSession(env, models, hooks, deadline, lessons, lab_run, team.coach).run()
+            with ending(tracking):
+                hooks = [*self._hooks(env, models, StoryTeller(story)), *tracked]
+                return TrainingSession(env, models, hooks, deadline, lessons, lab_run, team.coach).run()
         finally:
-            if tracking is not None:
-                tracking.finish()
             team.close()
             models.close()
 

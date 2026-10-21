@@ -1,5 +1,7 @@
 import os
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from loguru import logger
 from mlflow import MlflowClient, flush_async_logging
@@ -12,6 +14,7 @@ TOKEN_VARIABLE = "MLFLOW_TRACKING_TOKEN"
 MILLISECONDS_PER_SECOND = 1000
 ERROR_TAG = "error"
 MAX_TAG_LENGTH = 5000
+STOPS = (KeyboardInterrupt, SystemExit)
 
 
 class TrackingRun:
@@ -25,23 +28,58 @@ class TrackingRun:
         experiment_id = client.create_experiment(experiment) if found is None else found.experiment_id
         run_id = client.create_run(experiment_id, run_name=name).info.run_id
         client.log_batch(run_id, params=[Param(key, value) for key, value in parameters.items()])
-        return cls(client, run_id)
+        run = cls(client, run_id)
+        ACTIVE_RUNS.add(run)
+        return run
 
     def log(self, metrics: dict[str, float], step: int) -> None:
         timestamp = int(time.time() * MILLISECONDS_PER_SECOND)
         entries = [Metric(key, value, timestamp, step) for key, value in metrics.items()]
         self.client.log_batch(self.run_id, metrics=entries, synchronous=False)
 
+    def end(self, error: BaseException | None) -> None:
+        if error is None:
+            self.finish()
+        elif isinstance(error, STOPS):
+            self.kill()
+        else:
+            self.fail(error)
+
     def finish(self) -> None:
         self._end(RunStatus.FINISHED)
+
+    def kill(self) -> None:
+        self._end(RunStatus.KILLED)
 
     def fail(self, error: BaseException) -> None:
         self.client.set_tag(self.run_id, ERROR_TAG, f"{type(error).__name__}: {error}"[:MAX_TAG_LENGTH])
         self._end(RunStatus.FAILED)
 
     def _end(self, status: int) -> None:
+        ACTIVE_RUNS.discard(self)
         flush_async_logging()
         self.client.set_terminated(self.run_id, RunStatus.to_string(status))
+
+
+ACTIVE_RUNS: set[TrackingRun] = set()
+
+
+def kill_active_runs() -> None:
+    for run in tuple(ACTIVE_RUNS):
+        run.kill()
+
+
+@contextmanager
+def ending(run: TrackingRun | None) -> Iterator[None]:
+    if run is None:
+        yield
+        return
+    try:
+        yield
+    except BaseException as error:
+        run.end(error)
+        raise
+    run.end(None)
 
 
 def start_tracking(

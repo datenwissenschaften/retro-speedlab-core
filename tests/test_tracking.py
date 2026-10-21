@@ -6,7 +6,7 @@ from mlflow.exceptions import MlflowException
 from datenwissenschaften.settings import TrackingSettings
 from datenwissenschaften.tracking import run as run_module
 from datenwissenschaften.tracking import task_run as task_run_module
-from datenwissenschaften.tracking.run import TrackingRun, start_tracking
+from datenwissenschaften.tracking.run import ACTIVE_RUNS, TrackingRun, ending, kill_active_runs, start_tracking
 from datenwissenschaften.tracking.task_run import task_run
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.tracking_hook import TrackingHook
@@ -122,7 +122,7 @@ def test_a_failed_run_keeps_its_error_and_ends_failed(monkeypatch):
 
 def test_every_task_is_a_run_in_the_games_task_experiment_that_ends_with_the_task(tmp_path, monkeypatch):
     started, ended = [], []
-    run = SimpleNamespace(finish=lambda: ended.append("FINISHED"), fail=lambda error: ended.append(str(error)))
+    run = SimpleNamespace(end=lambda error: ended.append("FINISHED" if error is None else str(error)))
 
     def start(settings, experiment: str, name: str, parameters: dict[str, str]) -> SimpleNamespace:
         started.append((experiment, name, parameters))
@@ -153,3 +153,52 @@ def test_an_untracked_task_still_runs(tmp_path):
         ran.append(True)
 
     assert ran == [True]
+
+
+def test_a_run_ends_finished_killed_or_failed_by_how_its_work_ended(monkeypatch):
+    monkeypatch.setattr(run_module, "flush_async_logging", lambda: None)
+    client = FakeClient({})
+
+    TrackingRun(client, "done").end(None)
+    TrackingRun(client, "stopped").end(KeyboardInterrupt())
+    TrackingRun(client, "exited").end(SystemExit(143))
+    TrackingRun(client, "broken").end(ValueError("no ROM"))
+
+    assert client.terminated == [
+        ("done", "FINISHED"),
+        ("stopped", "KILLED"),
+        ("exited", "KILLED"),
+        ("broken", "FAILED"),
+    ]
+    assert client.tags == [("broken", "error", "ValueError: no ROM")]
+
+
+def test_open_runs_are_killed_when_the_container_stops(monkeypatch):
+    monkeypatch.setattr(run_module, "flush_async_logging", lambda: None)
+    client = FakeClient({})
+    finished = TrackingRun.start(client, "Game-v0", "earlier", {})
+    finished.finish()
+    open_run = TrackingRun.start(client, "Game-v0", "session", {})
+
+    kill_active_runs()
+
+    assert client.terminated == [(finished.run_id, "FINISHED"), (open_run.run_id, "KILLED")]
+    assert not ACTIVE_RUNS
+
+
+def test_ending_ends_the_run_by_how_the_block_exits_and_passes_without_one(monkeypatch):
+    ended: list[BaseException | None] = []
+    run = SimpleNamespace(end=ended.append)
+
+    with ending(run):
+        pass
+    try:
+        with ending(run):
+            raise KeyboardInterrupt
+    except KeyboardInterrupt:
+        pass
+    with ending(None):
+        pass
+
+    assert ended[0] is None
+    assert isinstance(ended[1], KeyboardInterrupt)
