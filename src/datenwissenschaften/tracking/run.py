@@ -82,14 +82,21 @@ def ending(run: TrackingRun | None) -> Iterator[None]:
     run.end(None)
 
 
-def start_tracking(
-    settings: TrackingSettings, experiment: str, name: str, parameters: dict[str, str]
-) -> TrackingRun | None:
+def tracking_client(settings: TrackingSettings) -> MlflowClient | None:
     if settings.token is None:
         return None
     os.environ[TOKEN_VARIABLE] = settings.token
+    return MlflowClient(tracking_uri=settings.url)
+
+
+def start_tracking(
+    settings: TrackingSettings, experiment: str, name: str, parameters: dict[str, str]
+) -> TrackingRun | None:
+    client = tracking_client(settings)
+    if client is None:
+        return None
     try:
-        return TrackingRun.start(MlflowClient(tracking_uri=settings.url), experiment, name, parameters)
+        return TrackingRun.start(client, experiment, name, parameters)
     except MlflowException as error:
         logger.warning(f"MLflow at {settings.url} is unreachable, this run is not tracked: {error}")
         return None

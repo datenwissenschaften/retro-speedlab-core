@@ -6,6 +6,7 @@ from loguru import logger
 
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
+from datenwissenschaften.tracking.stale import close_stale_lab_runs
 from datenwissenschaften.tracking.task_run import task_run
 from datenwissenschaften.workflow.environment import speedlab
 
@@ -27,6 +28,7 @@ def lab_run_due(config: str) -> bool:
     if settings.paths.lab_run_marker.exists():
         logger.info("No lab run: one is running")
         return False
+    close_stale_lab_runs(settings)
     stalled_minutes = (time.time() - last_progress(settings)) / SECONDS_PER_MINUTE
     if stalled_minutes < settings.lab.stall_hours * MINUTES_PER_HOUR:
         logger.info(f"No lab run: the last progress was {stalled_minutes:.0f} minutes ago")
