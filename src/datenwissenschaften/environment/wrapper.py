@@ -86,12 +86,20 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         self.observer = Observer[T](env.unwrapped.get_ram, self.state_machine, actions, routes)
 
     def reset(self, **kwargs: Any) -> tuple[Observation, dict[str, Any]]:
-        emulator = self.env.unwrapped
-        ensure_movie_directory(emulator)
-        frame, _ = self.env.reset(**kwargs)
-        self.frames = [frame]
+        frame = self._power_on(**kwargs)
         state = self.curriculum.begin_episode()
         return self.start_from(state, None if state is None else self.curriculum.checkpoint(state), frame)
+
+    def reset_to(self, state: str | None) -> tuple[Observation, dict[str, Any]]:
+        frame = self._power_on()
+        self.curriculum.begin_episode()
+        return self.start_from(state, None if state is None else self.curriculum.checkpoint(state), frame)
+
+    def _power_on(self, **kwargs: Any) -> np.ndarray:
+        ensure_movie_directory(self.env.unwrapped)
+        frame, _ = self.env.reset(**kwargs)
+        self.frames = [frame]
+        return frame
 
     def start_from(
         self, checkpoint_state: str | None, emulator_state: bytes | None, frame: np.ndarray

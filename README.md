@@ -252,6 +252,23 @@ same relay. The engine itself serves nothing. With `twitch.enabled: true`, free
 models on OpenRouter (`OPENROUTER_API_KEY`) write the short version of the
 latest lab report for the stream.
 
+## Workflows, tracking and A/B tests
+
+[Flyte](https://flyte.org) runs the training as tasks (`datenwissenschaften.workflow`):
+`training` snapshots the models, trains one two-hour `train_session` and then
+`ab_test`s the models before and after it, again and again. `lab` starts a
+Claude Code lab run (`agent/daily.sh` of the game package) once no curriculum
+win happened for `agent.stall_hours` hours. Every task runs locally with
+`flyte run --local` and declares its GPU, so it can move to a Flyte cluster.
+
+With `tracking.token` set, every session is an [MLflow](https://mlflow.org) run
+at `tracking.url`: each attempt's score, length and win, and each state's
+entropy share, explained variance and advisor agreement. The A/B test plays
+both models greedily from the same starts (power-on and the curriculum
+frontier) and logs to the `<game> A/B` experiment the mean score and progress
+before and after, a bootstrap confidence interval for the difference and the
+probability of improvement, computed with SciPy.
+
 ## Persistence
 
 Training state that is not a file (statistics, curriculum progress, the level
@@ -332,6 +349,8 @@ raise a `RuntimeError` when the configuration is loaded.
 | `upload.url`, `upload.api_key` | Retro Speedlab API; `null` disables uploads |
 | `ui.*` | Live relay on or off, history size, release label and the persona shown on stream |
 | `twitch.enabled`, `twitch.summary_models` | Short lab reports for the stream via OpenRouter |
+| `agent.stall_hours` | Hours without a curriculum win before the `lab` task starts a lab run |
+| `tracking.url`, `tracking.token` | MLflow server; `null` disables tracking |
 
 ## Testing
 

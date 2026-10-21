@@ -17,7 +17,7 @@ from datenwissenschaften.laya.agent import LayaAgent
 from datenwissenschaften.laya.network import LayaNetwork
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.persistence import JsonDatabase
-from datenwissenschaften.settings import load_config
+from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
 from datenwissenschaften.tracking.run import start_tracking
 from datenwissenschaften.training.beaten_level_hook import BeatenLevelHook
 from datenwissenschaften.training.checkpoint_hook import CheckpointHook, model_metadata
@@ -54,6 +54,16 @@ ADVISOR_THREADS = 2
 def phases(wrapper_cls: type[StateMachineGymWrapper]) -> tuple[str, ...]:
     classes = (wrapper_cls.start_state_cls, *wrapper_cls.state_classes)
     return tuple(dict.fromkeys(state_cls.__name__ for state_cls in classes))
+
+
+def laya_network(wrapper_cls: type[StateMachineGymWrapper], config: RetroSpeedlabConfig) -> LayaNetwork:
+    return LayaNetwork(config.laya.checkpoint, wrapper_cls.action_descriptions, configure_accelerator())
+
+
+def state_models(wrapper_cls: type[StateMachineGymWrapper], network: LayaNetwork, context: RunContext) -> StateModels:
+    state_classes = (wrapper_cls.start_state_cls, *wrapper_cls.state_classes)
+    agent = LayaAgent(network, tuple(state_cls.description for state_cls in state_classes))
+    return StateModels(agent, context, phases(wrapper_cls))
 
 
 class LayaTrainer:
@@ -109,7 +119,10 @@ class LayaTrainer:
         backplay = Backplay(starts, phases(self.wrapper_cls), self.context.backplay_path)
         team = AdvisorTeam(advisors, practice, lab_run, lessons, backplay)
         tracking = start_tracking(
-            self.config.tracking, self.context.game, self.config.ui.release, self._parameters(len(workers) + 1)
+            self.config.tracking,
+            self.config.training.game_identity,
+            self.config.ui.release,
+            self._parameters(len(workers) + 1),
         )
         tracked = [] if tracking is None else [TrackingHook(tracking, models)]
         try:
@@ -135,12 +148,7 @@ class LayaTrainer:
         return frozenset((*phases(self.wrapper_cls), *levels, FULL_RUN))
 
     def _models(self) -> StateModels:
-        network = LayaNetwork(
-            self.config.laya.checkpoint, self.wrapper_cls.action_descriptions, configure_accelerator()
-        )
-        state_classes = (self.wrapper_cls.start_state_cls, *self.wrapper_cls.state_classes)
-        agent = LayaAgent(network, tuple(state_cls.description for state_cls in state_classes))
-        return StateModels(agent, self.context, phases(self.wrapper_cls))
+        return state_models(self.wrapper_cls, laya_network(self.wrapper_cls, self.config), self.context)
 
     def _hooks(self, env: StateMachineGymWrapper, models: StateModels, teller: StoryTeller) -> list[TrainingHook]:
         frame_rate = env.unwrapped.em.get_screen_rate()
