@@ -99,6 +99,14 @@ Optimize for maintainability rather than short-term speed.
 
 ---
 
+# Environment
+
+Prefer WSL for running commands: `uv run pytest`, `uv run ruff`, deployments and SSH.
+
+The project's `.venv` is a Linux environment and `stable-retro` does not build on Windows.
+
+---
+
 # External Libraries First
 
 Before writing custom code, always check whether a mature library already solves the problem.
