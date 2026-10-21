@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from fakes import write_config
+from mlflow.entities import RunStatus
 from mlflow.exceptions import MlflowException
 
 from datenwissenschaften.settings import TrackingSettings
@@ -18,6 +19,10 @@ class FakeClient:
         self.batches: list[dict] = []
         self.terminated: list[tuple[str, str]] = []
         self.tags: list[tuple[str, str, str]] = []
+        self._tracking_client = SimpleNamespace(store=SimpleNamespace(update_run_info=self.update_run_info))
+
+    def update_run_info(self, run_id: str, status: int, end_time: int, run_name: None) -> None:
+        self.terminated.append((run_id, RunStatus.to_string(status)))
 
     def get_experiment_by_name(self, name: str) -> SimpleNamespace | None:
         if name not in self.experiments:

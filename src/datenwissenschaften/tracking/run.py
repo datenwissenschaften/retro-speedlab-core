@@ -49,7 +49,9 @@ class TrackingRun:
         self._end(RunStatus.FINISHED)
 
     def kill(self) -> None:
-        self._end(RunStatus.KILLED)
+        ACTIVE_RUNS.discard(self)
+        end_time = int(time.time() * MILLISECONDS_PER_SECOND)
+        self.client._tracking_client.store.update_run_info(self.run_id, RunStatus.KILLED, end_time, None)
 
     def fail(self, error: BaseException) -> None:
         self.client.set_tag(self.run_id, ERROR_TAG, f"{type(error).__name__}: {error}"[:MAX_TAG_LENGTH])

@@ -1,4 +1,5 @@
 import signal
+import threading
 from pathlib import Path
 
 import pytest
@@ -39,3 +40,22 @@ def test_training_starts_after_the_stop_handler_is_installed(monkeypatch):
         ("init",),
         ("run", launch.training, {"wrapper": "src.game.wrapper:GameWrapper", "config": "config.yaml"}),
     ]
+
+
+def test_a_hanging_close_does_not_keep_the_container_alive(monkeypatch):
+    release = threading.Event()
+    exits: list[int] = []
+    monkeypatch.setattr(launch, "kill_active_runs", release.wait)
+    monkeypatch.setattr(launch, "CLOSE_SECONDS", 0.1)
+
+    def exit_now(status: int) -> None:
+        exits.append(status)
+        raise Exited
+
+    monkeypatch.setattr(launch.os, "_exit", exit_now)
+
+    with pytest.raises(Exited):
+        launch.terminate(signal.SIGTERM, None)
+    release.set()
+
+    assert exits == [launch.TERMINATED]
