@@ -183,7 +183,9 @@ Laya's reader stays frozen. Each state trains its own small heads with PPO once
   and toward the lab demonstrations until the state is mastered
 
 A state is cut after 180 seconds of game time, counted in emulator frames, so a
-slow GPU never shortens what an attempt can achieve.
+slow GPU never shortens what an attempt can achieve. A stalled attempt ends
+sooner: once the player has reached no new 8 px spot of the state for 30 seconds
+of game time (frames where `GameRam.position()` is `None` never count as stalled).
 
 ## One Laya per state
 

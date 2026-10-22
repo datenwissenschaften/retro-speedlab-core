@@ -8,6 +8,7 @@ from datenwissenschaften.environment.curriculum_run import CurriculumRun
 from datenwissenschaften.environment.levels import Levels, level_map
 from datenwissenschaften.environment.observer import Observation, Observer
 from datenwissenschaften.environment.recording import active_movie_path, ensure_movie_directory, restore_emulator_state
+from datenwissenschaften.environment.stillness import MAX_STILL_SECONDS, Stillness
 from datenwissenschaften.ram import RamInfo
 from datenwissenschaften.route.position import Position
 from datenwissenschaften.route.route_map import RouteMap
@@ -78,7 +79,9 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         self._episode_info: dict[str, Any] = {}
         self.frames: list[np.ndarray] = []
         self.state_frames = 0
-        self.max_state_frames = round(MAX_STATE_SECONDS * env.unwrapped.em.get_screen_rate())
+        frame_rate = env.unwrapped.em.get_screen_rate()
+        self.max_state_frames = round(MAX_STATE_SECONDS * frame_rate)
+        self.stillness = Stillness(round(MAX_STILL_SECONDS * frame_rate))
         self.speedrun = False
         self.routes = routes
         self.trail: list[Step] = []
@@ -114,6 +117,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         state_type = None if checkpoint_state is None else state_class(state_classes, checkpoint_state)
         self.state_machine.reset(ram, frame, state_type)
         self.state_frames = 0
+        self.stillness.restart()
         self.ram = ram
         self.trail = []
         self._episode_info = {
@@ -144,10 +148,12 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
             transition = self.state_machine.last_transition
             if transition is not None:
                 self.state_frames = 0
+                self.stillness.restart()
                 emulator_state = bytes(self.env.unwrapped.em.get_state())
                 succeeded, mastered = self.curriculum.transition(*transition, emulator_state, reward)
                 terminated = terminated or succeeded
-            truncated = truncated or self.state_frames >= self.max_state_frames
+            stalled = self.stillness.stalled(ram.position())
+            truncated = truncated or stalled or self.state_frames >= self.max_state_frames
             if transition is not None or terminated or truncated:
                 break
 
