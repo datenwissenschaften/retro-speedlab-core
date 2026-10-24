@@ -46,28 +46,20 @@ def test_a_session_task_trains_one_session_of_the_named_wrapper(tmp_path: Path, 
     assert sessions == [(FakeWrapper, config)]
 
 
-def test_training_snapshots_the_models_trains_a_session_and_ab_tests_it_again_and_again(monkeypatch):
-    calls: list[tuple[str, ...]] = []
+def test_training_trains_one_session_after_another(monkeypatch):
+    sessions: list[tuple[str, str]] = []
 
     def session(wrapper: str, config: str) -> None:
-        calls.append(("session", wrapper, config))
-        if len(calls) > 3:
+        sessions.append((wrapper, config))
+        if len(sessions) > 1:
             raise KeyboardInterrupt
 
-    monkeypatch.setattr(training_module, "snapshot", lambda config: calls.append(("snapshot", config)) or "before")
     monkeypatch.setattr(training_module, "train_session", session)
-    monkeypatch.setattr(training_module, "ab_test", lambda *arguments: calls.append(("ab_test", *arguments)))
 
     with pytest.raises(KeyboardInterrupt):
         training_module.training("game:Wrapper", "config.yaml")
 
-    assert calls == [
-        ("snapshot", "config.yaml"),
-        ("session", "game:Wrapper", "config.yaml"),
-        ("ab_test", "game:Wrapper", "config.yaml", "before"),
-        ("snapshot", "config.yaml"),
-        ("session", "game:Wrapper", "config.yaml"),
-    ]
+    assert sessions == [("game:Wrapper", "config.yaml")] * 2
 
 
 def test_a_lab_run_is_due_once_training_made_no_progress_for_the_stall_hours(tmp_path: Path):

@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from loguru import logger
-from mlflow import MlflowClient, flush_async_logging
+from mlflow import MlflowClient
 from mlflow.entities import Metric, Param, RunStatus
 from mlflow.exceptions import MlflowException
 
@@ -59,7 +59,7 @@ class TrackingRun:
 
     def _end(self, status: int) -> None:
         ACTIVE_RUNS.discard(self)
-        flush_async_logging()
+        self.client._tracking_client.store.flush_async_logging()
         self.client.set_terminated(self.run_id, RunStatus.to_string(status))
 
 

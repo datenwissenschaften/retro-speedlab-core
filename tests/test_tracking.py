@@ -5,7 +5,6 @@ from mlflow.entities import RunStatus
 from mlflow.exceptions import MlflowException
 
 from datenwissenschaften.settings import TrackingSettings
-from datenwissenschaften.tracking import run as run_module
 from datenwissenschaften.tracking import task_run as task_run_module
 from datenwissenschaften.tracking.run import ACTIVE_RUNS, TrackingRun, ending, kill_active_runs, start_tracking
 from datenwissenschaften.tracking.task_run import task_run
@@ -19,7 +18,12 @@ class FakeClient:
         self.batches: list[dict] = []
         self.terminated: list[tuple[str, str]] = []
         self.tags: list[tuple[str, str, str]] = []
-        self._tracking_client = SimpleNamespace(store=SimpleNamespace(update_run_info=self.update_run_info))
+        self.flushes = 0
+        store = SimpleNamespace(update_run_info=self.update_run_info, flush_async_logging=self.flush_async_logging)
+        self._tracking_client = SimpleNamespace(store=store)
+
+    def flush_async_logging(self) -> None:
+        self.flushes += 1
 
     def update_run_info(self, run_id: str, status: int, end_time: int, run_name: None) -> None:
         self.terminated.append((run_id, RunStatus.to_string(status)))
@@ -67,9 +71,7 @@ def test_a_new_game_gets_its_own_experiment():
     assert client.experiments == {"Game-v0": "new"}
 
 
-def test_metrics_are_logged_without_waiting_and_the_run_finishes(monkeypatch):
-    flushed = []
-    monkeypatch.setattr(run_module, "flush_async_logging", lambda: flushed.append(True))
+def test_metrics_are_logged_without_waiting_and_the_run_finishes_after_flushing_its_own_server():
     client = FakeClient({})
     run = TrackingRun(client, "run")
 
@@ -79,7 +81,7 @@ def test_metrics_are_logged_without_waiting_and_the_run_finishes(monkeypatch):
     logged = client.batches[0]
     assert [(metric.key, metric.value, metric.step) for metric in logged["metrics"]] == [("episode/score", 2.0, 5)]
     assert logged["synchronous"] is False
-    assert flushed == [True]
+    assert client.flushes == 1
     assert client.terminated == [("run", "FINISHED")]
 
 
@@ -129,8 +131,7 @@ def test_an_attempt_without_duration_has_no_speed():
     assert logged == [{"Level 1/Level1/progress": 1.0, "Level 1/Level1/success": 1.0, "Level 1/Level1/score": 7.0}]
 
 
-def test_a_failed_run_keeps_its_error_and_ends_failed(monkeypatch):
-    monkeypatch.setattr(run_module, "flush_async_logging", lambda: None)
+def test_a_failed_run_keeps_its_error_and_ends_failed():
     client = FakeClient({})
 
     TrackingRun(client, "run").fail(ValueError("no ROM"))
@@ -174,8 +175,7 @@ def test_an_untracked_task_still_runs(tmp_path):
     assert ran == [True]
 
 
-def test_a_run_ends_finished_killed_or_failed_by_how_its_work_ended(monkeypatch):
-    monkeypatch.setattr(run_module, "flush_async_logging", lambda: None)
+def test_a_run_ends_finished_killed_or_failed_by_how_its_work_ended():
     client = FakeClient({})
 
     TrackingRun(client, "done").end(None)
@@ -192,8 +192,7 @@ def test_a_run_ends_finished_killed_or_failed_by_how_its_work_ended(monkeypatch)
     assert client.tags == [("broken", "error", "ValueError: no ROM")]
 
 
-def test_open_runs_are_killed_when_the_container_stops(monkeypatch):
-    monkeypatch.setattr(run_module, "flush_async_logging", lambda: None)
+def test_open_runs_are_killed_when_the_container_stops():
     client = FakeClient({})
     finished = TrackingRun.start(client, "Game-v0", "earlier", {})
     finished.finish()
@@ -205,7 +204,7 @@ def test_open_runs_are_killed_when_the_container_stops(monkeypatch):
     assert not ACTIVE_RUNS
 
 
-def test_ending_ends_the_run_by_how_the_block_exits_and_passes_without_one(monkeypatch):
+def test_ending_ends_the_run_by_how_the_block_exits_and_passes_without_one():
     ended: list[BaseException | None] = []
     run = SimpleNamespace(end=ended.append)
 

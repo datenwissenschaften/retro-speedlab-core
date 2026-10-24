@@ -1,22 +1,21 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+import msgspec
 import pytest
-from fakes import FakeWrapper, write_config
+from fakes import write_config
 
-from datenwissenschaften.evaluation import ab_test as ab_test_module
-from datenwissenschaften.evaluation.ab_test import ABTest, evaluation_starts
+from datenwissenschaften.evaluation import branch_play
+from datenwissenschaften.evaluation import duel as duel_module
+from datenwissenschaften.evaluation.duel import DRAW, Entrant, decide, probability_better
 from datenwissenschaften.evaluation.player import Attempt, Player
-from datenwissenschaften.evaluation.snapshot import snapshot_models, with_models
-from datenwissenschaften.evaluation.statistics import compare
 from datenwissenschaften.settings import load_config
-from datenwissenschaften.workflow import evaluation as evaluation_module
 
 PHASES = ("Menu", "Survive", "Boss")
 
 
 class ScriptedEnv:
-    def __init__(self, steps: list[tuple[float, bool, str, bool]]) -> None:
+    def __init__(self, steps: list[tuple[bool, str, bool]]) -> None:
         self.steps = steps
         self.starts: list[str | None] = []
 
@@ -25,8 +24,8 @@ class ScriptedEnv:
         return {"state": "text"}, {"state": "Menu", "advice": None}
 
     def step(self, action: int) -> tuple[dict[str, str], float, bool, bool, dict]:
-        reward, terminated, state, won = self.steps.pop(0)
-        return {"state": "text"}, reward, terminated, False, {"state": state, "advice": 1, "won": won}
+        terminated, state, won = self.steps.pop(0)
+        return {"state": "text"}, 1.0, terminated, False, {"state": state, "advice": 1, "won": won}
 
 
 class GreedyModels:
@@ -38,158 +37,101 @@ class GreedyModels:
         return [SimpleNamespace(action=0)]
 
 
-def test_a_clear_improvement_has_a_positive_interval_and_a_high_probability():
-    comparison = compare([1.0, 2.0, 1.5, 1.0], [5.0, 6.0, 5.5, 6.5])
-
-    assert comparison.before == 1.375
-    assert comparison.after == 5.75
-    assert comparison.difference_low > 0
-    assert comparison.probability_of_improvement == 1.0
+def attempts(*progress: float) -> list[Attempt]:
+    return [Attempt(value, value == 1.0, 100) for value in progress]
 
 
-def test_equal_models_are_a_coin_flip():
-    comparison = compare([3.0, 3.0, 3.0], [3.0, 3.0, 3.0])
-
-    assert comparison.difference_low == comparison.difference_high == 0.0
-    assert comparison.probability_of_improvement == 0.5
-
-
-def test_one_attempt_per_model_is_not_a_comparison():
-    with pytest.raises(ValueError):
-        compare([1.0], [2.0, 3.0])
-
-
-def test_comparisons_name_their_metrics():
-    metrics = compare([1.0, 2.0], [2.0, 3.0]).metrics("score")
-
-    assert set(metrics) == {
-        "score/before",
-        "score/after",
-        "score/difference_low",
-        "score/difference_high",
-        "score/probability_of_improvement",
-    }
-
-
-def test_the_player_plays_greedily_and_records_score_progress_and_win():
-    env = ScriptedEnv([(1.0, False, "Survive", False), (2.0, True, "Boss", True)])
+def test_the_player_plays_greedily_from_power_on_and_records_progress_win_and_decisions():
+    env = ScriptedEnv([(False, "Survive", False), (True, "Boss", True)])
     models = GreedyModels()
 
-    attempt = Player(env, models, PHASES).play("Survive", 10)
+    attempt = Player(env, models, PHASES).play(10)
 
-    assert attempt == Attempt(3.0, 2.0, True)
-    assert env.starts == ["Survive"]
+    assert attempt == Attempt(1.0, True, 2)
+    assert env.starts == [None]
     assert models.explorations == [{"Menu": 0.0}, {"Survive": 0.0}]
 
 
 def test_the_player_stops_after_its_decisions():
-    env = ScriptedEnv([(1.0, False, "Survive", False)] * 5)
+    env = ScriptedEnv([(False, "Survive", False)] * 5)
 
-    attempt = Player(env, GreedyModels(), PHASES).play(None, 2)
-
-    assert attempt == Attempt(2.0, 1.0, False)
+    assert Player(env, GreedyModels(), PHASES).play(2) == Attempt(0.5, False, 2)
 
 
-def test_attempts_start_at_power_on_and_at_the_frontier_once_it_has_a_checkpoint():
-    def env(frontier: str | None, checkpoint: bool) -> SimpleNamespace:
-        curriculum = SimpleNamespace(active_state=lambda: frontier, has_checkpoint=lambda state: checkpoint)
-        return SimpleNamespace(curriculum=SimpleNamespace(curriculum=curriculum))
-
-    assert evaluation_starts(env(None, False)) == (None,)
-    assert evaluation_starts(env("Boss", False)) == (None,)
-    assert evaluation_starts(env("Boss", True)) == (None, "Boss")
+def test_clearly_better_attempts_are_better_for_certain_and_equal_ones_are_a_coin_flip():
+    assert probability_better([0.1, 0.2, 0.1], [0.8, 0.9, 0.7]) == 1.0
+    assert probability_better([0.5, 0.5], [0.5, 0.5]) == 0.5
 
 
-def test_a_snapshot_copies_the_games_models_and_a_config_can_point_at_it(tmp_path: Path):
-    config = load_config(write_config(tmp_path))
-    model = config.paths.models_dir / "FakeGame-v0" / "Survive" / "laya.pt"
-    model.parent.mkdir(parents=True)
-    model.write_bytes(b"weights")
+def test_wins_decide_the_duel_before_progress():
+    verdict = decide([Entrant("claude", attempts(0.9, 0.9)), Entrant("codex", attempts(1.0, 0.1))])
 
-    snapshot = snapshot_models(config)
-
-    assert (snapshot / "FakeGame-v0" / "Survive" / "laya.pt").read_bytes() == b"weights"
-    assert with_models(config, snapshot).paths.models_dir == snapshot
-    assert with_models(config, snapshot).paths.cache_dir == config.paths.cache_dir
+    assert verdict.winner == "codex"
 
 
-def test_an_ab_test_plays_both_models_from_the_same_starts_and_compares_them(tmp_path: Path, monkeypatch):
-    config = load_config(write_config(tmp_path))
-    played: list[tuple[Path, str | None]] = []
-    closed: list[str] = []
+def test_without_wins_the_furthest_progress_decides():
+    verdict = decide([Entrant("claude", attempts(0.6, 0.5)), Entrant("codex", attempts(0.2, 0.1))])
 
-    class FakeEnv:
-        curriculum = SimpleNamespace(
-            curriculum=SimpleNamespace(active_state=lambda: "Boss", has_checkpoint=lambda state: True)
-        )
-        observer = SimpleNamespace(advisor=None)
-
-        def close(self) -> None:
-            closed.append("env")
-
-    class FakeModels:
-        def __init__(self, models_dir: Path) -> None:
-            self.models_dir = models_dir
-
-        def close(self) -> None:
-            closed.append("models")
-
-    class FakePlayer:
-        def __init__(self, env: FakeEnv, models: FakeModels, phases: tuple[str, ...]) -> None:
-            self.models = models
-
-        def play(self, start: str | None, decisions: int) -> Attempt:
-            played.append((self.models.models_dir, start))
-            better = self.models.models_dir == config.paths.models_dir
-            return Attempt(10.0 if better else 1.0, 2.0 if better else 1.0, better)
-
-    class FakeAdvisors:
-        def __init__(self, actions: tuple[str, ...], device: str, path: object) -> None:
-            pass
-
-        def advise(self, state: str, inputs: object) -> None:
-            pass
-
-        def close(self) -> None:
-            closed.append("advisors")
-
-    monkeypatch.setattr(ab_test_module, "make_environment", lambda wrapper, config, worker, main: FakeEnv())
-    monkeypatch.setattr(ab_test_module, "laya_network", lambda wrapper, config: "network")
-    monkeypatch.setattr(
-        ab_test_module, "state_models", lambda wrapper, network, context: FakeModels(context.config.paths.models_dir)
-    )
-    monkeypatch.setattr(ab_test_module, "configure_accelerator", lambda: "cpu")
-    monkeypatch.setattr(ab_test_module, "Advisors", FakeAdvisors)
-    monkeypatch.setattr(ab_test_module, "Player", FakePlayer)
-
-    comparisons = ABTest(FakeWrapper, config).run(tmp_path / "before")
-
-    episodes = ab_test_module.EPISODES
-    assert played == [
-        *[(tmp_path / "before", None)] * episodes,
-        *[(tmp_path / "before", "Boss")] * episodes,
-        *[(config.paths.models_dir, None)] * episodes,
-        *[(config.paths.models_dir, "Boss")] * episodes,
-    ]
-    assert comparisons["score"].probability_of_improvement == 1.0
-    assert comparisons["progress"].after == 2.0
-    assert closed == ["advisors", "models", "advisors", "models", "env"]
+    assert verdict.winner == "claude"
+    assert verdict.confidence == 1.0
 
 
-def test_the_ab_test_task_removes_the_snapshot_even_when_the_test_fails(tmp_path: Path, monkeypatch):
-    before = tmp_path / "before"
-    before.mkdir()
+def test_equal_wins_are_decided_by_fewer_decisions():
+    faster = [Attempt(1.0, True, 50), Attempt(1.0, True, 60)]
+    verdict = decide([Entrant("claude", attempts(1.0, 1.0)), Entrant("codex", faster)])
 
-    class FailingTest:
-        def __init__(self, wrapper_cls: type, config: object) -> None:
-            pass
+    assert verdict.winner == "codex"
 
-        def run(self, before_dir: Path) -> None:
-            raise RuntimeError("emulator crashed")
 
-    monkeypatch.setattr(evaluation_module, "ABTest", FailingTest)
+def test_identical_play_is_a_draw():
+    verdict = decide([Entrant("claude", attempts(0.5, 0.5)), Entrant("codex", attempts(0.5, 0.5))])
+
+    assert verdict.winner == DRAW
+    assert verdict.confidence == 0.5
+
+
+def test_a_crashed_branch_forfeits_and_without_any_branch_there_is_no_winner():
+    assert decide([Entrant("codex", attempts(0.1, 0.1))]).winner == "codex"
+    with pytest.raises(RuntimeError):
+        decide([])
+
+
+def test_a_branch_plays_with_its_own_integrations_and_the_trained_models(tmp_path: Path):
+    config = write_config(tmp_path)
+
+    settings = branch_play.branch_config(config, tmp_path / "game-codex")
+
+    assert settings.paths.integrations_dir == tmp_path / "game-codex" / "integrations"
+    assert settings.paths.models_dir == load_config(config).paths.models_dir
+
+
+def test_the_judge_plays_both_branches_and_a_crashed_one_loses(tmp_path: Path, monkeypatch, capsys):
+    config = write_config(tmp_path)
+    project = tmp_path / "game"
+    played: list[Path] = []
+    recorded: list[str] = []
+
+    def run(command: list[str], cwd: Path, stdout: object, check: bool) -> None:
+        played.append(cwd)
+        if cwd.name.endswith("claude"):
+            raise duel_module.subprocess.CalledProcessError(1, command)
+        progress = 0.8
+        Path(command[-1]).parent.mkdir(parents=True, exist_ok=True)
+        Path(command[-1]).write_bytes(msgspec.json.encode(attempts(progress, progress)))
+
+    monkeypatch.setattr(duel_module.subprocess, "run", run)
+    monkeypatch.setattr(duel_module, "record", lambda settings, entrants, verdict: recorded.append(verdict.winner))
+
+    duel_module.judge("game:Wrapper", config, project)
+
+    assert played == [tmp_path / "game-claude", tmp_path / "game-codex"]
+    assert recorded == ["codex"]
+    assert capsys.readouterr().out == "codex\n"
+
+
+def test_a_duel_without_tracking_fails(tmp_path: Path):
+    settings = load_config(write_config(tmp_path))
+    entrants = [Entrant("claude", attempts(0.5, 0.5)), Entrant("codex", attempts(0.5, 0.5))]
 
     with pytest.raises(RuntimeError):
-        evaluation_module.ab_test("fakes:FakeWrapper", str(write_config(tmp_path)), str(before))
-
-    assert not before.exists()
+        duel_module.record(settings, entrants, decide(entrants))

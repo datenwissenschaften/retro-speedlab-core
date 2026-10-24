@@ -346,7 +346,7 @@ wheels = [
 
 [[package]]
 name = "datenwissenschaften"
-version = "3.0.22"
+version = "3.0.23"
 source = { editable = "." }
 dependencies = [
     { name = "flyte" },
@@ -364,6 +364,7 @@ dependencies = [
     { name = "stable-retro" },
     { name = "tenacity" },
     { name = "torch" },
+    { name = "typer" },
 ]
 
 [package.dev-dependencies]
@@ -390,6 +391,7 @@ requires-dist = [
     { name = "stable-retro", specifier = "==1.0.1" },
     { name = "tenacity", specifier = "==9.1.4" },
     { name = "torch", specifier = "==2.12.1" },
+    { name = "typer", specifier = "==0.27.3" },
 ]
 
 [package.metadata.requires-dev]

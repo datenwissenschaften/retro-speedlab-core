@@ -39,6 +39,4 @@ ui:
 twitch:
   enabled: true
   summary_models:
-    - google/gemma-4-31b-it:free
-    - google/gemma-4-26b-a4b-it:free
-    - google/gemma-4-26b-a4b-it
+    - anthropic/claude-haiku-5.5

@@ -8,9 +8,9 @@ GREEDY = 0.0
 
 @dataclass(slots=True, frozen=True)
 class Attempt:
-    score: float
     progress: float
     won: bool
+    decisions: int
 
 
 class Player:
@@ -19,16 +19,16 @@ class Player:
         self.models = models
         self.phases = phases
 
-    def play(self, start: str | None, decisions: int) -> Attempt:
-        observation, info = self.env.reset_to(start)
-        score, progress, won = 0.0, self.phases.index(info["state"]), False
-        for _ in range(decisions):
+    def play(self, decisions: int) -> Attempt:
+        observation, info = self.env.reset_to(None)
+        furthest, won, taken = self.phases.index(info["state"]), False, 0
+        while taken < decisions:
             state = info["state"]
             decision = self.models.decide([observation], [state], {state: GREEDY}, [info["advice"]])[0]
             observation, reward, terminated, truncated, info = self.env.step(decision.action)
-            score += reward
-            progress = max(progress, self.phases.index(info["state"]))
+            taken += 1
+            furthest = max(furthest, self.phases.index(info["state"]))
             won = won or info["won"]
             if terminated or truncated:
                 break
-        return Attempt(score, float(progress), won)
+        return Attempt(furthest / max(len(self.phases) - 1, 1), won, taken)

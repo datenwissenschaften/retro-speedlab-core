@@ -8,7 +8,7 @@ from datenwissenschaften.tracking.run import tracking_client
 from datenwissenschaften.tracking.task_run import TASKS_SUFFIX
 
 RUNNING = "attributes.status = 'RUNNING'"
-TRAINING_TASKS = frozenset({"train_session", "ab_test"})
+TRAINING_TASKS = frozenset({"train_session"})
 LAB_TASKS = frozenset({"lab_run"})
 
 

@@ -46,6 +46,7 @@ from datenwissenschaften.ui.summaries import report_digest
 from datenwissenschaften.ui.telemetry import configure_history, level_full_run_wins, publish_metadata
 
 SESSION_SECONDS = 2 * 60 * 60
+STATE_SEPARATOR = ","
 BEATEN_FULL_RUN_WINS = 8
 RESERVED_CORES = 2
 ADVISOR_THREADS = 2
@@ -140,6 +141,7 @@ class LayaTrainer:
             "laya": self.config.laya.checkpoint,
             "speedrun": str(self.speedrun),
             "emulators": str(emulators),
+            "states": STATE_SEPARATOR.join(phases(self.wrapper_cls)),
         }
 
     def _levels(self) -> dict[str, tuple[str, ...]]:

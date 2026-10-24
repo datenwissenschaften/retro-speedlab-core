@@ -254,13 +254,13 @@ same relay. The engine itself serves nothing. With `twitch.enabled: true`, free
 models on OpenRouter (`OPENROUTER_API_KEY`) write the short version of the
 latest lab report for the stream.
 
-## Workflows, tracking and A/B tests
+## Workflows, tracking and the lab duel
 
 [Flyte](https://flyte.org) runs the training as tasks (`datenwissenschaften.workflow`):
-`training` snapshots the models, trains one two-hour `train_session` and then
-`ab_test`s the models before and after it, again and again. `lab` starts a
-Claude Code lab run (`agent/daily.sh` of the game package) once no curriculum
-win happened for `agent.stall_hours` hours. Every task runs locally with
+`training` trains one two-hour `train_session` after another. `lab` starts a
+lab run (`agent/daily.sh` of the game package) once no curriculum win happened
+for `agent.stall_hours` hours: Claude Code and Codex each work on their own git
+worktree of the game package, and the duel decides which one ships. Every task runs locally with
 `flyte run --local` and declares its GPU, so it can move to a Flyte cluster.
 
 With `tracking.token` set, every session is an [MLflow](https://mlflow.org) run
@@ -271,11 +271,15 @@ charts by level; a whole level is `<level>/whole level` and a run from power-on
 is `Full run`.
 Two lines cover the whole session: `decisions_per_second` and, after every
 learning update, `confidence` (one minus the entropy share of the state that
-learned). The A/B test plays
-both models greedily from the same starts (power-on and the curriculum
-frontier) and logs to the `<game> A/B` experiment the mean score and progress
-before and after, a bootstrap confidence interval for the difference and the
-probability of improvement, computed with SciPy.
+learned).
+
+The duel (`python -m datenwissenschaften.evaluation.duel <wrapper> <config>
+<project>`) plays the trained models greedily from power-on with each agent's
+branch (`<project>-claude`, `<project>-codex`) and ranks them by wins, then by
+the furthest share of the run's states, then by fewer decisions per win. It
+logs both agents, the winner and the probability that the winner's attempts
+get further (a Mann-Whitney U test with SciPy) to the `<game> A/B` experiment
+and prints the winner, or `draw`.
 
 ## Persistence
 

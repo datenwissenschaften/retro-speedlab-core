@@ -35,7 +35,7 @@ def test_a_new_session_closes_every_open_session_and_training_task(tmp_path: Pat
     client = FakeClient(
         {
             "FakeGame-v0": ["2026.10.21-8", "2026.10.21-9"],
-            "FakeGame-v0 tasks": ["train_session", "ab_test", "lab_run"],
+            "FakeGame-v0 tasks": ["train_session", "lab_run"],
         }
     )
     monkeypatch.setattr(stale, "tracking_client", lambda settings: client)
@@ -46,7 +46,6 @@ def test_a_new_session_closes_every_open_session_and_training_task(tmp_path: Pat
         ("id-2026.10.21-8", "KILLED"),
         ("id-2026.10.21-9", "KILLED"),
         ("id-train_session", "KILLED"),
-        ("id-ab_test", "KILLED"),
     ]
 
 
