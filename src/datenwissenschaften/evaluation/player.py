@@ -21,7 +21,8 @@ class Player:
 
     def play(self, start: str | None, decisions: int) -> Attempt:
         observation, info = self.env.reset_to(start)
-        furthest, won, taken, reached = self.phases.index(info["state"]), False, 0, 0
+        start = furthest = self.phases.index(info["state"])
+        won, taken, reached = False, 0, 0
         while taken < decisions:
             state = info["state"]
             decision = self.models.decide([observation], [state], {state: GREEDY}, [info["advice"]])[0]
@@ -34,4 +35,4 @@ class Player:
             won = won or info["won"]
             if terminated or truncated:
                 break
-        return Attempt(furthest / max(len(self.phases) - 1, 1), won, reached)
+        return Attempt(float(furthest - start), won, reached)

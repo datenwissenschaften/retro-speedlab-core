@@ -278,7 +278,7 @@ The duel (`python -m datenwissenschaften.evaluation.duel <wrapper> <config>
 branch (`<project>-claude`, `<project>-codex`), starting at the latest curriculum
 checkpoint toward the frontier, or at power-on once every state is mastered. Each
 branch uses its own integrations and curriculum seeds. It ranks them by wins, then by
-the furthest share of the run's states, then by fewer decisions to get that far. It
+how many states its attempts pass beyond the start, then by fewer decisions to get that far, so a branch that adds states is not ranked lower for it. It
 logs both agents, the winner and the probability that the winner's attempts
 get further (a Mann-Whitney U test with SciPy) to the `<game> A/B` experiment
 and prints the winner, or `draw`.

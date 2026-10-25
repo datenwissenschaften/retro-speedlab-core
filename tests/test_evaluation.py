@@ -22,7 +22,7 @@ class ScriptedEnv:
 
     def reset_to(self, start: str | None) -> tuple[dict[str, str], dict]:
         self.starts.append(start)
-        return {"state": "text"}, {"state": "Menu", "advice": None}
+        return {"state": "text"}, {"state": start or "Menu", "advice": None}
 
     def step(self, action: int) -> tuple[dict[str, str], float, bool, bool, dict]:
         terminated, state, won = self.steps.pop(0)
@@ -42,7 +42,7 @@ def attempts(*progress: float) -> list[Attempt]:
     return [Attempt(value, value == 1.0, 100) for value in progress]
 
 
-def test_the_player_plays_greedily_from_its_start_and_records_progress_win_and_decisions():
+def test_the_player_counts_the_states_passed_from_its_start_its_win_and_its_decisions():
     env = ScriptedEnv([(False, "Survive", False), (True, "Boss", True)])
     models = GreedyModels()
 
@@ -50,13 +50,13 @@ def test_the_player_plays_greedily_from_its_start_and_records_progress_win_and_d
 
     assert attempt == Attempt(1.0, True, 2)
     assert env.starts == ["Survive"]
-    assert models.explorations == [{"Menu": 0.0}, {"Survive": 0.0}]
+    assert models.explorations == [{"Survive": 0.0}, {"Survive": 0.0}]
 
 
 def test_the_player_stops_after_its_decisions():
     env = ScriptedEnv([(False, "Survive", False)] * 5)
 
-    assert Player(env, GreedyModels(), PHASES).play(None, 2) == Attempt(0.5, False, 1)
+    assert Player(env, GreedyModels(), PHASES).play(None, 2) == Attempt(1.0, False, 1)
 
 
 def test_clearly_better_attempts_are_better_for_certain_and_equal_ones_are_a_coin_flip():
