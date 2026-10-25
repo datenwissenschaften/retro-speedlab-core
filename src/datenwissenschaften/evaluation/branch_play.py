@@ -1,4 +1,4 @@
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import msgspec
@@ -19,20 +19,34 @@ EPISODES = 5
 DECISIONS = 3000
 
 
+@dataclass(slots=True, frozen=True)
+class BranchPlay:
+    start: str
+    attempts: list[Attempt]
+
+
 def branch_config(config: Path, branch: Path) -> RetroSpeedlabConfig:
     settings = load_config(config)
-    return replace(settings, paths=replace(settings.paths, integrations_dir=branch / "integrations"))
+    paths = replace(settings.paths, integrations_dir=branch / "integrations", curriculum_dir=branch / "curriculum")
+    return replace(settings, paths=paths)
 
 
-def play_attempts(wrapper_cls: type[StateMachineGymWrapper], settings: RetroSpeedlabConfig) -> list[Attempt]:
+def duel_start(env: StateMachineGymWrapper) -> str | None:
+    curriculum = env.curriculum.curriculum
+    frontier = curriculum.active_state()
+    return None if frontier is None else curriculum.episode_start_state(frontier)
+
+
+def play_attempts(wrapper_cls: type[StateMachineGymWrapper], settings: RetroSpeedlabConfig) -> BranchPlay:
     env = make_environment(wrapper_cls, settings, MAIN_ENVIRONMENT, False)
+    start = duel_start(env)
     context = RunContext(settings, POWER_ON)
     models = state_models(wrapper_cls, laya_network(wrapper_cls, settings), context)
     advisors = Advisors(tuple(wrapper_cls.action_descriptions), configure_accelerator(), context.advisor_path)
     env.observer.advisor = advisors.advise
     player = Player(env, models, phases(wrapper_cls))
     try:
-        return [player.play(DECISIONS) for _ in range(EPISODES)]
+        return BranchPlay(start or POWER_ON, [player.play(start, DECISIONS) for _ in range(EPISODES)])
     finally:
         advisors.close()
         models.close()
@@ -40,9 +54,9 @@ def play_attempts(wrapper_cls: type[StateMachineGymWrapper], settings: RetroSpee
 
 
 def play_branch(wrapper: str, config: Path, branch: Path, output: Path) -> None:
-    attempts = play_attempts(wrapper_class(wrapper), branch_config(config, branch))
+    played = play_attempts(wrapper_class(wrapper), branch_config(config, branch))
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_bytes(msgspec.json.encode(attempts))
+    output.write_bytes(msgspec.json.encode(played))
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ from fakes import write_config
 
 from datenwissenschaften.evaluation import branch_play
 from datenwissenschaften.evaluation import duel as duel_module
+from datenwissenschaften.evaluation.branch_play import BranchPlay, duel_start
 from datenwissenschaften.evaluation.duel import DRAW, Entrant, decide, probability_better
 from datenwissenschaften.evaluation.player import Attempt, Player
 from datenwissenschaften.settings import load_config
@@ -41,21 +42,21 @@ def attempts(*progress: float) -> list[Attempt]:
     return [Attempt(value, value == 1.0, 100) for value in progress]
 
 
-def test_the_player_plays_greedily_from_power_on_and_records_progress_win_and_decisions():
+def test_the_player_plays_greedily_from_its_start_and_records_progress_win_and_decisions():
     env = ScriptedEnv([(False, "Survive", False), (True, "Boss", True)])
     models = GreedyModels()
 
-    attempt = Player(env, models, PHASES).play(10)
+    attempt = Player(env, models, PHASES).play("Survive", 10)
 
     assert attempt == Attempt(1.0, True, 2)
-    assert env.starts == [None]
+    assert env.starts == ["Survive"]
     assert models.explorations == [{"Menu": 0.0}, {"Survive": 0.0}]
 
 
 def test_the_player_stops_after_its_decisions():
     env = ScriptedEnv([(False, "Survive", False)] * 5)
 
-    assert Player(env, GreedyModels(), PHASES).play(2) == Attempt(0.5, False, 2)
+    assert Player(env, GreedyModels(), PHASES).play(None, 2) == Attempt(0.5, False, 2)
 
 
 def test_clearly_better_attempts_are_better_for_certain_and_equal_ones_are_a_coin_flip():
@@ -64,13 +65,13 @@ def test_clearly_better_attempts_are_better_for_certain_and_equal_ones_are_a_coi
 
 
 def test_wins_decide_the_duel_before_progress():
-    verdict = decide([Entrant("claude", attempts(0.9, 0.9)), Entrant("codex", attempts(1.0, 0.1))])
+    verdict = decide([Entrant("claude", "Wall4", attempts(0.9, 0.9)), Entrant("codex", "Wall4", attempts(1.0, 0.1))])
 
     assert verdict.winner == "codex"
 
 
 def test_without_wins_the_furthest_progress_decides():
-    verdict = decide([Entrant("claude", attempts(0.6, 0.5)), Entrant("codex", attempts(0.2, 0.1))])
+    verdict = decide([Entrant("claude", "Wall4", attempts(0.6, 0.5)), Entrant("codex", "Wall4", attempts(0.2, 0.1))])
 
     assert verdict.winner == "claude"
     assert verdict.confidence == 1.0
@@ -78,31 +79,41 @@ def test_without_wins_the_furthest_progress_decides():
 
 def test_equal_wins_are_decided_by_fewer_decisions():
     faster = [Attempt(1.0, True, 50), Attempt(1.0, True, 60)]
-    verdict = decide([Entrant("claude", attempts(1.0, 1.0)), Entrant("codex", faster)])
+    verdict = decide([Entrant("claude", "Wall4", attempts(1.0, 1.0)), Entrant("codex", "Wall4", faster)])
 
     assert verdict.winner == "codex"
 
 
 def test_identical_play_is_a_draw():
-    verdict = decide([Entrant("claude", attempts(0.5, 0.5)), Entrant("codex", attempts(0.5, 0.5))])
+    verdict = decide([Entrant("claude", "Wall4", attempts(0.5, 0.5)), Entrant("codex", "Wall4", attempts(0.5, 0.5))])
 
     assert verdict.winner == DRAW
     assert verdict.confidence == 0.5
 
 
 def test_a_crashed_branch_forfeits_and_without_any_branch_there_is_no_winner():
-    assert decide([Entrant("codex", attempts(0.1, 0.1))]).winner == "codex"
+    assert decide([Entrant("codex", "Wall4", attempts(0.1, 0.1))]).winner == "codex"
     with pytest.raises(RuntimeError):
         decide([])
 
 
-def test_a_branch_plays_with_its_own_integrations_and_the_trained_models(tmp_path: Path):
+def test_a_branch_plays_with_its_own_integrations_and_seeds_and_the_trained_models(tmp_path: Path):
     config = write_config(tmp_path)
 
     settings = branch_play.branch_config(config, tmp_path / "game-codex")
 
     assert settings.paths.integrations_dir == tmp_path / "game-codex" / "integrations"
+    assert settings.paths.curriculum_dir == tmp_path / "game-codex" / "curriculum"
     assert settings.paths.models_dir == load_config(config).paths.models_dir
+
+
+def test_a_duel_starts_at_the_latest_checkpoint_toward_the_frontier_and_at_power_on_once_all_is_mastered():
+    def env(frontier: str | None) -> SimpleNamespace:
+        curriculum = SimpleNamespace(active_state=lambda: frontier, episode_start_state=lambda state: f"before {state}")
+        return SimpleNamespace(curriculum=SimpleNamespace(curriculum=curriculum))
+
+    assert duel_start(env("Wall4")) == "before Wall4"
+    assert duel_start(env(None)) is None
 
 
 def test_the_judge_plays_both_branches_and_a_crashed_one_loses(tmp_path: Path, monkeypatch, capsys):
@@ -117,7 +128,7 @@ def test_the_judge_plays_both_branches_and_a_crashed_one_loses(tmp_path: Path, m
             raise duel_module.subprocess.CalledProcessError(1, command)
         progress = 0.8
         Path(command[-1]).parent.mkdir(parents=True, exist_ok=True)
-        Path(command[-1]).write_bytes(msgspec.json.encode(attempts(progress, progress)))
+        Path(command[-1]).write_bytes(msgspec.json.encode(BranchPlay("Wall4", attempts(progress, progress))))
 
     monkeypatch.setattr(duel_module.subprocess, "run", run)
     monkeypatch.setattr(duel_module, "record", lambda settings, entrants, verdict: recorded.append(verdict.winner))
@@ -131,7 +142,7 @@ def test_the_judge_plays_both_branches_and_a_crashed_one_loses(tmp_path: Path, m
 
 def test_a_duel_without_tracking_fails(tmp_path: Path):
     settings = load_config(write_config(tmp_path))
-    entrants = [Entrant("claude", attempts(0.5, 0.5)), Entrant("codex", attempts(0.5, 0.5))]
+    entrants = [Entrant("claude", "Wall4", attempts(0.5, 0.5)), Entrant("codex", "Wall4", attempts(0.5, 0.5))]
 
     with pytest.raises(RuntimeError):
         duel_module.record(settings, entrants, decide(entrants))

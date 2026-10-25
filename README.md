@@ -274,8 +274,10 @@ learning update, `confidence` (one minus the entropy share of the state that
 learned).
 
 The duel (`python -m datenwissenschaften.evaluation.duel <wrapper> <config>
-<project>`) plays the trained models greedily from power-on with each agent's
-branch (`<project>-claude`, `<project>-codex`) and ranks them by wins, then by
+<project>`) plays the trained models greedily with each agent's
+branch (`<project>-claude`, `<project>-codex`), starting at the latest curriculum
+checkpoint toward the frontier, or at power-on once every state is mastered. Each
+branch uses its own integrations and curriculum seeds. It ranks them by wins, then by
 the furthest share of the run's states, then by fewer decisions per win. It
 logs both agents, the winner and the probability that the winner's attempts
 get further (a Mann-Whitney U test with SciPy) to the `<game> A/B` experiment

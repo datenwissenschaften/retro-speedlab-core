@@ -10,6 +10,7 @@ from loguru import logger
 from scipy.stats import mannwhitneyu
 
 from datenwissenschaften.evaluation import branch_play
+from datenwissenschaften.evaluation.branch_play import BranchPlay
 from datenwissenschaften.evaluation.player import Attempt
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
 from datenwissenschaften.tracking.run import TrackingRun, tracking_client
@@ -24,6 +25,7 @@ CERTAIN = 1.0
 @dataclass(slots=True, frozen=True)
 class Entrant:
     agent: str
+    start: str
     attempts: list[Attempt]
 
     @property
@@ -67,7 +69,7 @@ def decide(entrants: list[Entrant]) -> Verdict:
     return Verdict(best.agent, probability_better(other.progress, best.progress))
 
 
-def branch_attempts(wrapper: str, config: Path, project: Path, agent: str, output_dir: Path) -> list[Attempt] | None:
+def branch_entrant(wrapper: str, config: Path, project: Path, agent: str, output_dir: Path) -> Entrant | None:
     branch = project.with_name(f"{project.name}-{agent}")
     output = output_dir / f"{agent}.json"
     command = [sys.executable, "-m", branch_play.__name__, wrapper, str(config), str(branch), str(output)]
@@ -76,7 +78,8 @@ def branch_attempts(wrapper: str, config: Path, project: Path, agent: str, outpu
     except subprocess.CalledProcessError as error:
         logger.error(f"The {agent} branch crashed while playing and forfeits the duel: {error}")
         return None
-    return msgspec.json.decode(output.read_bytes(), type=list[Attempt])
+    played = msgspec.json.decode(output.read_bytes(), type=BranchPlay)
+    return Entrant(agent, played.start, played.attempts)
 
 
 def record(settings: RetroSpeedlabConfig, entrants: list[Entrant], verdict: Verdict) -> None:
@@ -84,7 +87,8 @@ def record(settings: RetroSpeedlabConfig, entrants: list[Entrant], verdict: Verd
     if client is None:
         raise RuntimeError("A duel is always tracked, but tracking.token is not set.")
     experiment = f"{settings.training.game_identity}{EXPERIMENT_SUFFIX}"
-    parameters = {"winner": verdict.winner, "episodes": str(branch_play.EPISODES)}
+    starts = {f"{entrant.agent}/start": entrant.start for entrant in entrants}
+    parameters = {"winner": verdict.winner, "episodes": str(branch_play.EPISODES), **starts}
     run = TrackingRun.start(client, experiment, settings.ui.release, parameters)
     metrics = {key: value for entrant in entrants for key, value in entrant.metrics().items()}
     run.log({**metrics, "confidence": verdict.confidence}, 0)
@@ -94,11 +98,13 @@ def record(settings: RetroSpeedlabConfig, entrants: list[Entrant], verdict: Verd
 def judge(wrapper: str, config: Path, project: Path) -> None:
     settings = load_config(config)
     output_dir = settings.paths.cache_dir / "duel"
-    played = {agent: branch_attempts(wrapper, config, project, agent, output_dir) for agent in AGENTS}
-    entrants = [Entrant(agent, attempts) for agent, attempts in played.items() if attempts is not None]
+    played = [branch_entrant(wrapper, config, project, agent, output_dir) for agent in AGENTS]
+    entrants = [entrant for entrant in played if entrant is not None]
     verdict = decide(entrants)
     for entrant in entrants:
-        logger.info(f"Duel {entrant.agent}: {entrant.wins} wins, progress {mean(entrant.progress):.2f}")
+        logger.info(
+            f"Duel {entrant.agent} from {entrant.start}: {entrant.wins} wins, progress {mean(entrant.progress):.2f}"
+        )
     logger.info(f"Duel winner: {verdict.winner} with confidence {verdict.confidence:.2f}")
     record(settings, entrants, verdict)
     typer.echo(verdict.winner)

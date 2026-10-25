@@ -19,8 +19,8 @@ class Player:
         self.models = models
         self.phases = phases
 
-    def play(self, decisions: int) -> Attempt:
-        observation, info = self.env.reset_to(None)
+    def play(self, start: str | None, decisions: int) -> Attempt:
+        observation, info = self.env.reset_to(start)
         furthest, won, taken = self.phases.index(info["state"]), False, 0
         while taken < decisions:
             state = info["state"]
