@@ -36,9 +36,12 @@ class Entrant:
     def progress(self) -> list[float]:
         return [attempt.progress for attempt in self.attempts]
 
+    @property
+    def speed(self) -> list[float]:
+        return [-float(attempt.decisions) for attempt in self.attempts]
+
     def rank(self) -> tuple[int, float, float]:
-        winning = [attempt.decisions for attempt in self.attempts if attempt.won]
-        return self.wins, mean(self.progress), -mean(winning) if winning else 0.0
+        return self.wins, mean(self.progress), mean(self.speed)
 
     def metrics(self) -> dict[str, float]:
         return {
@@ -66,6 +69,8 @@ def decide(entrants: list[Entrant]) -> Verdict:
     best, other = sorted(entrants, key=Entrant.rank, reverse=True)
     if best.rank() == other.rank():
         return Verdict(DRAW, COIN_FLIP)
+    if best.rank()[:2] == other.rank()[:2]:
+        return Verdict(best.agent, probability_better(other.speed, best.speed))
     return Verdict(best.agent, probability_better(other.progress, best.progress))
 
 

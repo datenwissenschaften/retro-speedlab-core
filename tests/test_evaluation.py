@@ -56,7 +56,7 @@ def test_the_player_plays_greedily_from_its_start_and_records_progress_win_and_d
 def test_the_player_stops_after_its_decisions():
     env = ScriptedEnv([(False, "Survive", False)] * 5)
 
-    assert Player(env, GreedyModels(), PHASES).play(None, 2) == Attempt(0.5, False, 2)
+    assert Player(env, GreedyModels(), PHASES).play(None, 2) == Attempt(0.5, False, 1)
 
 
 def test_clearly_better_attempts_are_better_for_certain_and_equal_ones_are_a_coin_flip():
@@ -82,6 +82,16 @@ def test_equal_wins_are_decided_by_fewer_decisions():
     verdict = decide([Entrant("claude", "Wall4", attempts(1.0, 1.0)), Entrant("codex", "Wall4", faster)])
 
     assert verdict.winner == "codex"
+
+
+def test_without_wins_the_same_progress_reached_in_fewer_decisions_wins():
+    slower = [Attempt(1.0, False, 1400), Attempt(1.0, False, 1380)]
+    faster = [Attempt(1.0, False, 770), Attempt(1.0, False, 780)]
+
+    verdict = decide([Entrant("claude", "Wall4", faster), Entrant("codex", "Wall4", slower)])
+
+    assert verdict.winner == "claude"
+    assert verdict.confidence == 1.0
 
 
 def test_identical_play_is_a_draw():
