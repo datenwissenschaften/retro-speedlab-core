@@ -259,8 +259,11 @@ latest lab report for the stream.
 [Flyte](https://flyte.org) runs the training as tasks (`datenwissenschaften.workflow`):
 `training` trains one two-hour `train_session` after another. `lab` starts a
 lab run (`agent/daily.sh` of the game package) once no curriculum win happened
-for `agent.stall_hours` hours: Claude Code and Codex each work on their own git
-worktree of the game package, and the duel decides which one ships. Every task runs locally with
+for `agent.stall_minutes` minutes: Claude Code and Codex each work on their own git
+worktree of the game package for `agent.minutes` minutes, and the duel decides which one ships.
+While they work, the stream shows each agent's latest actions (only the kind of action and the
+source files it touches), its commit subjects with URLs and secret-like words hidden, and the
+lines it changed; after the duel it shows the scores and the winner. Every task runs locally with
 `flyte run --local` and declares its GPU, so it can move to a Flyte cluster.
 
 With `tracking.token` set, every session is an [MLflow](https://mlflow.org) run

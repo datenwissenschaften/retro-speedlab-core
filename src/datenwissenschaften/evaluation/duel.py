@@ -12,6 +12,7 @@ from scipy.stats import mannwhitneyu
 from datenwissenschaften.evaluation import branch_play
 from datenwissenschaften.evaluation.branch_play import BranchPlay
 from datenwissenschaften.evaluation.player import Attempt
+from datenwissenschaften.lab.marker import DuelResult, Score
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
 from datenwissenschaften.tracking.run import TrackingRun, tracking_client
 
@@ -43,11 +44,15 @@ class Entrant:
     def rank(self) -> tuple[int, float, float]:
         return self.wins, mean(self.progress), mean(self.speed)
 
+    def score(self) -> Score:
+        return Score(self.agent, self.wins, mean(self.progress), mean(attempt.decisions for attempt in self.attempts))
+
     def metrics(self) -> dict[str, float]:
+        score = self.score()
         return {
-            f"{self.agent}/wins": float(self.wins),
-            f"{self.agent}/progress": mean(self.progress),
-            f"{self.agent}/decisions": mean(attempt.decisions for attempt in self.attempts),
+            f"{self.agent}/wins": float(score.wins),
+            f"{self.agent}/progress": score.progress,
+            f"{self.agent}/decisions": score.decisions,
         }
 
 
@@ -100,7 +105,7 @@ def record(settings: RetroSpeedlabConfig, entrants: list[Entrant], verdict: Verd
     run.finish()
 
 
-def judge(wrapper: str, config: Path, project: Path) -> None:
+def judge(wrapper: str, config: Path, project: Path, result: Path) -> None:
     settings = load_config(config)
     output_dir = settings.paths.cache_dir / "duel"
     played = [branch_entrant(wrapper, config, project, agent, output_dir) for agent in AGENTS]
@@ -112,6 +117,8 @@ def judge(wrapper: str, config: Path, project: Path) -> None:
         )
     logger.info(f"Duel winner: {verdict.winner} with confidence {verdict.confidence:.2f}")
     record(settings, entrants, verdict)
+    scores = [entrant.score() for entrant in entrants]
+    result.write_bytes(msgspec.json.encode(DuelResult(verdict.winner, verdict.confidence, scores)))
     typer.echo(verdict.winner)
 
 

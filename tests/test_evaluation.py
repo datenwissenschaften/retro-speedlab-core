@@ -10,6 +10,7 @@ from datenwissenschaften.evaluation import duel as duel_module
 from datenwissenschaften.evaluation.branch_play import BranchPlay, duel_start
 from datenwissenschaften.evaluation.duel import DRAW, Entrant, decide, probability_better
 from datenwissenschaften.evaluation.player import Attempt, Player
+from datenwissenschaften.lab.marker import DuelResult
 from datenwissenschaften.settings import load_config
 
 PHASES = ("Menu", "Survive", "Boss")
@@ -143,11 +144,14 @@ def test_the_judge_plays_both_branches_and_a_crashed_one_loses(tmp_path: Path, m
     monkeypatch.setattr(duel_module.subprocess, "run", run)
     monkeypatch.setattr(duel_module, "record", lambda settings, entrants, verdict: recorded.append(verdict.winner))
 
-    duel_module.judge("game:Wrapper", config, project)
+    result = tmp_path / "duel.json"
+    duel_module.judge("game:Wrapper", config, project, result)
 
     assert played == [tmp_path / "game-claude", tmp_path / "game-codex"]
     assert recorded == ["codex"]
     assert capsys.readouterr().out == "codex\n"
+    duel = msgspec.json.decode(result.read_bytes(), type=DuelResult)
+    assert (duel.winner, duel.confidence, [score.agent for score in duel.scores]) == ("codex", 1.0, ["codex"])
 
 
 def test_a_duel_without_tracking_fails(tmp_path: Path):
