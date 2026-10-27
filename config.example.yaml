@@ -20,7 +20,7 @@ laya:
 log_level: INFO
 
 agent:
-  stall_hours: 2
+  stall_minutes: 30
 
 tracking:
   url: https://training.datenwissenschaften.com

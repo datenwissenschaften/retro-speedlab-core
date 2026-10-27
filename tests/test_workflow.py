@@ -10,7 +10,7 @@ from datenwissenschaften.workflow import training as training_module
 from datenwissenschaften.workflow.lab import lab, lab_run_due
 from datenwissenschaften.workflow.wrapper import wrapper_class
 
-HOURS_AGO = 3 * 60 * 60
+STALLED_SECONDS_AGO = 31 * 60
 
 
 def progress(tmp_path: Path, seconds_ago: float) -> None:
@@ -62,11 +62,11 @@ def test_training_trains_one_session_after_another(monkeypatch):
     assert sessions == [("game:Wrapper", "config.yaml")] * 2
 
 
-def test_a_lab_run_is_due_once_training_made_no_progress_for_the_stall_hours(tmp_path: Path):
+def test_a_lab_run_is_due_once_training_made_no_progress_for_the_stall_minutes(tmp_path: Path):
     config = str(write_config(tmp_path))
 
     assert lab_run_due(config)
-    progress(tmp_path, HOURS_AGO)
+    progress(tmp_path, STALLED_SECONDS_AGO)
     assert lab_run_due(config)
 
 

@@ -50,7 +50,7 @@ class UISettings:
 
 @dataclass(frozen=True)
 class LabSettings:
-    stall_hours: int
+    stall_minutes: int
 
 
 @dataclass(frozen=True)
@@ -112,7 +112,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             twitch=_boolean(document.twitch.enabled, "twitch.enabled"),
             summary_models=_texts(document.twitch.summary_models, "twitch.summary_models"),
         ),
-        lab=LabSettings(stall_hours=_positive_int(document.agent.stall_hours, "agent.stall_hours")),
+        lab=LabSettings(stall_minutes=_positive_int(document.agent.stall_minutes, "agent.stall_minutes")),
         tracking=TrackingSettings(
             url=_text(document.tracking.url, "tracking.url"),
             token=_optional_text(document.tracking.token, "tracking.token"),

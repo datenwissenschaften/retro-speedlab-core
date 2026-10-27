@@ -165,7 +165,7 @@ def write_config(tmp_path: Path) -> Path:
                 "upload: {url: 'https://upload.test', api_key: null}",
                 "ui: {enable: false, max_episodes: 10, release: local, persona: Retra}",
                 "twitch: {enabled: true, summary_models: [test/model:free]}",
-                "agent: {stall_hours: 2}",
+                "agent: {stall_minutes: 30}",
                 "tracking: {url: 'https://training.test', token: null}",
                 "log_level: INFO",
             ]

@@ -11,7 +11,6 @@ from datenwissenschaften.tracking.task_run import task_run
 from datenwissenschaften.workflow.environment import speedlab
 
 SECONDS_PER_MINUTE = 60
-MINUTES_PER_HOUR = 60
 LAST_LAB_RUN = ".agent-last-run"
 
 
@@ -30,7 +29,7 @@ def lab_run_due(config: str) -> bool:
         return False
     close_stale_lab_runs(settings)
     stalled_minutes = (time.time() - last_progress(settings)) / SECONDS_PER_MINUTE
-    if stalled_minutes < settings.lab.stall_hours * MINUTES_PER_HOUR:
+    if stalled_minutes < settings.lab.stall_minutes:
         logger.info(f"No lab run: the last progress was {stalled_minutes:.0f} minutes ago")
         return False
     logger.info(f"Lab run: no progress for {stalled_minutes:.0f} minutes")
