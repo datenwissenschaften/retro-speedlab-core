@@ -9,8 +9,6 @@ def test_curriculum_masters_states_in_order_even_with_deeper_checkpoints(tmp_pat
     curriculum.save_checkpoint("Finish", b"finish", 0.0)
 
     assert curriculum.active_state() == "Start"
-    for _ in range(ReverseCurriculum.WIN_TARGET - 1):
-        assert curriculum.record_success("Start", 4) is False
     assert curriculum.record_success("Start", 4) is True
     assert curriculum.active_state() == "Middle"
     assert curriculum.checkpoint("Middle") == b"middle"
@@ -52,25 +50,21 @@ def test_mastered_checkpoint_is_not_used_when_target_checkpoint_is_healthy(tmp_p
     assert curriculum.episode_start_state("Finish") == "Finish"
 
 
-def test_curriculum_counts_wins_across_failures(tmp_path: Path):
+def test_the_first_win_masters_a_state_after_any_failures(tmp_path: Path):
     curriculum = ReverseCurriculum(tmp_path, ("Start", "Finish"))
 
-    curriculum.record_success("Finish", 16)
-    curriculum.record_success("Finish", 16)
-    curriculum.record_failure("Finish", 16, 10.0)
+    curriculum.record_failure("Start", 16, 10.0)
 
-    assert curriculum.wins("Finish") == 2
-    assert curriculum.record_success("Finish", 16) is False
-    assert curriculum.wins("Finish") == 3
-
-
-def test_initial_state_only_completes_after_success_threshold(tmp_path: Path):
-    curriculum = ReverseCurriculum(tmp_path, ("Start", "Finish"))
-
-    for _ in range(ReverseCurriculum.WIN_TARGET - 1):
-        assert curriculum.record_success("Start", 1) is False
-    assert curriculum.record_success("Start", 1) is True
+    assert curriculum.record_success("Start", 400) is True
     assert curriculum.progress()["Start"]["mastered"] is True
+
+
+def test_partial_wins_from_before_first_win_mastery_count_as_mastered(tmp_path: Path):
+    curriculum = ReverseCurriculum(tmp_path, ("Start", "Finish"))
+    (tmp_path / "Start.successes").write_text("3", encoding="utf-8")
+
+    assert curriculum.is_mastered("Start") is True
+    assert curriculum.wins("Start") == ReverseCurriculum.WIN_TARGET
 
 
 def test_bad_checkpoint_is_deleted_after_persistent_score_stagnation(tmp_path: Path):
@@ -132,37 +126,3 @@ def test_bad_checkpoint_detector_never_deletes_initial_state(tmp_path: Path):
 
     assert curriculum.record_failure("Start", 1, 0.0) is False
     assert curriculum.stagnation_evidence("Start") == 0
-
-
-def test_success_target_is_the_same_for_every_state(tmp_path: Path):
-    curriculum = ReverseCurriculum(tmp_path, ("Start", "Finish"))
-
-    assert curriculum.win_target("Finish") == ReverseCurriculum.WIN_TARGET
-    curriculum.record_success("Finish", 256)
-    assert curriculum.win_target("Finish") == ReverseCurriculum.WIN_TARGET
-    assert curriculum.progress()["Finish"]["wins"] == 1
-    assert curriculum.progress()["Finish"]["win_target"] == ReverseCurriculum.WIN_TARGET
-
-
-def test_a_win_only_counts_within_the_speed_margin_of_the_median_recent_win(tmp_path: Path):
-    curriculum = ReverseCurriculum(tmp_path, ("Start", "Finish"))
-    curriculum.record_success("Start", 80)
-    curriculum.record_success("Start", 100)
-
-    assert curriculum.step_limit("Start") == 112
-    assert curriculum.record_success("Start", 400) is False
-    assert curriculum.wins("Start") == 2
-    assert curriculum.step_limit("Start") == 125
-    curriculum.record_success("Start", 120)
-    assert curriculum.wins("Start") == 3
-    assert curriculum.progress()["Start"]["win_step_limit"] == 137
-
-
-def test_one_lucky_fast_win_never_blocks_mastery(tmp_path: Path):
-    curriculum = ReverseCurriculum(tmp_path, ("Start", "Finish"))
-    curriculum.record_success("Start", 50)
-
-    while not curriculum.is_mastered("Start"):
-        curriculum.record_success("Start", 4000)
-
-    assert curriculum.recent_win_steps("Start")[-1] == 4000

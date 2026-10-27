@@ -7,11 +7,11 @@ from datenwissenschaften.curriculum import ReverseCurriculum
 from datenwissenschaften.environment import level_clock as level_clock_module
 from datenwissenschaften.environment.curriculum_run import CurriculumRun
 from datenwissenschaften.environment.level_clock import LevelClock
-from datenwissenschaften.environment.level_review import REVIEW_INTERVAL
 from datenwissenschaften.environment.levels import LevelTargets, curriculum_targets, level_map
 from datenwissenschaften.states.state import State
 
 FRAME_RATE = 60.0
+ATTEMPTS = 20
 
 
 class Menu(State):
@@ -95,29 +95,26 @@ def test_only_leaving_the_level_beats_it_and_records_its_time(run: CurriculumRun
     assert run.transition("Eat", "Door", b"door", 0.0) == (False, False)
     play_frames(run, 300)
 
-    assert run.transition("Door", "Next", b"next", 0.0) == (True, False)
-    assert run.finish_step(False, False, 0.0, ("Door", "Next"), (True, False))["curriculum_state"] == "Level 1"
+    assert run.transition("Door", "Next", b"next", 0.0) == (True, True)
+    assert run.finish_step(False, False, 0.0, ("Door", "Next"), (True, True))["curriculum_state"] == "Level 1"
     assert run.curriculum.wins("Level 1") == 1
     assert json.loads((tmp_path / "times.json").read_text()) == {
         "Level 1": {"best_seconds": 15.0, "last_seconds": 15.0, "runs": 1}
     }
 
 
-def test_a_win_inside_the_level_beats_it_too_and_keeps_the_best_time(run: CurriculumRun, tmp_path: Path):
-    for frames in (1200, 900, 1500):
-        run.begin_episode()
-        play_frames(run, frames)
-        outcome = run.finish_step(True, True, 0.0, None, (False, False))
-        assert outcome["curriculum_succeeded"] is True
+def test_a_win_inside_the_level_beats_it_too(run: CurriculumRun):
+    run.begin_episode()
+    play_frames(run, 900)
 
-    assert run.clock.times()["Level 1"] == {"best_seconds": 15.0, "last_seconds": 25.0, "runs": 3}
+    assert run.finish_step(True, True, 0.0, None, (False, False))["curriculum_succeeded"] is True
+    assert run.clock.times()["Level 1"] == {"best_seconds": 15.0, "last_seconds": 15.0, "runs": 1}
 
 
-def test_eight_level_wins_master_the_level_and_move_on(run: CurriculumRun):
-    for _ in range(ReverseCurriculum.WIN_TARGET):
-        run.begin_episode()
-        play_frames(run, 60)
-        run.finish_step(True, True, 0.0, None, (False, False))
+def test_the_first_level_win_masters_the_level_and_moves_on(run: CurriculumRun):
+    run.begin_episode()
+    play_frames(run, 60)
+    run.finish_step(True, True, 0.0, None, (False, False))
 
     assert run.curriculum.is_mastered("Level 1")
     assert run.curriculum.active_state() == "Next"
@@ -130,7 +127,7 @@ def test_a_level_run_from_power_on_times_the_level_from_its_first_state(run: Cur
     run.transition("Menu", "Eat", b"eat", 0.0)
     play_frames(run, 600)
 
-    assert run.transition("Door", "Next", b"next", 0.0) == (True, False)
+    assert run.transition("Door", "Next", b"next", 0.0) == (True, True)
     assert run.clock.times()["Level 1"]["last_seconds"] == 10.0
 
 
@@ -159,25 +156,14 @@ def test_once_every_target_of_a_curriculum_that_beats_the_game_is_mastered_attem
     assert run.transition("Door", "Next", b"next", 0.0) == (False, False)
 
 
-def test_every_tenth_attempt_practises_a_beaten_level_again(tmp_path: Path, monkeypatch):
+def test_a_beaten_level_is_never_practised_again(tmp_path: Path, monkeypatch):
     run = level_run(tmp_path, monkeypatch, False)
     for _ in range(ReverseCurriculum.WIN_TARGET):
         run.curriculum.record_success("Level 1", 1)
 
-    targets = []
-    for _ in range(REVIEW_INTERVAL):
-        run.begin_episode()
-        targets.append(run.start_state)
-
-    assert targets == ["Next"] * (REVIEW_INTERVAL - 1) + ["Level 1"]
-    assert run.finish_step(True, True, 0.0, None, (False, False))["curriculum_state"] == "Level 1"
-    assert run.curriculum.active_state() == "Next"
-
-
-def test_a_level_not_yet_beaten_is_never_practised_again(run: CurriculumRun):
     targets = set()
-    for _ in range(REVIEW_INTERVAL):
+    for _ in range(ATTEMPTS):
         run.begin_episode()
         targets.add(run.start_state)
 
-    assert targets == {"Level 1"}
+    assert targets == {"Next"}

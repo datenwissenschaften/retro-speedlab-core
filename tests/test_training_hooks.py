@@ -409,7 +409,7 @@ def test_curriculum_upload_hook_sends_the_curriculum_once_per_change(tmp_path: P
     assert first[0] == {
         "name": "Menu",
         "wins": 0,
-        "win_target": 8,
+        "win_target": 1,
         "mastered": False,
         "active": True,
         "has_checkpoint": False,

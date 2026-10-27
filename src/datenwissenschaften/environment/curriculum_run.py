@@ -4,7 +4,6 @@ from loguru import logger
 
 from datenwissenschaften.curriculum import ReverseCurriculum
 from datenwissenschaften.environment.level_clock import LevelClock
-from datenwissenschaften.environment.level_review import LevelReview
 from datenwissenschaften.environment.levels import LevelTargets
 from datenwissenschaften.ui.telemetry import publish_metadata
 
@@ -20,7 +19,6 @@ class CurriculumRun:
         self.level = level
         self.state_names = targets.state_names
         self.targets = targets
-        self.review = LevelReview(tuple(targets.levels))
         self.clock = clock
         self.seeds_dir = seeds_dir
         self.curriculum = seeded(ReverseCurriculum(root, self.state_names), self.state_names, seeds_dir)
@@ -36,7 +34,7 @@ class CurriculumRun:
         self.publish()
 
     def begin_episode(self) -> str | None:
-        target = self._target()
+        target = self._frontier()
         self.start_state = target or FULL_RUN
         self.outcome_recorded = target is None or not self.counts_outcomes
         self.episode_steps = 0
@@ -44,9 +42,6 @@ class CurriculumRun:
         checkpoint_state = None if target is None else self.targets.start_checkpoint(target, self.curriculum)
         self.episode_score = 0.0 if checkpoint_state is None else self.curriculum.entry_score(checkpoint_state)
         return checkpoint_state
-
-    def _target(self) -> str | None:
-        return self.review.target(self._frontier(), self.curriculum)
 
     def _frontier(self) -> str | None:
         active_state = self.curriculum.active_state()
@@ -116,15 +111,9 @@ class CurriculumRun:
         self.outcome_recorded = True
         if self.targets.is_level(self.start_state):
             self.clock.record(self.start_state, self.episode_steps)
-        limit = self.curriculum.step_limit(self.start_state)
-        fast_enough = self.curriculum.is_fast_enough(self.start_state, self.episode_steps)
         mastered = self.curriculum.record_success(self.start_state, self.episode_steps)
-        if not fast_enough:
-            logger.info(f"Too slow for {self.start_state}: {self.episode_steps} steps, limit {limit}")
-            self.publish()
-            return False
-        wins, target = self.curriculum.wins(self.start_state), self.curriculum.win_target(self.start_state)
-        logger.info(f"Curriculum win for {self.start_state}: {wins}/{target}{', mastered' if mastered else ''}")
+        if mastered:
+            logger.info(f"Mastered {self.start_state} in {self.episode_steps} steps")
         self.publish()
         return mastered
 
