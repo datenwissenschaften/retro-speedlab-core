@@ -124,9 +124,7 @@ coach pauses while a lab run judges its branches and deploys, and saves `advisor
 each state's `laya.pt`.
 
 Hard stretches such as precise platforming are learned backwards (backplay).
-Replaying the lab's demonstrations happens once per set of movies, integrations
-and game and engine code; later sessions reuse the result from
-`cache/demonstrations/`. Replaying from power-on keeps a start point every 4
+Replaying the lab's demonstrations from power-on keeps a start point every 4
 decisions of each stretch that leaves a state forward. A practice run that ends
 in such a state restarts from one of its last start points; once half of 20
 attempts leave the state forward, the start moves one point further back, until

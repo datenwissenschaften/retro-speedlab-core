@@ -1,12 +1,11 @@
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
 from fakes import fake_environment
 
-from datenwissenschaften.environment import demonstration, demonstration_cache
+from datenwissenschaften.environment import demonstration
 from datenwissenschaften.environment.demonstration import load_demonstrations, movie_buttons, replay
 from datenwissenschaften.training.knowledge import knowledge
 
@@ -63,28 +62,6 @@ def test_loading_replays_every_movie_without_recording_it(tmp_path: Path, monkey
     assert list(starts) == ["Survive"]
     assert env.env.unwrapped.movie_path == record_dir
     assert load_demonstrations(env, tmp_path / "empty") == ({}, {})
-
-
-def test_replayed_demonstrations_are_reused_until_a_movie_or_the_code_changes(tmp_path: Path, monkeypatch):
-    env = fake_environment(tmp_path, SCRIPT)
-    paths = SimpleNamespace(
-        demonstrations_dir=tmp_path / "demos", integrations_dir=tmp_path / "integrations", cache_dir=tmp_path / "cache"
-    )
-    paths.demonstrations_dir.mkdir()
-    paths.integrations_dir.mkdir()
-    (paths.demonstrations_dir / "menu.bk2").write_bytes(b"one")
-    replays = []
-    monkeypatch.setattr(
-        demonstration_cache, "load_demonstrations", lambda wrapper, directory: replays.append(1) or ({}, {})
-    )
-
-    for _ in range(2):
-        assert demonstration_cache.cached_demonstrations(env, paths) == ({}, {})
-    (paths.demonstrations_dir / "menu.bk2").write_bytes(b"two")
-    demonstration_cache.cached_demonstrations(env, paths)
-
-    assert len(replays) == 2
-    assert len(list((paths.cache_dir / "demonstrations").iterdir())) == 1
 
 
 def test_movie_buttons_skip_the_reset_frame_and_require_a_power_on_movie_of_the_game(tmp_path: Path, monkeypatch):
