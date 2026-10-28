@@ -265,8 +265,9 @@ latest lab report for the stream.
 
 [Flyte](https://flyte.org) runs the training as tasks (`datenwissenschaften.workflow`):
 `training` trains one two-hour `train_session` after another. `lab` starts a
-lab run (`agent/daily.sh` of the game package) once no curriculum win happened
-for `agent.stall_minutes` minutes: Claude Code and Codex each work on their own git
+lab run (`agent/daily.sh` of the game package) once no curriculum win and no
+passed level drill happened for `agent.stall_minutes` minutes, and never while
+a level drill still collects endings or has fewer than 10 tries: Claude Code and Codex each work on their own git
 worktree of the game package for `agent.minutes` minutes, and the duel decides which one ships.
 While they work, the stream shows each agent's latest actions (only the kind of action and the
 source files it touches), its commit subjects with URLs and secret-like words hidden, and the
@@ -406,10 +407,12 @@ poetry run ruff format --check .
 
 ## Limitations
 
-- Training runs one emulator per CPU core, minus two. Only the first one, on
-  the stream, is played by Laya, at the speed of one Laya read per decision;
-  the others are played by the advisors at emulator speed (about 750
-  decisions per second with ten practice emulators on a laptop RTX 3060).
+- Training runs one emulator per CPU core, minus two. Laya plays the first
+  one, on the stream, and up to three practice emulators (never more than
+  half of them) in one batched read per decision, and learns from all of
+  them; only the first one counts wins. The other practice emulators are
+  played by the advisors at emulator speed (about 750 decisions per second
+  with ten practice emulators on a laptop RTX 3060).
 - The advisor only knows the RAM and the facts. A state whose reward never
   pays for progress stays flat for both models; the stall watch flags it after
   200 000 decisions.

@@ -18,6 +18,11 @@ ADVISOR_FACT = "advised"
 MOVE_FACT = "move"
 
 
+def observe(facts: Facts, question: str, advised: str | None) -> Observation:
+    shown = facts if advised is None else {ADVISOR_FACT: advised, **facts}
+    return {"state": render_facts(shown), "question": question}
+
+
 class Observer(Generic[T]):
     def __init__(
         self,
@@ -40,14 +45,17 @@ class Observer(Generic[T]):
         return {**ram.describe(), **told, **route}
 
     def inputs(self, ram: T) -> np.ndarray:
-        return encode(self.read_bytes(), self.facts(ram))
+        return self.encoded(self.facts(ram))
+
+    def encoded(self, facts: Facts) -> np.ndarray:
+        return encode(self.read_bytes(), facts)
 
     def observation(self, ram: T) -> Observation:
         facts = self.facts(ram)
-        if self.advisor is not None:
-            self.advice = self.advisor(self.state_machine.state_name, encode(self.read_bytes(), facts))
-            facts = {ADVISOR_FACT: self.action_descriptions[self.advice.action], **facts}
-        return {"state": render_facts(facts), "question": self.state_machine.question}
+        if self.advisor is None:
+            return observe(facts, self.state_machine.question, None)
+        self.advice = self.advisor(self.state_machine.state_name, self.encoded(facts))
+        return observe(facts, self.state_machine.question, self.action_descriptions[self.advice.action])
 
     def advised_action(self) -> int | None:
         return None if self.advice is None else self.advice.action

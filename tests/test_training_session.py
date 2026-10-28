@@ -14,6 +14,7 @@ from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
 from datenwissenschaften.training.lab_run import LabRun
 from datenwissenschaften.training.lessons import Lessons
+from datenwissenschaften.training.practice import PracticeStep, PracticeView
 from datenwissenschaften.training.session import (
     EXPLORATION_ONCE_MASTERED,
     EXPLORATION_WHILE_LEARNING,
@@ -23,6 +24,22 @@ from datenwissenschaften.training.session import (
 from datenwissenschaften.training.state_models import StateModels
 
 IDLE_LAB = LabRun(Path("no-lab-run"))
+VIEW = PracticeView(np.zeros(2, dtype=np.float32), {}, "Which move survives?")
+
+
+class FakeLayaPractice:
+    def __init__(self, workers: int) -> None:
+        self.states = ["Survive"] * workers
+        self.sent: list[list[int]] = []
+
+    def views(self) -> tuple[list[dict[str, str]], list[int]]:
+        return [{"state": "{}", "question": VIEW.question}] * len(self.states), [0] * len(self.states)
+
+    def send(self, decisions: list[Decision]) -> None:
+        self.sent.append([decision.action for decision in decisions])
+
+    def receive(self) -> list[PracticeStep]:
+        return [PracticeStep(VIEW, 1.0, False, False, "Survive", False, "Survive") for _ in self.states]
 
 
 class RecordingPolicy:
@@ -97,7 +114,9 @@ def test_session_plays_learns_and_stops_on_a_reset_request(tmp_path: Path, monke
     agent, hook = RecordingAgent(), RecordingHook()
     models = StateModels(agent, RunContext(load_config(write_config(tmp_path)), "Level1"), ("Survive", "Boss"))
 
-    result = TrainingSession(env, models, [hook], float("inf"), no_lessons(env), IDLE_LAB, FakeCoach()).run()
+    result = TrainingSession(
+        env, models, [hook], float("inf"), no_lessons(env), IDLE_LAB, FakeCoach(), FakeLayaPractice(0)
+    ).run()
 
     assert result == "reset"
     assert agent.num_timesteps == ROLLOUT_STEPS
@@ -121,7 +140,9 @@ def test_mastered_states_explore_less(tmp_path: Path):
     for _ in range(env.curriculum.curriculum.WIN_TARGET):
         env.curriculum.curriculum.record_success("Survive", 1)
 
-    session = TrainingSession(env, models, [], float("inf"), no_lessons(env), IDLE_LAB, FakeCoach())
+    session = TrainingSession(
+        env, models, [], float("inf"), no_lessons(env), IDLE_LAB, FakeCoach(), FakeLayaPractice(0)
+    )
 
     assert session._exploration("Survive") == EXPLORATION_ONCE_MASTERED
     assert session._exploration("Boss") == EXPLORATION_WHILE_LEARNING
@@ -134,7 +155,9 @@ def test_session_hands_over_to_the_next_level_after_an_episode_past_the_deadline
     context = RunContext(load_config(write_config(tmp_path)), "Level1")
     models = StateModels(RecordingAgent(), context, ("Survive", "Boss"))
 
-    result = TrainingSession(env, models, [hook], 0.0, no_lessons(env), IDLE_LAB, FakeCoach()).run()
+    result = TrainingSession(
+        env, models, [hook], 0.0, no_lessons(env), IDLE_LAB, FakeCoach(), FakeLayaPractice(0)
+    ).run()
 
     assert result is None
     assert len(hook.episodes) == 1
@@ -161,8 +184,23 @@ def test_laya_decides_with_the_advice_it_read_and_the_coach_is_watched(tmp_path:
     agent, coach = RecordingAgent(), FakeCoach()
     models = StateModels(agent, RunContext(load_config(write_config(tmp_path)), "Level1"), ("Survive", "Boss"))
 
-    TrainingSession(env, models, [], float("inf"), no_lessons(env), IDLE_LAB, coach).run()
+    TrainingSession(env, models, [], float("inf"), no_lessons(env), IDLE_LAB, coach, FakeLayaPractice(0)).run()
 
     assert agent.advice == [1, 1]
     assert coach.checks == 2
     assert models.rollout("Survive", 0).decisions[0].advice is None
+
+
+def test_laya_also_plays_its_practice_emulators_and_learns_from_each(tmp_path: Path, monkeypatch):
+    requests = iter([None, None, "reset"])
+    monkeypatch.setattr(session_module, "consume_model_reset", lambda: next(requests))
+    env = fake_environment(tmp_path, [(3, 0)] * 4)
+    agent, practice = RecordingAgent(), FakeLayaPractice(2)
+    models = StateModels(agent, RunContext(load_config(write_config(tmp_path)), "Level1"), ("Survive", "Boss"))
+
+    TrainingSession(env, models, [], float("inf"), no_lessons(env), IDLE_LAB, FakeCoach(), practice).run()
+
+    assert practice.sent == [[1, 1], [1, 1]]
+    assert agent.advice == [None, 0, 0, None, 0, 0]
+    assert [len(models.rollout("Survive", worker)) for worker in (0, 1, 2)] == [2, 2, 2]
+    assert models.collected("Survive") == 6

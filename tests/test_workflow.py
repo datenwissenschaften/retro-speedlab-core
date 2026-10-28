@@ -1,3 +1,4 @@
+import json
 import os
 import time
 from pathlib import Path
@@ -5,6 +6,7 @@ from pathlib import Path
 import pytest
 from fakes import FakeWrapper, write_config
 
+from datenwissenschaften.environment import level_drill
 from datenwissenschaften.workflow import lab as lab_module
 from datenwissenschaften.workflow import training as training_module
 from datenwissenschaften.workflow.lab import lab, lab_run_due
@@ -101,3 +103,35 @@ def test_the_lab_runs_the_projects_daily_agent_only_when_due(tmp_path: Path, mon
     lab(config, str(tmp_path))
 
     assert commands == [[tmp_path / "agent" / "daily.sh"]]
+
+
+def drill_files(tmp_path: Path, endings: int, tries: int) -> Path:
+    root = tmp_path / "cache" / "curriculum" / "Level1"
+    root.mkdir(parents=True, exist_ok=True)
+    (root / f"Level 1{level_drill.ENDINGS_SUFFIX}").write_text(json.dumps(["Boss"] * endings), encoding="utf-8")
+    if tries:
+        (root / "Level 1.drill.json").write_text(json.dumps([False] * tries), encoding="utf-8")
+    return root
+
+
+def test_no_lab_run_while_the_engine_collects_endings_or_drills_a_level(tmp_path: Path):
+    config = str(write_config(tmp_path))
+    drill_files(tmp_path, level_drill.MIN_ENDINGS - 1, 0)
+    assert not lab_run_due(config)
+
+    drill_files(tmp_path, level_drill.MIN_ENDINGS, level_drill.DRILL_WINDOW - 1)
+    assert not lab_run_due(config)
+
+
+def test_a_drill_that_keeps_failing_lets_the_lab_in(tmp_path: Path):
+    config = str(write_config(tmp_path))
+    drill_files(tmp_path, level_drill.MIN_ENDINGS, level_drill.DRILL_WINDOW)
+
+    assert lab_run_due(config)
+
+
+def test_a_passed_drill_counts_as_progress(tmp_path: Path):
+    config = str(write_config(tmp_path))
+    (drill_files(tmp_path, 0, 0) / f"Level 1{level_drill.DRILLED_SUFFIX}").touch()
+
+    assert not lab_run_due(config)

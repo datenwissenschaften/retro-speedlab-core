@@ -147,7 +147,7 @@ def test_the_judge_plays_both_branches_and_a_crashed_one_loses(tmp_path: Path, m
     result = tmp_path / "duel.json"
     duel_module.judge("game:Wrapper", config, project, result)
 
-    assert played == [tmp_path / "game-claude", tmp_path / "game-codex"]
+    assert sorted(played) == [tmp_path / "game-claude", tmp_path / "game-codex"]
     assert recorded == ["codex"]
     assert capsys.readouterr().out == "codex\n"
     duel = msgspec.json.decode(result.read_bytes(), type=DuelResult)

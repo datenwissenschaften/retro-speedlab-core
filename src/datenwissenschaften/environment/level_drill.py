@@ -12,6 +12,8 @@ ENDINGS_WINDOW = 50
 MIN_ENDINGS = 20
 DRILL_WINDOW = 10
 RELIABLE_PASSES = 3
+ENDINGS_SUFFIX = ".endings.json"
+DRILLED_SUFFIX = ".drilled"
 
 
 class LevelDrill:
@@ -46,9 +48,16 @@ class LevelDrill:
         if sum(outcomes) >= RELIABLE_PASSES:
             self._drill_path(level).unlink(missing_ok=True)
             self._endings_path(level).unlink(missing_ok=True)
+            atomic_write(self.root / f"{level}{DRILLED_SUFFIX}", b"")
             return True
         atomic_write(self._drill_path(level), msgspec.json.encode(outcomes))
         return False
+
+    def busy(self, level: str) -> bool:
+        endings = len(self._read(self._endings_path(level), list[str]))
+        if endings < MIN_ENDINGS:
+            return endings > 0
+        return len(self._read(self._drill_path(level), list[bool])) < DRILL_WINDOW
 
     def progress(self, level: str) -> dict[str, object]:
         outcomes = self._read(self._drill_path(level), list[bool])
@@ -64,7 +73,12 @@ class LevelDrill:
         return msgspec.json.decode(path.read_bytes(), type=kind) if path.is_file() else kind()
 
     def _endings_path(self, level: str) -> Path:
-        return self.root / f"{level}.endings.json"
+        return self.root / f"{level}{ENDINGS_SUFFIX}"
 
     def _drill_path(self, level: str) -> Path:
         return self.root / f"{level}.drill.json"
+
+
+def drilling(root: Path) -> bool:
+    drill = LevelDrill(root)
+    return any(drill.busy(path.name.removesuffix(ENDINGS_SUFFIX)) for path in root.glob(f"*{ENDINGS_SUFFIX}"))

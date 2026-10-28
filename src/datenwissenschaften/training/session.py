@@ -2,9 +2,11 @@ import time
 
 from datenwissenschaften.advisor.coach import Coach
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
+from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import TrainingHook, Transition
 from datenwissenschaften.training.lab_run import LabRun
+from datenwissenschaften.training.laya_practice import LayaPractice
 from datenwissenschaften.training.lessons import Lessons
 from datenwissenschaften.training.state_models import StateModels
 from datenwissenschaften.ui.control import ModelResetRequest, consume_model_reset
@@ -26,8 +28,10 @@ class TrainingSession:
         lessons: Lessons,
         lab_run: LabRun,
         coach: Coach,
+        laya_practice: LayaPractice,
     ) -> None:
         self.env = env
+        self.laya_practice = laya_practice
         self.deadline = deadline
         self.models = models
         self.hooks = hooks
@@ -44,9 +48,14 @@ class TrainingSession:
         while (request := consume_model_reset()) is None:
             self.coach.check()
             state_name, advice = info["state"], info["advice"]
-            exploration = {state_name: self._exploration(state_name)}
-            decision = self.models.decide([observation], [state_name], exploration, [advice])[0]
+            practice_observations, practice_advice = self.laya_practice.views()
+            states = [state_name, *self.laya_practice.states]
+            exploration = {state: self._exploration(state) for state in states}
+            observations = [observation, *practice_observations]
+            decision, *practice = self.models.decide(observations, states, exploration, [advice, *practice_advice])
+            self.laya_practice.send(practice)
             next_observation, reward, terminated, truncated, info = self.env.step(decision.action)
+            self._practise(states[1:], practice)
             done = terminated or truncated
             terminal = terminated or info["state"] != state_name
             self.models.rollout(state_name, MAIN_ENVIRONMENT).add(decision, reward, terminal, truncated)
@@ -68,8 +77,16 @@ class TrainingSession:
                 next_observation, info = self.env.reset()
                 episode, started_at = EpisodeRecord.start(self.episodes, info), time.monotonic()
             observation = next_observation
-            self._learn(state_name)
+            for state in dict.fromkeys(states):
+                self._learn(state)
         return request
+
+    def _practise(self, states: list[str], decisions: list[Decision]) -> None:
+        steps = self.laya_practice.receive()
+        for worker, (state, decision, step) in enumerate(
+            zip(states, decisions, steps, strict=True), MAIN_ENVIRONMENT + 1
+        ):
+            self.models.rollout(state, worker).add(decision, step.reward, step.terminal, step.truncated)
 
     def _learn(self, state_name: str) -> None:
         if self.models.collected(state_name) < ROLLOUT_STEPS:

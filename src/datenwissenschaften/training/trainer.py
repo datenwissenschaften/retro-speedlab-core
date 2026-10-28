@@ -27,6 +27,7 @@ from datenwissenschaften.training.hooks import TrainingHook
 from datenwissenschaften.training.identity import TrainingIdentity, engine_version
 from datenwissenschaften.training.knowledge import knowledge
 from datenwissenschaften.training.lab_run import LabRun
+from datenwissenschaften.training.laya_practice import LayaPractice
 from datenwissenschaften.training.lessons import Lessons
 from datenwissenschaften.training.live_stream_hook import LiveStreamHook
 from datenwissenschaften.training.practice import PracticeEnvironments
@@ -49,6 +50,7 @@ SESSION_SECONDS = 2 * 60 * 60
 STATE_SEPARATOR = ","
 BEATEN_FULL_RUN_WINS = 8
 RESERVED_CORES = 2
+LAYA_EMULATORS = 3
 ADVISOR_THREADS = 2
 
 
@@ -85,7 +87,7 @@ class LayaTrainer:
         env.speedrun = self.speedrun = level_full_run_wins(POWER_ON) >= BEATEN_FULL_RUN_WINS
         identity = TrainingIdentity(self.context, database)
         identity.require_compatible(env)
-        relay = self._start_ui(identity, env)
+        relay = start_ui(self.config, identity, env, self.context.record_root)
         env.curriculum.publish()
         try:
             request = self._train_level(env, database, SESSION_SECONDS)
@@ -113,36 +115,28 @@ class LayaTrainer:
         deadline = time.monotonic() + seconds
         lessons = Lessons(demonstrations, env.curriculum.curriculum)
         lab_run = LabRun(self.config.paths.lab_run_marker)
-        actions = tuple(self.wrapper_cls.action_descriptions)
-        advisors = Advisors(actions, configure_accelerator(), self.context.advisor_path)
+        advisors = Advisors(
+            tuple(self.wrapper_cls.action_descriptions), configure_accelerator(), self.context.advisor_path
+        )
         env.observer.advisor = advisors.advise
-        practice = PracticeEnvironments(self.wrapper_cls, self.config, self.speedrun, workers)
+        practice, laya_practice = practice_environments(self.wrapper_cls, self.config, self.speedrun, workers, advisors)
         backplay = Backplay(starts, phases(self.wrapper_cls), self.context.backplay_path)
         team = AdvisorTeam(advisors, practice, lab_run, lessons, backplay)
         tracking = start_tracking(
             self.config.tracking,
             self.config.training.game_identity,
             self.config.ui.release,
-            self._parameters(len(workers) + 1),
+            tracking_parameters(self.wrapper_cls, self.config, self.speedrun, len(workers) + 1),
         )
         tracked = [] if tracking is None else [TrackingHook(tracking, models, phases(self.wrapper_cls), self._levels())]
         try:
             with ending(tracking):
                 hooks = [*self._hooks(env, models, StoryTeller(story)), *tracked]
-                return TrainingSession(env, models, hooks, deadline, lessons, lab_run, team.coach).run()
+                return TrainingSession(env, models, hooks, deadline, lessons, lab_run, team.coach, laya_practice).run()
         finally:
+            laya_practice.close()
             team.close()
             models.close()
-
-    def _parameters(self, emulators: int) -> dict[str, str]:
-        return {
-            "engine": engine_version(),
-            "release": self.config.ui.release,
-            "laya": self.config.laya.checkpoint,
-            "speedrun": str(self.speedrun),
-            "emulators": str(emulators),
-            "states": STATE_SEPARATOR.join(phases(self.wrapper_cls)),
-        }
 
     def _levels(self) -> dict[str, tuple[str, ...]]:
         return level_map(self.wrapper_cls.levels, self.wrapper_cls.state_classes)
@@ -168,24 +162,53 @@ class LayaTrainer:
             CurriculumUploadHook(self.context, env.curriculum),
         ]
 
-    def _start_ui(self, identity: TrainingIdentity, env: StateMachineGymWrapper) -> LiveRelay | None:
-        ui = self.config.ui
-        if not ui.enabled:
-            return None
-        reset = identity.reset_request(env)
-        configure_training_control(
-            game=reset.game,
-            model_dir=reset.model_dir,
-            restart_supported=True,
-            artifact_dirs=reset.artifact_dirs,
-            on_reset=reset.on_reset,
-        )
-        upload = self.config.upload
-        if upload.api_key is None:
-            raise RuntimeError("ui.enable relays the stream to the backend and needs upload.api_key.")
-        relay = LiveRelay(upload.url, upload.api_key, ui, self.context.record_root)
-        relay.start()
-        return relay
+
+def start_ui(
+    config: RetroSpeedlabConfig, identity: TrainingIdentity, env: StateMachineGymWrapper, record_root: Path
+) -> LiveRelay | None:
+    ui = config.ui
+    if not ui.enabled:
+        return None
+    reset = identity.reset_request(env)
+    configure_training_control(
+        game=reset.game,
+        model_dir=reset.model_dir,
+        restart_supported=True,
+        artifact_dirs=reset.artifact_dirs,
+        on_reset=reset.on_reset,
+    )
+    upload = config.upload
+    if upload.api_key is None:
+        raise RuntimeError("ui.enable relays the stream to the backend and needs upload.api_key.")
+    relay = LiveRelay(upload.url, upload.api_key, ui, record_root)
+    relay.start()
+    return relay
+
+
+def tracking_parameters(
+    wrapper_cls: type[StateMachineGymWrapper], config: RetroSpeedlabConfig, speedrun: bool, emulators: int
+) -> dict[str, str]:
+    return {
+        "engine": engine_version(),
+        "release": config.ui.release,
+        "laya": config.laya.checkpoint,
+        "speedrun": str(speedrun),
+        "emulators": str(emulators),
+        "states": STATE_SEPARATOR.join(phases(wrapper_cls)),
+    }
+
+
+def practice_environments(
+    wrapper_cls: type[StateMachineGymWrapper],
+    config: RetroSpeedlabConfig,
+    speedrun: bool,
+    workers: range,
+    advisors: Advisors,
+) -> tuple[PracticeEnvironments, LayaPractice]:
+    laya_workers = workers[: min(LAYA_EMULATORS, len(workers) // 2)]
+    advisor_practice = PracticeEnvironments(wrapper_cls, config, speedrun, workers[len(laya_workers) :])
+    laya_practice = PracticeEnvironments(wrapper_cls, config, speedrun, laya_workers)
+    return advisor_practice, LayaPractice(laya_practice, advisors, tuple(wrapper_cls.action_descriptions))
 
 
 def publish_run(wrapper_cls: type[StateMachineGymWrapper], context: RunContext, speedrun: bool, emulators: int) -> None:

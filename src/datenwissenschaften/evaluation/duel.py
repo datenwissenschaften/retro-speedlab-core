@@ -1,6 +1,8 @@
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from statistics import mean
 
@@ -108,7 +110,8 @@ def record(settings: RetroSpeedlabConfig, entrants: list[Entrant], verdict: Verd
 def judge(wrapper: str, config: Path, project: Path, result: Path) -> None:
     settings = load_config(config)
     output_dir = settings.paths.cache_dir / "duel"
-    played = [branch_entrant(wrapper, config, project, agent, output_dir) for agent in AGENTS]
+    with ThreadPoolExecutor(max_workers=len(AGENTS)) as branches:
+        played = list(branches.map(partial(branch_entrant, wrapper, config, project, output_dir=output_dir), AGENTS))
     entrants = [entrant for entrant in played if entrant is not None]
     verdict = decide(entrants)
     for entrant in entrants:

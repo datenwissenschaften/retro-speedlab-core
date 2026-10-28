@@ -71,6 +71,7 @@ def test_practice_workers_step_restart_and_stop(monkeypatch, tmp_path: Path):
 
     assert environments.states == ["Survive", "Survive"]
     assert all(isinstance(step, PracticeStep) for step in steps)
+    assert all(step.view.question and step.view.inputs.size for step in steps)
     assert not any(process.is_alive() for process in environments.processes)
 
 

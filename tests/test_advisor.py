@@ -11,10 +11,11 @@ from datenwissenschaften.advisor.inputs import FACT_SLOTS, RAM_SCALE, encode
 from datenwissenschaften.rollout import Rollout
 from datenwissenschaften.states.facts import Offset
 from datenwissenschaften.training.lab_run import LabRun
-from datenwissenschaften.training.practice import PracticeStep
+from datenwissenschaften.training.practice import PracticeStep, PracticeView
 
 ACTIONS = ("left", "right")
 INPUTS = np.ones(4, dtype=np.float32)
+VIEW = PracticeView(INPUTS, {}, "Which move?")
 UPDATES = 40
 COACH_WAIT_SECONDS = 30.0
 
@@ -65,7 +66,7 @@ class EndlessPractice:
 
     def receive(self) -> list[PracticeStep]:
         self.steps += 1
-        return [PracticeStep(INPUTS, float(action), False, False, "Play", False, "Play") for action in self.actions]
+        return [PracticeStep(VIEW, float(action), False, False, "Play", False, "Play") for action in self.actions]
 
 
 def test_the_coach_practises_until_stopped_and_learns_every_full_rollout(tmp_path: Path):
@@ -87,8 +88,8 @@ class ExitingPractice(EndlessPractice):
     def receive(self) -> list[PracticeStep]:
         self.steps += 1
         return [
-            PracticeStep(INPUTS, 1.0, True, False, "Door", False, "Play"),
-            PracticeStep(INPUTS, 0.0, False, False, "Play", False, "Play"),
+            PracticeStep(VIEW, 1.0, True, False, "Door", False, "Play"),
+            PracticeStep(VIEW, 0.0, False, False, "Play", False, "Play"),
         ]
 
 
@@ -115,8 +116,8 @@ class RestartablePractice(EndlessPractice):
         self.steps += 1
         reached = "Door" if self.restarts else "Play"
         return [
-            PracticeStep(INPUTS, 0.0, True, False, reached, True, "Play"),
-            PracticeStep(INPUTS, 0.0, False, False, "Play", False, "Play"),
+            PracticeStep(VIEW, 0.0, True, False, reached, True, "Play"),
+            PracticeStep(VIEW, 0.0, False, False, "Play", False, "Play"),
         ]
 
     def restart(self, worker: int, state: str, emulator_state: bytes) -> None:
