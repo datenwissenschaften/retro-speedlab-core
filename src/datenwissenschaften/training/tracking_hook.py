@@ -1,4 +1,6 @@
+import os
 from collections import Counter
+from pathlib import Path
 
 from datenwissenschaften.tracking.run import TrackingRun
 from datenwissenschaften.training.checkpoint_hook import learning_metadata
@@ -7,6 +9,13 @@ from datenwissenschaften.training.hooks import Transition
 from datenwissenschaften.training.state_models import StateModels
 
 WHOLE_LEVEL = "whole level"
+BYTES_PER_MEGABYTE = 1024 * 1024
+PROCESS_MEMORY = Path("/proc/self/statm")
+
+
+def resident_megabytes() -> float:
+    resident_pages = int(PROCESS_MEMORY.read_text(encoding="utf-8").split()[1])
+    return resident_pages * os.sysconf("SC_PAGE_SIZE") / BYTES_PER_MEGABYTE
 
 
 def chart_group(part: str, levels: dict[str, tuple[str, ...]]) -> str:
@@ -41,8 +50,10 @@ class TrackingHook:
             f"{group}/score": episode.score,
         }
         self.run.log(metrics, self.attempts[group])
+        system = {"resident_memory_mb": resident_megabytes()}
         if episode.duration_seconds > 0:
-            self.run.log({"decisions_per_second": episode.step_count / episode.duration_seconds}, episode.episode_index)
+            system["decisions_per_second"] = episode.step_count / episode.duration_seconds
+        self.run.log(system, episode.episode_index)
 
     def on_update(self) -> None:
         self.updates += 1

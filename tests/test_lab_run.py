@@ -9,8 +9,8 @@ from datenwissenschaften.training import lab_run as lab_run_module
 from datenwissenschaften.training.lab_run import LabRun
 
 
-def write_marker(marker: Path, until: float, agents: dict[str, dict[str, str]], base: str) -> None:
-    lab = {"until": until, "phase": "working", "base": base, "agents": agents, "duel": None}
+def write_marker(marker: Path, until: float, agents: dict[str, dict[str, str]], base: str, phase: str) -> None:
+    lab = {"until": until, "phase": phase, "base": base, "agents": agents, "duel": None}
     marker.write_text(json.dumps(lab), encoding="utf-8")
 
 
@@ -24,20 +24,33 @@ def git(worktree: Path, *arguments: str) -> str:
     return subprocess.run(command, capture_output=True, text=True, check=True).stdout.strip()
 
 
-def test_only_a_marker_with_a_future_deadline_is_an_active_lab_run(tmp_path: Path):
+def test_training_pauses_only_while_a_live_lab_run_judges_or_deploys(tmp_path: Path):
     marker = tmp_path / ".lab-run"
     run = LabRun(marker)
 
-    assert run.deadline() is None
-    write_marker(marker, time.time() - 60, {}, "HEAD")
-    assert run.deadline() is None
-    write_marker(marker, time.time() + 600, {}, "HEAD")
-    assert run.deadline() is not None
+    assert not run.paused()
+    write_marker(marker, time.time() - 60, {}, "HEAD", "judging")
+    assert not run.paused()
+    write_marker(marker, time.time() + 600, {}, "HEAD", "working")
+    assert not run.paused()
+    write_marker(marker, time.time() + 600, {}, "HEAD", "judging")
+    assert run.paused()
+
+
+def test_training_runs_on_while_the_agents_work_and_checks_the_lab_once_per_poll(tmp_path: Path, monkeypatch):
+    marker = tmp_path / ".lab-run"
+    write_marker(marker, time.time() + 600, {}, "HEAD", "working")
+    published = []
+    monkeypatch.setattr(lab_run_module, "publish_metadata", lambda section, values, replace: published.append(values))
+    run = LabRun(marker)
+
+    assert (run.wait(), run.wait()) == (None, None)
+    assert [values["phase"] for values in published] == ["working"]
 
 
 def test_training_waits_until_the_lab_run_removes_its_marker(tmp_path: Path, monkeypatch):
     marker = tmp_path / ".lab-run"
-    write_marker(marker, time.time() + 600, {}, "HEAD")
+    write_marker(marker, time.time() + 600, {}, "HEAD", "judging")
     published, sleeps = [], []
     monkeypatch.setattr(
         lab_run_module, "publish_metadata", lambda section, values, replace: published.append(values["active"])
@@ -57,7 +70,7 @@ def test_training_waits_until_the_lab_run_removes_its_marker(tmp_path: Path, mon
 
 def test_a_model_reset_during_the_pause_is_handed_back(tmp_path: Path, monkeypatch):
     marker = tmp_path / ".lab-run"
-    write_marker(marker, time.time() + 600, {}, "HEAD")
+    write_marker(marker, time.time() + 600, {}, "HEAD", "decided")
     monkeypatch.setattr(lab_run_module, "publish_metadata", lambda section, values, replace: None)
     monkeypatch.setattr(lab_run_module, "consume_model_reset", lambda: "reset")
 

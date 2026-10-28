@@ -50,7 +50,7 @@ class Coach:
 
     def _coach(self) -> None:
         while not self.stopping.is_set():
-            if self.lab_run.deadline() is not None:
+            if self.lab_run.paused():
                 self.stopping.wait(PAUSE_SECONDS)
                 continue
             states = self.practice.states

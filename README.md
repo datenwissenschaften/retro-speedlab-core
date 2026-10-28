@@ -120,11 +120,13 @@ input is the console RAM scaled to `[0, 1]` plus the state's facts hashed into
 64 slots, normalized by running statistics. Advisors act and learn on the
 accelerator; every 2048 decisions of a state become one PPO update (minibatch
 256), with imitation of the lab demonstrations until the state is mastered. The
-coach pauses while a lab run works on the game and saves `advisor.pt` next to
+coach pauses while a lab run judges its branches and deploys, and saves `advisor.pt` next to
 each state's `laya.pt`.
 
 Hard stretches such as precise platforming are learned backwards (backplay).
-Replaying the lab's demonstrations from power-on keeps a start point every 4
+Replaying the lab's demonstrations happens once per set of movies, integrations
+and game and engine code; later sessions reuse the result from
+`cache/demonstrations/`. Replaying from power-on keeps a start point every 4
 decisions of each stretch that leaves a state forward. A practice run that ends
 in such a state restarts from one of its last start points; once half of 20
 attempts leave the state forward, the start moves one point further back, until
@@ -269,6 +271,8 @@ lab run (`agent/daily.sh` of the game package) once no curriculum win and no
 passed level drill happened for `agent.stall_minutes` minutes, and never while
 a level drill still collects endings or has fewer than 10 tries: Claude Code and Codex each work on their own git
 worktree of the game package for `agent.minutes` minutes, and the duel decides which one ships.
+Training keeps running while the agents work and pauses only while the duel judges and the
+winner deploys; the agents' processes are the first the kernel kills when memory runs out.
 While they work, the stream shows each agent's latest actions (only the kind of action and the
 source files it touches), its commit subjects with URLs and secret-like words hidden, and the
 lines it changed; after the duel it shows the scores and the winner. Every task runs locally with
@@ -280,7 +284,8 @@ at `tracking.url`. Every attempt counts toward the part it practised, as
 (1 when it clears the part) and `<level>/<part>/score`, so MLflow groups the
 charts by level; a whole level is `<level>/whole level` and a run from power-on
 is `Full run`.
-Two lines cover the whole session: `decisions_per_second` and, after every
+Three lines cover the whole session: `decisions_per_second` and
+`resident_memory_mb` (the trainer's memory) after every attempt and, after every
 learning update, `confidence` (one minus the entropy share of the state that
 learned).
 

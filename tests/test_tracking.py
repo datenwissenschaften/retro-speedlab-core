@@ -105,6 +105,7 @@ def test_the_hook_logs_each_levels_attempts_and_the_overall_speed_and_confidence
         "datenwissenschaften.training.tracking_hook.learning_metadata",
         lambda models: {"num_timesteps": 512, "entropy_share": 0.25, "explained_variance": 0.5},
     )
+    monkeypatch.setattr("datenwissenschaften.training.tracking_hook.resident_megabytes", lambda: 900.0)
     hook = TrackingHook(run, SimpleNamespace(), ("Menu", "Level1", "Boss"), {"Level 1": ("Level1",)})
 
     hook.on_episode_end(episode())
@@ -113,14 +114,15 @@ def test_the_hook_logs_each_levels_attempts_and_the_overall_speed_and_confidence
 
     assert logged == [
         ({"Level 1/Level1/progress": 1.0, "Level 1/Level1/success": 1.0, "Level 1/Level1/score": 7.0}, 1),
-        ({"decisions_per_second": 3.2}, 3),
+        ({"resident_memory_mb": 900.0, "decisions_per_second": 3.2}, 3),
         ({"Level 1/Level1/progress": 1.0, "Level 1/Level1/success": 1.0, "Level 1/Level1/score": 7.0}, 2),
-        ({"decisions_per_second": 3.2}, 3),
+        ({"resident_memory_mb": 900.0, "decisions_per_second": 3.2}, 3),
         ({"confidence": 0.75}, 1),
     ]
 
 
-def test_an_attempt_without_duration_has_no_speed():
+def test_an_attempt_without_duration_has_no_speed(monkeypatch):
+    monkeypatch.setattr("datenwissenschaften.training.tracking_hook.resident_megabytes", lambda: 900.0)
     logged: list[dict[str, float]] = []
     run = SimpleNamespace(log=lambda metrics, step: logged.append(metrics))
     record = episode()
@@ -128,7 +130,10 @@ def test_an_attempt_without_duration_has_no_speed():
 
     TrackingHook(run, SimpleNamespace(), ("Menu", "Level1"), {"Level 1": ("Level1",)}).on_episode_end(record)
 
-    assert logged == [{"Level 1/Level1/progress": 1.0, "Level 1/Level1/success": 1.0, "Level 1/Level1/score": 7.0}]
+    assert logged == [
+        {"Level 1/Level1/progress": 1.0, "Level 1/Level1/success": 1.0, "Level 1/Level1/score": 7.0},
+        {"resident_memory_mb": 900.0},
+    ]
 
 
 def test_a_failed_run_keeps_its_error_and_ends_failed():

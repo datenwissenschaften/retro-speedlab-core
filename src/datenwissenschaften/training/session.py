@@ -41,11 +41,11 @@ class TrainingSession:
         self.episodes = 0
 
     def run(self) -> ModelResetRequest | None:
-        if (request := self.lab_run.wait()) is not None:
-            return request
         observation, info = self.env.reset()
         episode, started_at = EpisodeRecord.start(self.episodes, info), time.monotonic()
         while (request := consume_model_reset()) is None:
+            if (request := self.lab_run.wait()) is not None:
+                return request
             self.coach.check()
             state_name, advice = info["state"], info["advice"]
             practice_observations, practice_advice = self.laya_practice.views()
@@ -72,8 +72,6 @@ class TrainingSession:
                 self.episodes += 1
                 if time.monotonic() >= self.deadline:
                     return None
-                if (request := self.lab_run.wait()) is not None:
-                    return request
                 next_observation, info = self.env.reset()
                 episode, started_at = EpisodeRecord.start(self.episodes, info), time.monotonic()
             observation = next_observation

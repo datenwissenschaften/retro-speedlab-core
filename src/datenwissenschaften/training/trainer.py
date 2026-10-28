@@ -9,7 +9,7 @@ from datenwissenschaften.advisor.advisors import Advisors
 from datenwissenschaften.advisor.backplay import Backplay
 from datenwissenschaften.advisor.team import AdvisorTeam
 from datenwissenschaften.environment.curriculum_run import FULL_RUN
-from datenwissenschaften.environment.demonstration import load_demonstrations
+from datenwissenschaften.environment.demonstration_cache import cached_demonstrations
 from datenwissenschaften.environment.factory import POWER_ON, make_environment
 from datenwissenschaften.environment.levels import level_map
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
@@ -110,7 +110,7 @@ class LayaTrainer:
         story = StoryBook(
             database, self.config.training.game_identity, self.context.savestate, phases(self.wrapper_cls)
         )
-        demonstrations, starts = load_demonstrations(env, self.config.paths.demonstrations_dir)
+        demonstrations, starts = cached_demonstrations(env, self.config.paths)
         publish_metadata("knowledge", knowledge(env, self.config.laya.checkpoint, demonstrations), replace=True)
         deadline = time.monotonic() + seconds
         lessons = Lessons(demonstrations, env.curriculum.curriculum)
