@@ -7,7 +7,8 @@ import torch
 from datenwissenschaften.advisor.advisors import Advisors
 from datenwissenschaften.advisor.backplay import Backplay
 from datenwissenschaften.advisor.coach import ROLLOUT_STEPS, Coach
-from datenwissenschaften.advisor.inputs import FACT_SLOTS, RAM_SCALE, encode
+from datenwissenschaften.advisor.inputs import FACT_SLOTS, RAM_SCALE, encode, fact_slots
+from datenwissenschaften.laya.imitation import DemonstrationStep
 from datenwissenschaften.rollout import Rollout
 from datenwissenschaften.states.facts import Offset
 from datenwissenschaften.training.lab_run import LabRun
@@ -38,6 +39,15 @@ def test_inputs_hold_the_scaled_ram_and_a_fixed_number_of_fact_slots():
     assert inputs.shape == (2 + FACT_SLOTS,)
     assert inputs[:2].tolist() == [0.0, 255 / RAM_SCALE]
     assert sorted(value for value in inputs[2:] if value) == [-4.0, 1.0, 2.0, 3.0]
+
+
+def test_a_demonstration_keeps_the_raw_ram_and_gives_the_same_inputs_as_live_play():
+    ram, facts = np.array([7, 200], dtype=np.uint8), {"lives": 3, "target": "bell"}
+
+    step = DemonstrationStep("{}", "Which move?", 0, ram, fact_slots(facts))
+
+    assert step.ram.dtype == np.uint8
+    np.testing.assert_array_equal(step.inputs, encode(ram, facts))
 
 
 def test_ppo_teaches_the_advisor_the_rewarded_move_and_saves_it(tmp_path: Path):

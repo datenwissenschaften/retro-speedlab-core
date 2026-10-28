@@ -119,7 +119,9 @@ def test_ppo_makes_the_rewarded_move_likelier_and_learns_its_value(network: Laya
 def test_demonstrations_pull_the_policy_toward_their_moves(network: LayaNetwork):
     agent = LayaAgent(network, (QUESTION,))
     before = right_probability(agent)
-    demonstrations = [DemonstrationStep(OBSERVATION["state"], QUESTION, 1, np.zeros(2, dtype=np.float32))] * 8
+    demonstrations = [
+        DemonstrationStep(OBSERVATION["state"], QUESTION, 1, np.zeros(1, dtype=np.uint8), np.zeros(1, dtype=np.float32))
+    ] * 8
 
     for _ in range(UPDATES):
         agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 0.0}), demonstrations)

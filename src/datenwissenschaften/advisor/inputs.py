@@ -8,12 +8,20 @@ FACT_SLOTS = 64
 RAM_SCALE = 255.0
 
 
-def encode(ram: np.ndarray, facts: Facts) -> np.ndarray:
+def fact_slots(facts: Facts) -> np.ndarray:
     slots = np.zeros(FACT_SLOTS, dtype=np.float32)
     for name, value in facts.items():
         for key, number in _numbers(name, value):
             slots[zlib.crc32(key.encode()) % FACT_SLOTS] += number
+    return slots
+
+
+def expand(ram: np.ndarray, slots: np.ndarray) -> np.ndarray:
     return np.concatenate([ram.astype(np.float32) / RAM_SCALE, slots])
+
+
+def encode(ram: np.ndarray, facts: Facts) -> np.ndarray:
+    return expand(ram, fact_slots(facts))
 
 
 def _numbers(name: str, value: object) -> list[tuple[str, float]]:

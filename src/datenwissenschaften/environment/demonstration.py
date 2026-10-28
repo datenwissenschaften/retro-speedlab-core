@@ -5,6 +5,7 @@ import stable_retro as retro
 from loguru import logger
 from stable_retro import RetroEnv
 
+from datenwissenschaften.advisor.inputs import fact_slots
 from datenwissenschaften.environment.recording import recorded_buttons
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.laya.imitation import DemonstrationStep
@@ -63,8 +64,9 @@ def replay(wrapper: StateMachineGymWrapper, buttons: np.ndarray) -> tuple[Demons
         if chunk.any():
             observation = wrapper.observer.observation(ram)
             action = int((wrapper.current_action_table() != chunk).sum(axis=(1, 2)).argmin())
-            inputs = wrapper.observer.inputs(ram)
-            step = DemonstrationStep(observation["state"], observation["question"], action, inputs)
+            memory = np.array(wrapper.observer.read_bytes(), dtype=np.uint8)
+            slots = fact_slots(wrapper.observer.facts(ram))
+            step = DemonstrationStep(observation["state"], observation["question"], action, memory, slots)
             demonstrations.setdefault(state, []).append(step)
         for frame_buttons in chunk:
             frame, *_ = wrapper.env.step(frame_buttons)

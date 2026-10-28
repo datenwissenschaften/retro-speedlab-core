@@ -165,7 +165,9 @@ def test_session_hands_over_to_the_next_level_after_an_episode_past_the_deadline
 
 def test_only_unmastered_states_learn_from_their_demonstrations(tmp_path: Path):
     env = fake_environment(tmp_path, [(3, 0)])
-    step = DemonstrationStep("{}", "Which move survives?", 1, np.zeros(2, dtype=np.float32))
+    step = DemonstrationStep(
+        "{}", "Which move survives?", 1, np.zeros(1, dtype=np.uint8), np.zeros(1, dtype=np.float32)
+    )
     for _ in range(env.curriculum.curriculum.WIN_TARGET):
         env.curriculum.curriculum.record_success("Survive", 1)
 
