@@ -123,7 +123,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         self._episode_info = {
             "started_from_initial_savestate": checkpoint_state is None,
             "episode_start_state": checkpoint_state or self.initial_savestate,
-            "episode_start_score": self.curriculum.episode_score,
+            "episode_start_score": self.curriculum.tally.score,
             "episode_bk2_path": active_movie_path(emulator) if emulator.movie_path else None,
         }
         observation = self.observer.observation(ram)
@@ -136,7 +136,7 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         succeeded, mastered = False, False
         self.frames = []
         for buttons in self.current_action_table()[action]:
-            self.curriculum.count_step()
+            self.curriculum.tally.count_step()
             self.state_frames += 1
             frame, _, _, env_truncated, _ = self.env.step(buttons)
             self.frames.append(frame)
@@ -160,7 +160,9 @@ class StateMachineGymWrapper(gym.Wrapper, Generic[T]):
         won = self.state_machine.current_state._won()
         self._follow_route(state, position, action, transition, won)
         self.ram = ram
-        outcome = self.curriculum.finish_step(won, terminated or truncated, reward, transition, (succeeded, mastered))
+        outcome = self.curriculum.finish_step(
+            won, terminated or truncated, reward, transition, (succeeded, mastered), self.state_machine.state_name
+        )
         terminated = terminated or won
         observation = self.observer.observation(ram)
         info = {**self._step_view(), **outcome, **step_details(ram, won, transition), **self._episode_info}

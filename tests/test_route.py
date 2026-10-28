@@ -1,9 +1,11 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 from fakes import ACTIONS, FakeEmulator, FakeRam, FakeWrapper, curriculum_run, fake_routes
 
+from datenwissenschaften.environment.observer import MOVE_FACT, Observer
 from datenwissenschaften.route import state_route
 from datenwissenschaften.route.position import Position
 from datenwissenschaften.route.route_map import RouteMap
@@ -109,3 +111,16 @@ def test_a_respawn_drops_the_moves_that_led_to_the_lost_life(tmp_path: Path):
         env.step(LEFT)
 
     assert env.trail == [(at(240, 0), LEFT)]
+
+
+def test_a_state_that_names_the_move_silences_the_route_memory(tmp_path: Path):
+    routes = RouteMap(lambda state: tmp_path / state / "route.json", MOVES)
+    routes.record("Climb", [(at(0, 0), LEFT)])
+    ram = SimpleNamespace(describe=lambda: {}, position=lambda: at(0, 0))
+
+    def observer(facts: dict[str, str]) -> Observer:
+        machine = SimpleNamespace(state_name="Climb", current_state=SimpleNamespace(describe=lambda: facts))
+        return Observer(lambda: None, machine, MOVES, routes)
+
+    assert observer({}).facts(ram) == {"route": "move left"}
+    assert observer({MOVE_FACT: "hold up"}).facts(ram) == {MOVE_FACT: "hold up"}

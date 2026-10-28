@@ -9,6 +9,13 @@ from pathlib import Path
 from typing import Iterator
 
 
+def atomic_write(path: Path, content: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temporary.write_bytes(content)
+    temporary.replace(path)
+
+
 class ReverseCurriculum:
     """Persistent ordered curriculum for a state sequence.
 
@@ -32,8 +39,8 @@ class ReverseCurriculum:
         with self._lock(state_name):
             if path.is_file():
                 return False
-            self._atomic_write(self._entry_score_path(state_name), repr(float(entry_score)).encode("utf-8"))
-            self._atomic_write(path, emulator_state)
+            atomic_write(self._entry_score_path(state_name), repr(float(entry_score)).encode("utf-8"))
+            atomic_write(path, emulator_state)
         return True
 
     def entry_score(self, state_name: str) -> float:
@@ -67,7 +74,7 @@ class ReverseCurriculum:
             if self.is_mastered(state_name):
                 return False
             self._record_longest_attempt(state_name, episode_steps)
-            self._atomic_write(self._success_path(state_name), str(self.WIN_TARGET).encode("utf-8"))
+            atomic_write(self._success_path(state_name), str(self.WIN_TARGET).encode("utf-8"))
             self._clear_score_evidence(state_name)
             return True
 
@@ -86,17 +93,17 @@ class ReverseCurriculum:
                 raise ValueError(f"Curriculum score must be finite, got {score}")
             best_score = self.best_score(state_name)
             last_score = self.last_score(state_name)
-            self._atomic_write(self._last_score_path(state_name), repr(score).encode("utf-8"))
+            atomic_write(self._last_score_path(state_name), repr(score).encode("utf-8"))
 
             if best_score is None or score > best_score:
-                self._atomic_write(self._best_score_path(state_name), repr(score).encode("utf-8"))
+                atomic_write(self._best_score_path(state_name), repr(score).encode("utf-8"))
                 self._evidence_path(state_name).unlink(missing_ok=True)
                 return False
 
             evidence_added = 2 if last_score is not None and score < last_score else 1
             evidence = self.stagnation_evidence(state_name) + evidence_added
             if evidence < self.bad_checkpoint_evidence_target(state_name):
-                self._atomic_write(self._evidence_path(state_name), str(evidence).encode("utf-8"))
+                atomic_write(self._evidence_path(state_name), str(evidence).encode("utf-8"))
                 return False
 
             checkpoint.unlink(missing_ok=True)
@@ -187,7 +194,7 @@ class ReverseCurriculum:
 
     def _record_longest_attempt(self, state_name: str, episode_steps: int) -> None:
         longest = max(1, episode_steps, self._read_int(self._attempt_steps_path(state_name)))
-        self._atomic_write(self._attempt_steps_path(state_name), str(longest).encode("utf-8"))
+        atomic_write(self._attempt_steps_path(state_name), str(longest).encode("utf-8"))
 
     @staticmethod
     def _read_int(path: Path) -> int:
@@ -218,10 +225,3 @@ class ReverseCurriculum:
                 yield
             finally:
                 fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
-
-    @staticmethod
-    def _atomic_write(path: Path, content: bytes) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-        temporary.write_bytes(content)
-        temporary.replace(path)

@@ -1,3 +1,4 @@
+from datenwissenschaften.environment.curriculum_run import seed_path
 from datenwissenschaften.environment.demonstration import Demonstrations
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 
@@ -11,7 +12,7 @@ def knowledge(env: StateMachineGymWrapper, checkpoint: str, demonstrations: Demo
             {
                 "name": name,
                 "question": questions[name],
-                "seeded": env.curriculum.seed(name).is_file(),
+                "seeded": seed_path(env.curriculum.seeds_dir, name).is_file(),
                 "demonstrations": len(demonstrations[name]) if name in demonstrations else 0,
             }
             for name in questions

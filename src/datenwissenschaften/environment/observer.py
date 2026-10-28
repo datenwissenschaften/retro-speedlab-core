@@ -15,6 +15,7 @@ T = TypeVar("T", bound=RamInfo)
 Observation = dict[str, str]
 Advise = Callable[[str, np.ndarray], Advice]
 ADVISOR_FACT = "advised"
+MOVE_FACT = "move"
 
 
 class Observer(Generic[T]):
@@ -34,8 +35,9 @@ class Observer(Generic[T]):
 
     def facts(self, ram: T) -> Facts:
         state = self.state_machine
-        route = self.routes.facts(state.state_name, ram.position())
-        return {**ram.describe(), **state.current_state.describe(), **route}
+        told = state.current_state.describe()
+        route = {} if MOVE_FACT in told else self.routes.facts(state.state_name, ram.position())
+        return {**ram.describe(), **told, **route}
 
     def inputs(self, ram: T) -> np.ndarray:
         return encode(self.read_bytes(), self.facts(ram))

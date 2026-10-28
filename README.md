@@ -157,7 +157,9 @@ pass, and off it `"to_route": "16 left, 4 below"`, the way to the nearest known
 cell of the same area. The route is per state, so a phase that eats and a phase
 that climbs over the same ground keep different moves. It knows the ground, not
 the moment: enemies and food move, so the game's own facts about them decide when
-to leave the route. `metadata.routes` counts the known cells per state.
+to leave the route. `metadata.routes` counts the known cells per state. A state
+that knows the right move gives it as the `move` fact, and the route stays
+silent for that step, so Laya never reads two moves that disagree.
 
 A game that returns its life count from `RamInfo.remaining_lives()` ends the
 episode on the frame that count drops: the attempt fails, the route trail is
@@ -199,14 +201,19 @@ background thread to a temporary file that replaces the old one atomically.
 
 `ReverseCurriculum` masters the states of a level in order. When an attempt
 reaches a new state, the emulator state is saved as that state's checkpoint;
-eight wins master a state. Only Laya's attempts on the main emulator count as
-wins and failures; the practice emulators only add start points. A win only counts if it takes at most 25 % more
-steps than the median of that state's last 8 wins, so faster wins pull the
-limit down and mastery means fast and consistent, while one lucky fast win
-never blocks it. From then on attempts start from the checkpoint
-of the first unmastered state, so Laya practises the hard part instead of
-replaying the easy one. Mastery is never lost; a checkpoint that keeps failing
-is rebuilt from the nearest earlier mastered checkpoint.
+the first win masters a state. Only Laya's attempts on the main emulator count
+as wins and failures; the practice emulators only add start points. From then on
+attempts start from the checkpoint of the first unmastered state, so Laya
+practises the hard part instead of replaying the easy one. Mastery is never
+lost; a checkpoint that keeps failing is rebuilt from the nearest earlier
+mastered checkpoint.
+
+Once every state of a level is mastered, attempts play the whole level from its
+first state until it is beaten once. One lucky win per state does not make the
+level chainable, so `LevelDrill` records the state each failed level attempt
+ends in. Once 20 are recorded, attempts start at the state where most of them
+ended until it passes 3 of 10 tries; then whole-level attempts resume.
+`metadata.level_drills` shows the endings and the drill.
 
 There are no configured savestates: every attempt that does not start from a
 curriculum checkpoint boots the game at power-on, so the menu (one player) is

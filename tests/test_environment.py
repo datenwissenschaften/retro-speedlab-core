@@ -95,7 +95,7 @@ def test_reset_resumes_from_the_active_curriculum_checkpoint(tmp_path: Path):
 def test_a_new_checkpoint_remembers_the_score_that_reached_it(tmp_path: Path):
     run = curriculum_run(tmp_path, ("Survive", "Boss"), tmp_path / "seeds")
     run.begin_episode()
-    run.add_reward(3.0, False)
+    run.tally.add_reward(3.0, False)
 
     run.transition("Survive", "Boss", b"boss", 2.0)
 
@@ -288,7 +288,7 @@ def test_practice_emulators_save_start_points_but_never_count_wins(tmp_path: Pat
     run.begin_episode()
 
     outcome = run.transition("Survive", "Boss", b"boss", 1.0)
-    run.fail(-1.0)
+    run.fail(-1.0, "Boss")
 
     assert outcome == (False, False)
     assert run.curriculum.has_checkpoint("Boss")
