@@ -1,5 +1,6 @@
 import multiprocessing
 import random
+import threading
 from concurrent.futures import Executor, ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,19 +10,21 @@ import typer
 from loguru import logger
 
 from datenwissenschaften.environment.factory import make_environment
-from datenwissenschaften.environment.levels import level_map
 from datenwissenschaften.environment.wrapper import phases
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
-from datenwissenschaften.tas.movie import Segment, verified_segments
+from datenwissenschaften.tas.feed import SpeedrunFeed
+from datenwissenschaften.tas.journal import JOURNAL_FILE, JournalStore
+from datenwissenschaften.tas.live import LIVE_DIR
+from datenwissenschaften.tas.live_search import search_round
+from datenwissenschaften.tas.movie import Segment, frames, verified_segments
 from datenwissenschaften.tas.paths import PROGRESS_FILE, TAS_MOVIE, atomic_write, tas_dir
-from datenwissenschaften.tas.report import SECTION, report
+from datenwissenschaften.tas.report import course_of
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import UNBOUNDED, Crossing, fastest_distinct
-from datenwissenschaften.tas.stuck import STUCK_FILE, load_stuck, mark_stuck
+from datenwissenschaften.tas.stuck import STUCK_FILE, mark_stuck
 from datenwissenschaften.tas.video import render_video
 from datenwissenschaften.tas.workers import explore, polish
-from datenwissenschaften.ui.telemetry import publish_metadata
 from datenwissenschaften.workflow.wrapper import wrapper_class
 
 LOG_FILE = "search.log"
@@ -46,10 +49,6 @@ def finished(segments: list[Segment], until: str) -> bool:
     return bool(segments) and (segments[-1].won or segments[-1].state == until)
 
 
-def frames(segments: list[Segment]) -> int:
-    return sum(len(segment.pressed) for segment in segments)
-
-
 def segment_of(crossing: Crossing) -> Segment:
     return Segment(crossing.end.state, crossing.pressed.tolist(), crossing.end.emulator_state, crossing.won)
 
@@ -61,6 +60,7 @@ class Tas:
     settings: RetroSpeedlabConfig
     runner: SegmentRunner
     pool: Executor
+    feed: SpeedrunFeed
 
     @property
     def output(self) -> Path:
@@ -72,13 +72,17 @@ class Tas:
         return Start(segments[index - 1].state, segments[index - 1].emulator_state)
 
     def candidates(self, start: Start, bound: int, rounds: int) -> list[Crossing]:
-        workers = self.settings.speedrun.workers
         for round_index in range(rounds):
             seconds = self.settings.speedrun.segment_seconds * 2**round_index
             first = random.randrange(SEED_SPACE)
-            seeds = range(first, first + workers)
-            searches = [self.pool.submit(explore, *self._job(start, bound, seed, seconds)) for seed in seeds]
-            if found := fastest_distinct([crossing for search in searches for crossing in search.result()]):
+            self.feed.begin(search_round(start.state, round_index, rounds, seconds, self.runner.position_at(start)))
+            searches = [
+                self.pool.submit(explore, *self._job(start, bound, first + index, seconds), self.feed.watch(index))
+                for index in range(self.settings.speedrun.workers)
+            ]
+            found = fastest_distinct([crossing for search in searches for crossing in search.result()])
+            self.feed.end()
+            if found:
                 return found
         return []
 
@@ -88,7 +92,7 @@ class Tas:
             return None
         seconds = self.settings.speedrun.segment_seconds
         ahead = [
-            self.pool.submit(explore, *self._job(crossing.end, UNBOUNDED, seed, seconds))
+            self.pool.submit(explore, *self._job(crossing.end, UNBOUNDED, seed, seconds), None)
             for seed, crossing in enumerate(found)
         ]
         following = [min((after.frames for after in search.result()), default=UNBOUNDED) for search in ahead]
@@ -101,38 +105,35 @@ class Tas:
     def keep(self, segments: list[Segment], searching: str) -> list[Segment]:
         save_progress(self.output / PROGRESS_FILE, segments)
         (self.output / STUCK_FILE).unlink(missing_ok=True)
-        return self.report(segments, searching)
-
-    def report(self, segments: list[Segment], searching: str) -> list[Segment]:
-        levels = level_map(self.runner.wrapper.levels, self.runner.wrapper.state_classes)
-        frame_rate = self.runner.emulator.em.get_screen_rate()
-        records, stuck = self.settings.speedrun.records, load_stuck(self.output / STUCK_FILE)
-        speedrun = report(segments, levels, self.runner.order[0], frame_rate, records, searching, stuck)
-        publish_metadata(SECTION, speedrun)
+        self.feed.show(segments, searching)
         return segments
 
     def verified(self, segments: list[Segment], shown: int) -> list[Segment]:
-        verified = verified_segments(self.runner, segments, self.output / TAS_MOVIE, shown)
-        if verified == len(segments):
+        replay = verified_segments(self.runner, segments, self.output / TAS_MOVIE, shown)
+        self.feed.follow(replay.route)
+        if replay.verified == len(segments):
             return segments
-        logger.warning(f"Only {verified} of {len(segments)} segments replay from power-on; searching again from there")
-        return segments[:verified]
+        logger.warning(f"Only {replay.verified} of {len(segments)} segments replay from power-on; searching again")
+        return segments[: replay.verified]
 
     def extend(self, segments: list[Segment], until: str) -> list[Segment]:
         while not finished(segments := self.verified(segments, len(segments) - 1), until):
             start = self.start(segments, len(segments))
-            self.report(segments, start.state)
+            self.feed.show(segments, start.state)
             crossing = self.best(start, UNBOUNDED, SEARCH_ROUNDS)
             if crossing is None:
                 searches = mark_stuck(self.output / STUCK_FILE, start.state).searches
+                self.feed.event("stuck", start.state, None)
                 logger.warning(
                     f"No way out of {start.state} after {searches} searches; searching the way into it again"
                 )
                 segments = segments[:-1]
                 continue
+            self.feed.event("found", crossing.end.state, crossing.frames)
             segments = self.keep([*segments, segment_of(crossing)], crossing.end.state)
             logger.info(f"{start.state} -> {crossing.end.state} in {crossing.frames} frames; run at {frames(segments)}")
-        return self.report(segments, segments[-1].state)
+        self.feed.show(segments, segments[-1].state)
+        return segments
 
     def improve(self, segments: list[Segment]) -> list[Segment]:
         if not segments:
@@ -144,6 +145,7 @@ class Tas:
             if crossing is not None and crossing.frames < len(segments[index].pressed):
                 saved = len(segments[index].pressed) - crossing.frames
                 logger.info(f"Segment {index} into {crossing.end.state} is {saved} frames faster; the rest is rebuilt")
+                self.feed.event("improved", crossing.end.state, crossing.frames)
                 segments = self.extend(self.keep([*segments[:index], segment_of(crossing)], start.state), until)
             index += 1
         return segments
@@ -169,7 +171,12 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
     tas_dir(settings).mkdir(parents=True, exist_ok=True)
     logger.add(tas_dir(settings) / LOG_FILE)
     runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, MAIN_WORKER))
-    return Tas(wrapper, config, settings, runner, pool)
+    output = tas_dir(settings)
+    course = course_of(runner, settings.speedrun.game)
+    journal = JournalStore(output / JOURNAL_FILE)
+    feed = SpeedrunFeed(course, journal, output / LIVE_DIR, output / STUCK_FILE, settings.paths.lab_run_marker)
+    threading.Thread(target=feed.publish_every, args=(threading.Event(),), name="speedrun-feed", daemon=True).start()
+    return Tas(wrapper, config, settings, runner, pool, feed)
 
 
 def speedrun_forever(wrapper: str, config: Path) -> None:
@@ -208,7 +215,7 @@ def verify(wrapper: str, config: Path, progress: Path) -> None:
     setup_logging(settings.log_level)
     segments = load_progress(progress)
     runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, MAIN_WORKER))
-    verified = verified_segments(runner, segments, tas_dir(settings) / f"verify-{TAS_MOVIE}", len(segments))
+    verified = verified_segments(runner, segments, tas_dir(settings) / f"verify-{TAS_MOVIE}", len(segments)).verified
     if verified < len(segments):
         raise RuntimeError(f"Only {verified} of {len(segments)} segments of {progress} replay with {wrapper}")
     logger.info(f"All {len(segments)} segments of {progress} replay with {wrapper}")

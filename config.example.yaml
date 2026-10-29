@@ -27,5 +27,12 @@ twitch:
 speedrun:
   workers: 4
   segment_seconds: 120
-  records:
-    "World record": 600.0
+  id: airstriker-genesis-v0
+  title: Airstriker
+  platform: Genesis
+  category: Any%
+  speedrun_com:
+    game: speedrun-com-game-id
+    category: speedrun-com-category-id
+    variables: {}
+  tasvideos: 1

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from datenwissenschaften.lab import run as lab_run
 from datenwissenschaften.lab.activity import Action, log_events, recent_actions, shown_file
-from datenwissenschaften.lab.branch import branch_changes, shown_subject
+from datenwissenschaften.lab.branch import CodeHunk, branch_changes, first_hunk, newest_hunk, shown_subject
 
 
 def write_marker(marker: Path, until: float, agents: dict[str, dict[str, str]], base: str, phase: str) -> None:
@@ -44,7 +44,7 @@ def test_a_live_lab_run_is_published_with_its_phase_and_agents(tmp_path: Path, m
     lab_run.publish_lab_run(marker)
 
     assert published[0]["phase"] == "working"
-    assert published[0]["agents"] == {"claude": {"actions": [], "changes": None}}
+    assert published[0]["agents"] == {"claude": {"actions": [], "changes": None, "code": None}}
 
 
 def test_an_expired_marker_counts_as_no_lab_run(tmp_path: Path, monkeypatch):
@@ -139,3 +139,36 @@ def test_branch_changes_count_commits_and_lines_since_the_base(tmp_path: Path):
         1,
     )
     assert branch_changes(tmp_path / "removed", base) is None
+
+
+def test_the_newest_lab_commit_shows_its_first_python_hunk(tmp_path: Path):
+    git(tmp_path, "init", "--quiet")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "play.py").write_text("reward = 0.0\nkept = 1\n", encoding="utf-8")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "--quiet", "-m", "start")
+    base = git(tmp_path, "rev-parse", "HEAD")
+
+    assert newest_hunk(tmp_path, base) is None
+
+    (tmp_path / "notes.md").write_text("why\n", encoding="utf-8")
+    (tmp_path / "src" / "play.py").write_text("reward = 0.02\nkept = 1\n", encoding="utf-8")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "--quiet", "-m", "Scale2 pays ghp_a1B2c3D4e5F6g7H8i9J0k1 for the ledge")
+
+    assert newest_hunk(tmp_path, base) == CodeHunk(
+        "src/play.py", ["-reward = 0.0", "+reward = 0.02"], "Scale2 pays [hidden] for the ledge"
+    )
+    assert newest_hunk(tmp_path / "removed", base) is None
+    assert newest_hunk(tmp_path, "unknown-base") is None
+
+
+def test_a_hunk_stops_at_twelve_lines_or_the_next_hunk_and_skips_unsafe_files(tmp_path: Path):
+    many = ["diff --git a/src/a.py b/src/a.py", "--- a/src/a.py", "+++ b/src/a.py", "@@ -1 +1 @@"]
+    many += [f"+line {index}" for index in range(20)]
+    two = ["diff --git a/x b/x", "+++ b/config.py", "+secret", "diff --git a/src/b.py b/src/b.py"]
+    two += ["+++ b/src/b.py", "@@ -1 +1 @@", "+one", "@@ -5 +5 @@", "+two", "diff --git a/src/c.py b/src/c.py"]
+
+    assert first_hunk(many, tmp_path) == ("src/a.py", [f"+line {index}" for index in range(12)])
+    assert first_hunk(two, tmp_path) == ("src/b.py", ["+one"])
+    assert first_hunk(["+++ b/config.py", "+secret"], tmp_path) is None

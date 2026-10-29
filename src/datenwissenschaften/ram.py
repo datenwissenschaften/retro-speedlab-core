@@ -31,6 +31,9 @@ class RamInfo:
                 values[name] = [int(raw_ram[address + offset]) for offset in range(length)]
         return cls(**values)
 
+    def describe(self) -> dict[str, int]:
+        return {}
+
     def position(self) -> Position | None:
         return None
 

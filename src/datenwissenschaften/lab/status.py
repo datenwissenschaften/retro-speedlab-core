@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from datenwissenschaften.lab.activity import Action, log_events, recent_actions
-from datenwissenschaften.lab.branch import BranchChanges, branch_changes
+from datenwissenschaften.lab.branch import BranchChanges, CodeHunk, branch_changes, newest_hunk
 from datenwissenschaften.lab.marker import DuelResult, LabMarker
 from datenwissenschaften.lab.team import Member, team_status
 
@@ -15,6 +15,7 @@ TEAM_AGENT = "claude"
 class AgentStatus:
     actions: list[Action]
     changes: BranchChanges | None
+    code: CodeHunk | None
 
 
 @dataclass(slots=True, frozen=True)
@@ -32,7 +33,7 @@ def agent_status(agent: str, lab: LabMarker) -> AgentStatus:
     branch = lab.agents[agent]
     worktree = Path(branch.worktree)
     actions = recent_actions(agent, log_events(Path(branch.log)), worktree)
-    return AgentStatus(actions, branch_changes(worktree, lab.base))
+    return AgentStatus(actions, branch_changes(worktree, lab.base), newest_hunk(worktree, lab.base))
 
 
 def lab_team(lab: LabMarker) -> tuple[list[Member], list[dict[str, str]]]:

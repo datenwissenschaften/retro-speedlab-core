@@ -17,6 +17,9 @@ class FakeRam(RamInfo):
     lives: int = ram(0)
     score: int = ram(1)
 
+    def describe(self) -> dict[str, int]:
+        return {"lives": self.lives, "score": self.score}
+
 
 class Survive(State[FakeRam]):
     goal = "Survive"
@@ -47,9 +50,13 @@ class FakeEmulator:
         self.movie_id = 0
         self.gamename = "FakeGame-v0"
         self.statename = "Level1.state"
+        self.buttons = ["A", "START"]
         self.movie = SimpleNamespace(set_state=lambda state: None)
         self.em = SimpleNamespace(
-            get_state=lambda: b"emulator", set_state=lambda state: None, get_screen_rate=lambda: FRAME_RATE
+            get_state=lambda: b"emulator",
+            set_state=lambda state: None,
+            get_screen_rate=lambda: FRAME_RATE,
+            get_screen=lambda: np.zeros((4, 4, 3), np.uint8),
         )
         self.data = SimpleNamespace(reset=lambda: None, update_ram=lambda: None)
         self.script = script
@@ -107,7 +114,15 @@ def write_config(tmp_path: Path) -> Path:
                 "ui: {enable: false, release: local}",
                 "twitch: {enabled: true}",
                 "agent: {stall_minutes: 30}",
-                "speedrun: {workers: 1, segment_seconds: 0.05, records: {Fake TAS: 60.0}}",
+                "speedrun:",
+                "  workers: 1",
+                "  segment_seconds: 0.05",
+                "  id: fakegame-v0",
+                "  title: Fake Game",
+                "  platform: NES",
+                "  category: Any%",
+                "  speedrun_com: {game: fake, category: any, variables: {level: one}}",
+                "  tasvideos: 7",
                 "log_level: INFO",
             ]
         ),

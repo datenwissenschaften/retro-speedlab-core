@@ -3,6 +3,8 @@ from pathlib import Path
 
 from datenwissenschaften.lab.run import publish_lab_run
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
+from datenwissenschaften.tas.live import ATTEMPT_FILE, LIVE_DIR
+from datenwissenschaften.tas.paths import tas_dir
 from datenwissenschaften.tas.run import speedrun_forever
 from datenwissenschaften.ui.relay import LiveRelay
 from datenwissenschaften.workflow.environment import speedlab
@@ -15,7 +17,8 @@ def start_relay(settings: RetroSpeedlabConfig) -> None:
         return
     if settings.upload.api_key is None:
         raise RuntimeError("ui.enable relays the stream to the backend and needs upload.api_key.")
-    LiveRelay(settings.upload.url, settings.upload.api_key, settings.ui).start()
+    attempt = tas_dir(settings) / LIVE_DIR / ATTEMPT_FILE
+    LiveRelay(settings.upload.url, settings.upload.api_key, settings.ui, attempt).start()
 
 
 def watch_lab(marker: Path, stopped: threading.Event) -> None:
