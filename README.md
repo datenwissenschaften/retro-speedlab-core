@@ -92,14 +92,19 @@ without the file is searched without guidance.
 
 [Flyte](https://flyte.org) runs the work as tasks (`datenwissenschaften.workflow`):
 `speedrun` relays the stream, publishes the lab's status and searches and
-improves the movie forever. `lab` starts a lab run (`agent/daily.sh` of the game
-package) at once when the search is stuck, or once the movie has not improved
-for `agent.stall_minutes` minutes. Claude Code works on its own git worktree of
-the game package, and its branch ships only when its tests pass and the current
-movie still replays with it (`tas.run verify`). While it works, the stream shows
-its latest actions (only the kind of action and the source files it touches),
-its commit subjects with URLs and secret-like words hidden, and the lines it
-changed. Every task runs locally with `flyte run --local`.
+improves the movie forever. `lab` first starts the critic (`agent/critic.sh`)
+once five new reports landed in `agent/reports/` since its last review; the
+stream shows its lessons as `metadata.critic`. Then it starts a lab run
+(`agent/daily.sh` of the game package) at once when the search is stuck, or once
+the movie has not improved for `agent.stall_minutes` minutes. Claude Code works
+for `agent.minutes` minutes on its own git worktree of the game package, and its
+branch ships only when its checks pass and the current movie still replays with
+it (`tas.run verify`). The lead session delegates to the subagents defined in the
+game package's `.claude/agents/`; the stream shows each member's role, state and
+latest step and every hand-off with its short task, the lead's latest actions
+(only the kind of action and the source files it touches), its commit subjects
+with URLs and secret-like words hidden, and the lines it changed. Every task
+runs locally with `flyte run --local`.
 
 ## Live relay
 

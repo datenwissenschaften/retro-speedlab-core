@@ -1,3 +1,4 @@
+import json
 import os
 import time
 from pathlib import Path
@@ -74,3 +75,28 @@ def test_the_lab_runs_the_projects_daily_agent_only_when_due(tmp_path: Path, mon
     lab(config, str(tmp_path))
 
     assert commands == [[tmp_path / "agent" / "daily.sh"]]
+
+
+def reports(project: Path, *stamps: str) -> None:
+    root = project / "agent" / "reports"
+    root.mkdir(parents=True, exist_ok=True)
+    for stamp in stamps:
+        (root / f"{stamp}.md").write_text("report", encoding="utf-8")
+
+
+def test_the_critic_reviews_every_five_new_reports_when_no_lab_run_is_due(tmp_path: Path, monkeypatch):
+    commands = []
+    monkeypatch.setattr(lab_module.subprocess, "run", lambda command, check: commands.append(command))
+    config = str(write_config(tmp_path))
+    progress(tmp_path, 60)
+    reports(tmp_path, "2026-10-29T1300", "2026-10-29T1330", "2026-10-29T1400", "2026-10-29T1430")
+
+    lab(config, str(tmp_path))
+    reports(tmp_path, "2026-10-29T1500")
+    lab(config, str(tmp_path))
+    critic = {"at": "2026-10-29T15:20:00+00:00", "runs": 5, "lessons": []}
+    (tmp_path / ".lab-critic.json").write_text(json.dumps(critic), encoding="utf-8")
+    reports(tmp_path, "2026-10-29T1530", "2026-10-29T1600", "2026-10-29T1630", "2026-10-29T1700")
+    lab(config, str(tmp_path))
+
+    assert commands == [[tmp_path / "agent" / "critic.sh"]]
