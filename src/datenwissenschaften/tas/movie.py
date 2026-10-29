@@ -54,6 +54,7 @@ def recording(runner: SegmentRunner, movie: Path) -> Iterator[None]:
     movie.parent.mkdir(parents=True, exist_ok=True)
     emulator.auto_record(str(movie.parent))
     runner.power_on()
+    emulator.movie.set_state(runner.snapshot())
     recorded = Path(active_movie_path(emulator))
     yield
     emulator.stop_record()

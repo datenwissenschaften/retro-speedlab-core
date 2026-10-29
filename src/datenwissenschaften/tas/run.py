@@ -86,7 +86,8 @@ class Tas:
         for round_index in range(rounds):
             seconds = self.settings.speedrun.segment_seconds * 2**round_index
             first = random.randrange(SEED_SPACE)
-            self.feed.begin(search_round(start.state, round_index, rounds, seconds))
+            beat = None if bound == UNBOUNDED else bound
+            self.feed.begin(search_round(start.state, round_index, rounds, seconds, beat))
             searches = [
                 self.pool.submit(explore, *self._job(start, bound, first + index, seconds), self.feed.live)
                 for index in range(self.settings.speedrun.workers)

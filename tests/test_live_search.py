@@ -83,13 +83,14 @@ def test_two_workers_share_one_row_of_the_mosaic(tmp_path: Path):
 
 
 def test_the_live_search_adds_up_its_workers():
-    search = SearchRound("Scale2", 0, 2, STARTED, 120.0)
+    search = SearchRound("Scale2", 0, 2, STARTED, 120.0, 393)
     reports = [WorkerReport(5, 10, 600, 393), WorkerReport(4, 10, 600, None)]
 
     assert search_field(search, reports, STARTED + timedelta(seconds=2)) == {
         "state": "Scale2",
         "round": 1,
         "rounds": 2,
+        "beat": 393,
         "started_at": "2026-10-29T14:07:10+00:00",
         "ends_at": "2026-10-29T14:09:10+00:00",
         "workers": [
@@ -101,7 +102,7 @@ def test_the_live_search_adds_up_its_workers():
         "frames_per_second": 600.0,
         "best_frames": 393,
     }
-    assert search_field(SearchRound("Menu", 1, 2, STARTED, 240.0), [], STARTED)["frames_per_second"] == 0.0
+    assert search_field(SearchRound("Menu", 1, 2, STARTED, 240.0, None), [], STARTED)["frames_per_second"] == 0.0
     assert search_field(None, reports, STARTED) is None
 
 
@@ -181,7 +182,7 @@ def test_the_feed_publishes_the_movie_with_the_live_search_and_notices_a_lab_run
     segments = [Segment("Play", [[0, 1]] * 60, b"", False), Segment("Level2", [[0, 0]] * 60, b"", False)]
 
     feed.show(segments, "Level2")
-    feed.begin(SearchRound("Level2", 0, 2, STARTED, 120.0))
+    feed.begin(SearchRound("Level2", 0, 2, STARTED, 120.0, None))
     searching = published[-1]
     marker.write_text("{}", encoding="utf-8")
     feed.publish_every(SimpleNamespace(wait=lambda seconds: len(published) > 2))

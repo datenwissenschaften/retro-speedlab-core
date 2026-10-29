@@ -12,10 +12,11 @@ class SearchRound:
     rounds: int
     started_at: datetime
     seconds: float
+    beat: int | None
 
 
-def search_round(state: str, index: int, rounds: int, seconds: float) -> SearchRound:
-    return SearchRound(state, index, rounds, datetime.now(UTC), seconds)
+def search_round(state: str, index: int, rounds: int, seconds: float, beat: int | None) -> SearchRound:
+    return SearchRound(state, index, rounds, datetime.now(UTC), seconds, beat)
 
 
 def search_field(search: SearchRound | None, reports: list[WorkerReport], now: datetime) -> dict[str, Any] | None:
@@ -28,6 +29,7 @@ def search_field(search: SearchRound | None, reports: list[WorkerReport], now: d
         "state": search.state,
         "round": search.round + 1,
         "rounds": search.rounds,
+        "beat": search.beat,
         "started_at": search.started_at.isoformat(timespec="seconds"),
         "ends_at": (search.started_at + timedelta(seconds=search.seconds)).isoformat(timespec="seconds"),
         "workers": [
