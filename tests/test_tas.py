@@ -27,15 +27,17 @@ class LineRunner:
     def restore(self, start: Start) -> None:
         self.x = int.from_bytes(start.emulator_state, "big", signed=True)
 
-    def press(self, buttons: np.ndarray) -> tuple[bool, bool]:
+    def press(self, buttons: np.ndarray) -> tuple[bool, bool, float]:
         self.x += MOVES[int(buttons[0])]
-        return self.x > PIT_X, False
+        return self.x > PIT_X, False, float(MOVES[int(buttons[0])])
 
     def decide(self, action: int) -> Outcome:
         pressed = np.full((2, 1), action, dtype=np.int8)
+        reward = 0.0
         for buttons in pressed:
-            alive, _ = self.press(buttons)
-        return Outcome(pressed, self.state_name, alive, False)
+            alive, _, frame_reward = self.press(buttons)
+            reward += frame_reward
+        return Outcome(pressed, self.state_name, alive, False, reward)
 
     def forward(self, origin: str, reached: str) -> bool:
         return ORDER.index(reached) > ORDER.index(origin)
@@ -74,7 +76,7 @@ def test_shaving_drops_every_frame_the_crossing_does_not_need():
 
 
 def test_cells_near_the_remembered_route_exit_are_picked_more_often():
-    near, unknown = Cell(START, None, 0, 0, 0), Cell(START, None, 0, 0, None)
+    near, unknown = Cell(START, None, 0, 0, 0, 0.0), Cell(START, None, 0, 0, None, 0.0)
 
     assert near.weight > 10 * unknown.weight
 

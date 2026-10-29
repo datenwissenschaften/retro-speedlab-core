@@ -14,6 +14,8 @@ MAX_CELLS = 8000
 BEAM = 3
 ROUTE_GAIN = 50.0
 SHAVE_WINDOWS = (8, 4, 2, 1)
+EXPLOIT = 0.5
+LEADING_SHARE = 10
 UNBOUNDED = sys.maxsize
 
 
@@ -37,6 +39,7 @@ class Cell:
     frames: int
     visits: int
     remaining: int | None
+    score: float
 
     @property
     def weight(self) -> float:
@@ -64,6 +67,8 @@ def fastest_distinct(crossings: list[Crossing]) -> list[Crossing]:
 
 
 def choose(cells: list[Cell], rng: random.Random) -> Cell:
+    if rng.random() < EXPLOIT:
+        cells = sorted(cells, key=lambda cell: cell.score)[-max(1, len(cells) // LEADING_SHARE) :]
     cell = rng.choices(cells, weights=[cell.weight for cell in cells])[0]
     cell.visits += 1
     return cell
@@ -77,17 +82,17 @@ def search_segment(runner: SegmentRunner, start: Start, bound: int, seed: int, s
     rng, deadline = random.Random(seed), time.monotonic() + seconds
     actions = len(runner.wrapper.action_table)
     runner.restore(start)
-    archive = {runner.key(0): Cell(start, None, 0, 0, runner.remaining())}
+    archive = {runner.key(0): Cell(start, None, 0, 0, runner.remaining(), 0.0)}
     crossings: list[Crossing] = []
     while time.monotonic() < deadline:
         cell = choose(list(archive.values()), rng)
         runner.restore(cell.start)
-        trail, frames, action = cell.trail, cell.frames, rng.randrange(actions)
+        trail, frames, score, action = cell.trail, cell.frames, cell.score, rng.randrange(actions)
         for _ in range(EXPLORE_DECISIONS):
             if rng.random() > KEEP_ACTION:
                 action = rng.randrange(actions)
             outcome = runner.decide(action)
-            trail, frames = Trail(trail, outcome.pressed), frames + len(outcome.pressed)
+            trail, frames, score = Trail(trail, outcome.pressed), frames + len(outcome.pressed), score + outcome.reward
             if frames >= (bound if len(crossings) < BEAM else crossings[-1].frames):
                 break
             if leaves(runner, start, outcome.state, outcome.won):
@@ -99,8 +104,9 @@ def search_segment(runner: SegmentRunner, start: Start, bound: int, seed: int, s
             key = runner.key(frames)
             if key in archive and archive[key].frames <= frames:
                 continue
-            if key in archive or len(archive) < MAX_CELLS:
-                archive[key] = Cell(Start(outcome.state, runner.snapshot()), trail, frames, 0, runner.remaining())
+            if key not in archive and len(archive) >= MAX_CELLS:
+                del archive[min(archive, key=lambda kept: (archive[kept].score, -archive[kept].visits))]
+            archive[key] = Cell(Start(outcome.state, runner.snapshot()), trail, frames, 0, runner.remaining(), score)
     return crossings
 
 
@@ -108,7 +114,7 @@ def replay(runner: SegmentRunner, start: Start, pressed: np.ndarray) -> Crossing
     runner.restore(start)
     machine = runner.wrapper.state_machine
     for frame, buttons in enumerate(pressed, 1):
-        alive, won = runner.press(buttons)
+        alive, won, _ = runner.press(buttons)
         if leaves(runner, start, machine.state_name, won):
             return Crossing(Start(machine.state_name, runner.snapshot()), pressed[:frame], won, runner.key(0))
         if not alive or machine.state_name != start.state:

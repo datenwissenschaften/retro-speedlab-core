@@ -24,6 +24,7 @@ class Outcome:
     state: str
     alive: bool
     won: bool
+    reward: float
 
 
 class SegmentRunner:
@@ -47,28 +48,29 @@ class SegmentRunner:
         state_type = None if start.state == self.order[0] else state_class(self.classes, start.state)
         self.wrapper.state_machine.reset(self.ram, NO_FRAME, state_type)
 
-    def press(self, buttons: np.ndarray) -> tuple[bool, bool]:
+    def press(self, buttons: np.ndarray) -> tuple[bool, bool, float]:
         for player, mask in enumerate(self.emulator.action_to_array(buttons)):
             self.emulator.em.set_button_mask(mask, player)
         self.emulator.em.step()
         self.emulator.data.update_ram()
         ram = self.wrapper.read_ram()
         machine = self.wrapper.state_machine
-        _, terminated, truncated = machine.step(ram, NO_FRAME)
+        reward, terminated, truncated = machine.step(ram, NO_FRAME)
         won = machine.current_state._won()
         alive = won or not (terminated or truncated or lost_life(self.ram, ram))
         self.ram = ram
-        return alive, won
+        return alive, won, reward
 
     def decide(self, action: int) -> Outcome:
         machine = self.wrapper.state_machine
-        pressed, alive, won = [], True, False
+        pressed, alive, won, reward = [], True, False, 0.0
         for buttons in self.wrapper.current_action_table()[action]:
             pressed.append(buttons)
-            alive, won = self.press(buttons)
+            alive, won, frame_reward = self.press(buttons)
+            reward += frame_reward
             if won or not alive or machine.last_transition is not None:
                 break
-        return Outcome(np.asarray(pressed, dtype=np.int8), machine.state_name, alive, won)
+        return Outcome(np.asarray(pressed, dtype=np.int8), machine.state_name, alive, won, reward)
 
     def forward(self, origin: str, reached: str) -> bool:
         return self.order.index(reached) > self.order.index(origin)

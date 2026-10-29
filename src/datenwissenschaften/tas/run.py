@@ -66,7 +66,8 @@ class Tas:
     def candidates(self, start: Start, bound: int, rounds: int) -> list[Crossing]:
         for round_index in range(rounds):
             seeds = range(round_index * self.workers, (round_index + 1) * self.workers)
-            searches = [self.pool.submit(explore, *self._job(start, bound, seed)) for seed in seeds]
+            seconds = self.seconds * 2**round_index
+            searches = [self.pool.submit(explore, *self._job(start, bound, seed, seconds)) for seed in seeds]
             if found := fastest_distinct([crossing for search in searches for crossing in search.result()]):
                 return found
         return []
@@ -76,7 +77,7 @@ class Tas:
         if not found:
             return None
         ahead = [
-            self.pool.submit(explore, *self._job(crossing.end, UNBOUNDED, index))
+            self.pool.submit(explore, *self._job(crossing.end, UNBOUNDED, index, self.seconds))
             for index, crossing in enumerate(found)
         ]
         totals = [
@@ -121,8 +122,8 @@ class Tas:
             index += 1
         return segments
 
-    def _job(self, start: Start, bound: int, seed: int) -> tuple[str, Path, Start, int, int, float]:
-        return self.wrapper, self.config, start, bound, seed, self.seconds
+    def _job(self, start: Start, bound: int, seed: int, seconds: float) -> tuple[str, Path, Start, int, int, float]:
+        return self.wrapper, self.config, start, bound, seed, seconds
 
 
 def publish(config: Path, output: Path, segments: list[Segment]) -> None:

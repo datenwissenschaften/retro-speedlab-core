@@ -282,7 +282,8 @@ python -m datenwissenschaften.tas.run improve <wrapper> <config> <workers> <segm
 The run is split at the state machine's transitions. Each segment is searched
 Go-Explore style on `<workers>` emulator processes: an archive keeps the fastest
 savestate per cell (state, 8 px position, height, airborne and
-`RamInfo.dynamics()`, the game's coarse view of whatever moves nearby) and
+`RamInfo.dynamics()`, the game's coarse view of what the player has collected
+and whatever moves nearby) and
 branches from rarely visited cells with short random input bursts, favouring
 cells the route memory knows to be few decisions from the exit. Workers step
 the emulator core without rendering. A crossing into a later state ends a
