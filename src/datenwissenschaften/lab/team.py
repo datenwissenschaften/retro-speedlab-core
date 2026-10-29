@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from datenwissenschaften.lab.activity import WORKING, claude_action
+from datenwissenschaften.lab.activity import THINKING, WORKING, claude_action
 from datenwissenschaften.lab.branch import shown_subject
 from datenwissenschaften.lab.roles import SAFE_NAME, agent_roles
 
@@ -39,11 +39,9 @@ def shown_task(description: str) -> str:
     return " ".join(shown_subject(description).split()[:TASK_WORDS])
 
 
-def step(block: dict[str, Any], worktree: Path) -> str | None:
-    action = claude_action(block, worktree)
-    if action is None:
-        return None
-    site = shown_site(block["input"]["url"]) if block["type"] == "tool_use" and "url" in block["input"] else None
+def step(tool_use: dict[str, Any], worktree: Path) -> str:
+    action = claude_action(tool_use, worktree)
+    site = shown_site(tool_use["input"]["url"]) if "url" in tool_use["input"] else None
     target = action.file if action.file is not None else site
     return action.kind.capitalize() if target is None else f"{action.kind.capitalize()} {target}"
 
@@ -55,7 +53,6 @@ class Team:
         self.members = {LEAD: Member(LEAD, LEAD_ROLE, WORKING, None, None)}
         self.calls: dict[str, str] = {}
         self.running: dict[str, str] = {}
-        self.foreground: set[str] = set()
         self.handoffs: list[dict[str, str]] = []
         self.now: str | None = None
 
@@ -66,11 +63,6 @@ class Team:
             self.members[LEAD].state = DONE
         if event["type"] == "system" and event["subtype"] == "task_notification":
             self.finish(event["tool_use_id"])
-        if event["type"] == "user" and isinstance(event["message"]["content"], list):
-            results = [block for block in event["message"]["content"] if block["type"] == "tool_result"]
-            for block in results:
-                if block["tool_use_id"] in self.foreground:
-                    self.finish(block["tool_use_id"])
         if event["type"] == "assistant":
             self.act(self.owner(event), event["message"]["content"])
 
@@ -81,11 +73,14 @@ class Team:
     def act(self, name: str, blocks: list[dict[str, Any]]) -> None:
         member = self.members[name]
         member.state, member.since = WORKING, self.now
-        for block in blocks:
-            if block["type"] == "tool_use" and block["name"] in DELEGATING_TOOLS:
-                self.delegate(member, block["id"], block["input"])
+        tool_uses = [block for block in blocks if block["type"] == "tool_use"]
+        for tool_use in tool_uses:
+            if tool_use["name"] in DELEGATING_TOOLS:
+                self.delegate(member, tool_use["id"], tool_use["input"])
                 continue
-            member.step = step(block, self.worktree) or member.step
+            member.step = step(tool_use, self.worktree)
+        if member.step is None:
+            member.step = THINKING.capitalize()
 
     def delegate(self, sender: Member, call: str, arguments: dict[str, Any]) -> None:
         name = arguments["subagent_type"]
@@ -93,8 +88,6 @@ class Team:
             return
         sender.step = f"Delegating to {name}"
         self.calls[call] = self.running[call] = name
-        if "run_in_background" not in arguments or not arguments["run_in_background"]:
-            self.foreground.add(call)
         role = self.roles[name] if name in self.roles else None
         self.members[name] = Member(name, role, WORKING, None, self.now)
         handoff = {"at": self.now, "from": sender.name, "to": name, "task": shown_task(arguments["description"])}
