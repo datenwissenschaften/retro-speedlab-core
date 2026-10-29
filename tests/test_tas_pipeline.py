@@ -162,7 +162,7 @@ def test_a_segment_without_a_way_out_is_marked_stuck_and_the_way_into_it_searche
     segments = tas.extend([], "Boss")
 
     assert run.frames(segments) == BOSS_FRAMES
-    assert [marked and (marked.state, marked.searches) for marked in stuck] == [None, ("Survive", 1)]
+    assert [marked and (marked.state, marked.searches) for marked in stuck] == [None, ("Survive", 1), None]
     assert load_stuck(tas.output / STUCK_FILE) is None
     assert [(event.kind, event.state) for event in tas.feed.journal.journal.events] == [
         ("stuck", "Survive"),
@@ -180,3 +180,15 @@ def test_workers_search_and_shave_from_a_savestate(tmp_path: Path, monkeypatch):
 
     assert workers.explore("fakes:FakeWrapper", tmp_path, start, 100, 1, SECONDS, None)[0].frames == BOSS_FRAMES
     assert workers.polish("fakes:FakeWrapper", tmp_path, start, crossing, SECONDS) == shave(runner, start, crossing, 0)
+
+
+def test_every_new_piece_is_followed_by_one_try_to_shorten_an_earlier_one(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    shortened: list[int] = []
+    monkeypatch.setattr(run.Tas, "shorten", lambda self, segments, index: shortened.append(index) or segments)
+
+    tas.extend([], "Boss")
+
+    assert shortened == [0]
+    assert tas.turn == 1

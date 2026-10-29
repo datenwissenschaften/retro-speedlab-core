@@ -70,6 +70,7 @@ class Tas:
     feed: SpeedrunFeed
     movie: Screen
     compare: Screen
+    turn: int
 
     @property
     def output(self) -> Path:
@@ -143,6 +144,8 @@ class Tas:
             self.feed.event("found", crossing.end.state, crossing.frames)
             segments = self.keep([*segments, segment_of(crossing)], crossing.end.state)
             logger.info(f"{start.state} -> {crossing.end.state} in {crossing.frames} frames; run at {frames(segments)}")
+            segments = self.shorten(segments, self.turn % len(segments))
+            self.turn += 1
         self.feed.show(segments, segments[-1].state)
         return segments
 
@@ -151,16 +154,21 @@ class Tas:
             raise RuntimeError(f"{self.output / PROGRESS_FILE} holds no movie to improve; search one first")
         until, index = segments[-1].state, 0
         while index < len(segments):
-            start = self.start(segments, index)
-            crossing = self.best(start, len(segments[index].pressed), IMPROVE_ROUNDS)
-            if crossing is not None and crossing.frames < len(segments[index].pressed):
-                saved = len(segments[index].pressed) - crossing.frames
-                logger.info(f"Segment {index} into {crossing.end.state} is {saved} frames faster; the rest is rebuilt")
-                self.feed.event("improved", crossing.end.state, crossing.frames)
-                self.compare.queue(compare_cut(self.runner, self.output, start, segments[index], crossing))
-                segments = self.extend(self.keep([*segments[:index], segment_of(crossing)], start.state), until)
+            if (shorter := self.shorten(segments, index)) is not segments:
+                segments = self.extend(shorter, until)
             index += 1
         return segments
+
+    def shorten(self, segments: list[Segment], index: int) -> list[Segment]:
+        start = self.start(segments, index)
+        crossing = self.best(start, len(segments[index].pressed), IMPROVE_ROUNDS)
+        if crossing is None or crossing.frames >= len(segments[index].pressed):
+            return segments
+        saved = len(segments[index].pressed) - crossing.frames
+        logger.info(f"Segment {index} into {crossing.end.state} is {saved} frames faster; the rest is rebuilt")
+        self.feed.event("improved", crossing.end.state, crossing.frames)
+        self.compare.queue(compare_cut(self.runner, self.output, start, segments[index], crossing))
+        return self.keep([*segments[:index], segment_of(crossing)], start.state)
 
     def _job(self, start: Start, bound: int, seed: int, seconds: float) -> tuple[str, Path, Start, int, int, float]:
         return self.wrapper, self.config, start, bound, seed, seconds
@@ -199,7 +207,7 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
     feed = SpeedrunFeed(course, journal, output / LIVE_DIR, output / STUCK_FILE, settings.paths.lab_run_marker)
     threading.Thread(target=feed.publish_every, args=(threading.Event(),), name="speedrun-feed", daemon=True).start()
     movie, compare = screen(settings, feed, "movie", render_movie), screen(settings, feed, "compare", render_compare)
-    return Tas(wrapper, config, settings, runner, pool, feed, movie, compare)
+    return Tas(wrapper, config, settings, runner, pool, feed, movie, compare, 0)
 
 
 def speedrun_forever(wrapper: str, config: Path) -> None:
