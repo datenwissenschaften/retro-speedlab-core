@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
-from datenwissenschaften.ppo import PpoLearner
+from datenwissenschaften.ppo import ENTROPY_WEIGHT, PpoLearner
 from datenwissenschaften.rollout import Rollout
 
 ACTIONS = 7
@@ -39,7 +39,9 @@ def test_exploration_does_not_count_as_a_policy_step():
     def evaluate(index: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         return torch.log_softmax(logits, -1).expand(len(index), -1), value.expand(len(index))
 
-    metrics = PpoLearner((holder, critic), 1e-4, 64).update(rollout, evaluate, lambda index: value.new_zeros(()))
+    metrics = PpoLearner((holder, critic), 1e-4, 64).update(
+        rollout, evaluate, lambda index: value.new_zeros(()), ENTROPY_WEIGHT
+    )
 
     assert metrics["clip_fraction"] < 0.05
     assert abs(metrics["approx_kl"]) < 0.01
@@ -61,7 +63,9 @@ def test_an_explored_move_the_policy_had_ruled_out_does_not_poison_the_policy():
     def evaluate(index: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         return torch.log_softmax(logits, -1).expand(len(index), -1), value.expand(len(index))
 
-    metrics = PpoLearner((holder, critic), 1e-4, 64).update(rollout, evaluate, lambda index: value.new_zeros(()))
+    metrics = PpoLearner((holder, critic), 1e-4, 64).update(
+        rollout, evaluate, lambda index: value.new_zeros(()), ENTROPY_WEIGHT
+    )
 
     assert torch.isfinite(logits).all()
     assert metrics["skipped_minibatches"] == 0

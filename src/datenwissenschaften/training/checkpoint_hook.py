@@ -1,5 +1,3 @@
-import math
-
 from loguru import logger
 
 from datenwissenschaften.training.episode_record import EpisodeRecord
@@ -17,10 +15,9 @@ DESCRIPTION = (
 
 def learning_metadata(models: StateModels) -> dict[str, float]:
     update = models.agent.last_update
-    uniform = math.log(len(models.agent.network.question.options))
     learning = {
         "num_timesteps": models.agent.num_timesteps,
-        "entropy_share": round(update["entropy"] / uniform, 3),
+        "entropy_share": round(models.agent.entropy_share, 3),
         "explained_variance": round(update["explained_variance"], 3),
     }
     if "advisor_agreement" in update:

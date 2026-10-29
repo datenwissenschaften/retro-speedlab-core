@@ -6,6 +6,8 @@ from datenwissenschaften.settings import RetroSpeedlabConfig
 MODEL_FILENAME = "laya.pt"
 ADVISOR_FILENAME = "advisor.pt"
 BACKPLAY_FILENAME = "backplay_depth.txt"
+LAYA_BACKPLAY_FILENAME = "laya_backplay_depth.txt"
+WINS_FILENAME = "laya_wins.json"
 ROUTE_FILENAME = "route.json"
 
 
@@ -38,6 +40,12 @@ class RunContext:
 
     def backplay_path(self, state_name: str) -> Path:
         return self.model_dir / state_name / BACKPLAY_FILENAME
+
+    def laya_backplay_path(self, state_name: str) -> Path:
+        return self.model_dir / state_name / LAYA_BACKPLAY_FILENAME
+
+    def wins_path(self, state_name: str) -> Path:
+        return self.model_dir / state_name / WINS_FILENAME
 
     def route_path(self, state_name: str) -> Path:
         return self.model_dir / state_name / ROUTE_FILENAME

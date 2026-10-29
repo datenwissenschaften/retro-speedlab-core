@@ -9,11 +9,13 @@ from fakes import ACTIONS, FakeTokenizer, fake_laya_load
 from datenwissenschaften.laya import network as network_module
 from datenwissenschaften.laya.agent import LayaAgent
 from datenwissenschaften.laya.decision import Decision
-from datenwissenschaften.laya.imitation import DemonstrationStep
+from datenwissenschaften.laya.imitation import IMITATION_WEIGHT, DemonstrationStep, Lesson
 from datenwissenschaften.laya.network import LayaNetwork
 from datenwissenschaften.laya.question import LayaQuestion
 from datenwissenschaften.ppo import GAMMA, LAMBDA
 from datenwissenschaften.rollout import Rollout
+
+NO_LESSON = Lesson([], IMITATION_WEIGHT)
 
 QUESTION = "Which move survives?"
 EXPLORATION = 0.2
@@ -97,7 +99,7 @@ def test_ppo_makes_the_rewarded_move_likelier_and_learns_its_value(network: Laya
     before = right_probability(agent)
 
     for _ in range(UPDATES):
-        agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 1.0}), [])
+        agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 1.0}), NO_LESSON)
 
     assert right_probability(agent) > before + 0.1
     assert agent.act(OBSERVATION, 0.0, None).value > 0.1
@@ -124,7 +126,7 @@ def test_demonstrations_pull_the_policy_toward_their_moves(network: LayaNetwork)
     ] * 8
 
     for _ in range(UPDATES):
-        agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 0.0}), demonstrations)
+        agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 0.0}), Lesson(demonstrations, IMITATION_WEIGHT))
 
     assert right_probability(agent) > before + 0.1
     assert agent.last_update["imitation_loss"] > 0.0
@@ -162,7 +164,7 @@ def test_a_truncated_segment_bootstraps_from_its_value_instead_of_ending_the_gam
 def test_checkpoints_hold_the_heads_and_restart_returns_to_laya(network: LayaNetwork):
     agent = LayaAgent(network, (QUESTION,))
     pretrained = right_probability(agent)
-    agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 1.0}), [])
+    agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 1.0}), NO_LESSON)
     trained = right_probability(agent)
     checkpoint = torch.load(io.BytesIO(agent.policy.checkpoint().getvalue()), map_location="cpu")
 
@@ -178,7 +180,7 @@ def test_checkpoints_hold_the_heads_and_restart_returns_to_laya(network: LayaNet
 def test_a_checkpoint_with_a_broken_policy_head_restores_laya_judgement_and_keeps_the_value_head(network: LayaNetwork):
     agent = LayaAgent(network, (QUESTION,))
     pretrained = right_probability(agent)
-    agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 1.0}), [])
+    agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 1.0}), NO_LESSON)
     checkpoint = torch.load(io.BytesIO(agent.policy.checkpoint().getvalue()), map_location="cpu")
     value = {name: tensor.clone() for name, tensor in checkpoint["heads"].items() if name.startswith("value.")}
     for name, tensor in checkpoint["heads"].items():
@@ -202,13 +204,13 @@ def test_laya_reports_how_often_its_favourite_move_is_the_advised_one(network: L
     favourite = max(rollout.decisions[0].probabilities, key=rollout.decisions[0].probabilities.__getitem__)
     expected = sum(favourite == name for name in ("left", "right", "right")) / 3
 
-    agent.learn(rollout, [])
+    agent.learn(rollout, NO_LESSON)
 
     assert agent.last_update["advisor_agreement"] == pytest.approx(expected)
 
 
 def test_without_advice_there_is_no_agreement_to_report(network: LayaNetwork):
     agent = LayaAgent(network, (QUESTION,))
-    agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 1.0}), [])
+    agent.learn(rewarded_rollout(agent, {0: 0.0, 1: 1.0}), NO_LESSON)
 
     assert "advisor_agreement" not in agent.last_update

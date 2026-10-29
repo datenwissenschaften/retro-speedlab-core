@@ -1,14 +1,18 @@
 from datenwissenschaften.advisor.advisors import Advisors
+from datenwissenschaften.advisor.backplay_follower import BackplayFollower
 from datenwissenschaften.environment.observer import Observation, observe
 from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.training.practice import PracticeEnvironments, PracticeStep
 
 
 class LayaPractice:
-    def __init__(self, practice: PracticeEnvironments, advisors: Advisors, actions: tuple[str, ...]) -> None:
+    def __init__(
+        self, practice: PracticeEnvironments, advisors: Advisors, actions: tuple[str, ...], follower: BackplayFollower
+    ) -> None:
         self.practice = practice
         self.advisors = advisors
         self.actions = actions
+        self.follower = follower
 
     @property
     def states(self) -> list[str]:
@@ -24,7 +28,10 @@ class LayaPractice:
         self.practice.send([decision.action for decision in decisions])
 
     def receive(self) -> list[PracticeStep]:
-        return self.practice.receive()
+        steps = self.practice.receive()
+        for worker, step in enumerate(steps):
+            self.follower.follow(worker, step)
+        return steps
 
     def close(self) -> None:
         self.practice.close()

@@ -55,6 +55,7 @@ class FakeAgent:
     num_timesteps = 7
     policy = FakePolicy()
     last_update = {"entropy": math.log(2), "explained_variance": 0.25}
+    entropy_share = 1.0
     network = SimpleNamespace(question=SimpleNamespace(options={"left": "go left", "right": "go right"}))
 
     def restart(self) -> None:

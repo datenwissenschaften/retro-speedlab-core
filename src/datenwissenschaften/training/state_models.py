@@ -2,7 +2,7 @@ from loguru import logger
 
 from datenwissenschaften.laya.agent import LayaAgent, Observation
 from datenwissenschaften.laya.decision import Decision
-from datenwissenschaften.laya.imitation import DemonstrationStep
+from datenwissenschaften.laya.imitation import Lesson, Shown
 from datenwissenschaften.laya.policy import Policy
 from datenwissenschaften.rollout import Rollout
 from datenwissenschaften.training.context import RunContext
@@ -65,10 +65,17 @@ class StateModels:
         self.activate(state_name)
         return self.agent.num_timesteps + self.collected(state_name)
 
-    def learn(self, state_name: str, demonstrations: list[DemonstrationStep]) -> None:
+    def learn(self, state_name: str, lesson: Lesson[Shown]) -> None:
         self.activate(state_name)
         keys = [key for key in self.rollouts if key[0] == state_name]
-        self.agent.learn(Rollout.joined([self.rollouts.pop(key) for key in keys]), demonstrations)
+        self.agent.learn(Rollout.joined([self.rollouts.pop(key) for key in keys]), lesson)
+
+    def reset(self, state_name: str) -> None:
+        self.activate(state_name)
+        trained = self.agent.num_timesteps
+        self.agent.restart()
+        self.agent.policy.num_timesteps = trained
+        self.policies[state_name] = self.agent.policy
 
     def save(self) -> None:
         self.store.write(self.context.model_path(self.require_active()), self.agent.policy.checkpoint)

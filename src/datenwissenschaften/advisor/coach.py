@@ -6,10 +6,11 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from datenwissenschaften.advisor.advice import AdvisorDecision
 from datenwissenschaften.advisor.advisors import Advisors
 from datenwissenschaften.advisor.backplay import Backplay
-from datenwissenschaften.laya.imitation import DemonstrationStep
+from datenwissenschaften.advisor.backplay_follower import BackplayFollower
+from datenwissenschaften.laya.imitation import DemonstrationStep, Lesson
 from datenwissenschaften.rollout import Rollout
 from datenwissenschaften.training.lab_run import LabRun
-from datenwissenschaften.training.practice import PracticeEnvironments, PracticeStep
+from datenwissenschaften.training.practice import PracticeEnvironments
 from datenwissenschaften.ui.telemetry import publish_metadata
 
 ROLLOUT_STEPS = 2048
@@ -23,12 +24,12 @@ class Coach:
         advisors: Advisors,
         practice: PracticeEnvironments,
         lab_run: LabRun,
-        lessons: Callable[[str], list[DemonstrationStep]],
+        lessons: Callable[[str], Lesson[DemonstrationStep]],
         backplay: Backplay,
     ) -> None:
         self.advisors = advisors
         self.backplay = backplay
-        self.backplayed: dict[int, str] = {}
+        self.follower = BackplayFollower(backplay, practice)
         self.practice = practice
         self.lab_run = lab_run
         self.lessons = lessons
@@ -62,20 +63,9 @@ class Coach:
                 rollout.add(decision, step.reward, step.terminal, step.truncated)
                 if step.reached != state:
                     self.exits.setdefault(state, Counter())[step.reached] += 1
-                self._follow_backplay(worker, step)
+                self.follower.follow(worker, step)
             for state in dict.fromkeys(states):
                 self._learn(state)
-
-    def _follow_backplay(self, worker: int, step: PracticeStep) -> None:
-        if worker in self.backplayed:
-            origin = self.backplayed[worker]
-            if self.backplay.forward(origin, step.reached) or step.ended:
-                self.backplay.record(origin, self.backplay.forward(origin, step.reached))
-                del self.backplayed[worker]
-        if not step.ended or (start := self.backplay.start(step.state)) is None:
-            return
-        self.practice.restart(worker, step.state, start)
-        self.backplayed[worker] = step.state
 
     def _learn(self, state: str) -> None:
         keys = [key for key in self.rollouts if key[0] == state]

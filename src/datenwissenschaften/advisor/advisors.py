@@ -11,8 +11,8 @@ import torch
 
 from datenwissenschaften.advisor.advice import Advice, AdvisorDecision
 from datenwissenschaften.advisor.network import ActorCritic
-from datenwissenschaften.laya.imitation import IMITATION_WEIGHT, DemonstrationStep
-from datenwissenschaften.ppo import PpoLearner
+from datenwissenschaften.laya.imitation import DemonstrationStep, Lesson
+from datenwissenschaften.ppo import ENTROPY_WEIGHT, PpoLearner
 from datenwissenschaften.rollout import Rollout
 from datenwissenschaften.training.model_store import ModelStore
 
@@ -66,11 +66,11 @@ class Advisors:
         return Advice(int(np.argmax(probabilities)), dict(zip(self.actions, probabilities, strict=True)))
 
     def learn(
-        self, state: str, rollout: Rollout[AdvisorDecision], demonstrations: list[DemonstrationStep]
+        self, state: str, rollout: Rollout[AdvisorDecision], lesson: Lesson[DemonstrationStep]
     ) -> dict[str, float]:
         advisor = self.models[state]
         inputs = torch.from_numpy(np.stack([decision.inputs for decision in rollout.decisions])).to(self.device)
-        sample = random.sample(demonstrations, min(len(demonstrations), MINIBATCH))
+        sample = random.sample(lesson.examples, min(len(lesson.examples), MINIBATCH))
         shown = torch.from_numpy(np.stack([step.inputs for step in sample])).to(self.device) if sample else None
         moves = torch.tensor([step.action for step in sample], device=self.device)
 
@@ -81,9 +81,9 @@ class Advisors:
             if shown is None:
                 return inputs.new_zeros(())
             log_probs, _ = advisor.learning(shown)
-            return -IMITATION_WEIGHT * log_probs.gather(1, moves[:, None]).mean()
+            return -lesson.weight * log_probs.gather(1, moves[:, None]).mean()
 
-        metrics = advisor.learner.update(rollout, evaluate, imitate)
+        metrics = advisor.learner.update(rollout, evaluate, imitate, ENTROPY_WEIGHT)
         advisor.learning.normalizer.update(inputs)
         advisor.num_timesteps += len(rollout)
         with self.lock:

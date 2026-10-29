@@ -119,7 +119,8 @@ thread plays them all with one small actor-critic per state (`advisor/`): its
 input is the console RAM scaled to `[0, 1]` plus the state's facts hashed into
 64 slots, normalized by running statistics. Advisors act and learn on the
 accelerator; every 2048 decisions of a state become one PPO update (minibatch
-256), with imitation of the lab demonstrations until the state is mastered. The
+256), with imitation of the lab demonstrations (weight 1 while the state learns,
+0.1 once it is mastered, so a mastered stretch is not forgotten). The
 coach pauses while a lab run judges its branches and deploys, and saves `advisor.pt` next to
 each state's `laya.pt`.
 
@@ -128,8 +129,9 @@ Replaying the lab's demonstrations from power-on keeps a start point every 4
 decisions of each stretch that leaves a state forward. A practice run that ends
 in such a state restarts from one of its last start points; once half of 20
 attempts leave the state forward, the start moves one point further back, until
-the whole stretch is covered. Only practice emulators use these start points;
-Laya's attempts always start at the curriculum's start points.
+the whole stretch is covered. Laya's practice emulators follow their own
+backplay depth (`laya_backplay_depth.txt`); the streamed emulator always starts
+at the curriculum's start points.
 `metadata.advisors.<State>` shows `backplay` (points covered / total) and
 `exits` (where practice runs leave the state).
 
@@ -179,10 +181,13 @@ Laya's reader stays frozen. Each state trains its own small heads with PPO once
   leaving the state ends a segment; hitting the time cap only cuts it, so the
   value estimate carries on instead of counting the cap as a death
 - 4 epochs of minibatch 64 with ratio clip 0.2, value weight 0.5 and entropy
-  bonus 0.01; policy and value gradients are clipped to norm 0.5 separately so
-  large returns cannot starve the policy
-- an imitation loss pulls Laya toward the advisor's choice on every decision
-  and toward the lab demonstrations until the state is mastered
+  bonus 0.01, raised up to tenfold while the state's entropy share is below 5 %;
+  policy and value gradients are clipped to norm 0.5 separately so large
+  returns cannot starve the policy
+- an imitation loss pulls Laya toward the advisor's choice on every decision,
+  toward the lab demonstrations and toward its own wins: each attempt that
+  leaves a learning state forward is kept (the latest 2048 decisions per state,
+  `laya_wins.json`). Learning states imitate with weight 1, mastered ones with 0.1
 
 A state is cut after 180 seconds of game time, counted in emulator frames, so a
 slow GPU never shortens what an attempt can achieve. A stalled attempt ends
@@ -212,7 +217,10 @@ Once every state of a level is mastered, attempts play the whole level from its
 first state until it is beaten once. One lucky win per state does not make the
 level chainable, so `LevelDrill` records the state each failed level attempt
 ends in. Once 20 are recorded, attempts start at the state where most of them
-ended until it passes 3 of 10 tries; then whole-level attempts resume.
+ended until it passes 3 of 10 tries; then whole-level attempts resume. While
+drilled, a mastered state learns like an unmastered one: exploration 0.05 and
+full imitation. A drilled state whose entropy share stays below 5 % for 50
+updates restarts its heads once from Laya's own judgement.
 `metadata.level_drills` shows the endings and the drill.
 
 There are no configured savestates: every attempt that does not start from a

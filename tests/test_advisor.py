@@ -8,7 +8,7 @@ from datenwissenschaften.advisor.advisors import Advisors
 from datenwissenschaften.advisor.backplay import Backplay
 from datenwissenschaften.advisor.coach import ROLLOUT_STEPS, Coach
 from datenwissenschaften.advisor.inputs import FACT_SLOTS, RAM_SCALE, encode, fact_slots
-from datenwissenschaften.laya.imitation import DemonstrationStep
+from datenwissenschaften.laya.imitation import IMITATION_WEIGHT, DemonstrationStep, Lesson
 from datenwissenschaften.rollout import Rollout
 from datenwissenschaften.states.facts import Offset
 from datenwissenschaften.training.lab_run import LabRun
@@ -56,7 +56,7 @@ def test_ppo_teaches_the_advisor_the_rewarded_move_and_saves_it(tmp_path: Path):
         rollout = Rollout()
         for decision in pool.act(["Play"] * 64, [INPUTS] * 64):
             rollout.add(decision, float(decision.action), False, False)
-        pool.learn("Play", rollout, [])
+        pool.learn("Play", rollout, Lesson([], IMITATION_WEIGHT))
     pool.close()
 
     assert pool.advise("Play", INPUTS).action == 1
@@ -81,7 +81,13 @@ class EndlessPractice:
 
 def test_the_coach_practises_until_stopped_and_learns_every_full_rollout(tmp_path: Path):
     pool, practice = advisors(tmp_path), EndlessPractice()
-    coach = Coach(pool, practice, LabRun(tmp_path / "no-lab-run"), lambda state: [], no_backplay(tmp_path))
+    coach = Coach(
+        pool,
+        practice,
+        LabRun(tmp_path / "no-lab-run"),
+        lambda state: Lesson([], IMITATION_WEIGHT),
+        no_backplay(tmp_path),
+    )
     deadline = time.monotonic() + COACH_WAIT_SECONDS
     while practice.steps < ROLLOUT_STEPS and time.monotonic() < deadline:
         coach.check()
@@ -105,7 +111,13 @@ class ExitingPractice(EndlessPractice):
 
 def test_the_coach_counts_where_practice_leaves_each_state(tmp_path: Path):
     pool, practice = advisors(tmp_path), ExitingPractice()
-    coach = Coach(pool, practice, LabRun(tmp_path / "no-lab-run"), lambda state: [], no_backplay(tmp_path))
+    coach = Coach(
+        pool,
+        practice,
+        LabRun(tmp_path / "no-lab-run"),
+        lambda state: Lesson([], IMITATION_WEIGHT),
+        no_backplay(tmp_path),
+    )
     deadline = time.monotonic() + COACH_WAIT_SECONDS
     while practice.steps < 10 and time.monotonic() < deadline:
         coach.check()
@@ -137,7 +149,7 @@ class RestartablePractice(EndlessPractice):
 def test_ended_practice_restarts_from_a_backplay_point_and_its_exit_counts_as_success(tmp_path: Path):
     pool, practice = advisors(tmp_path), RestartablePractice()
     backplay = Backplay({"Play": [b"near the door"]}, ("Play", "Door"), backplay_depth(tmp_path))
-    coach = Coach(pool, practice, LabRun(tmp_path / "no-lab-run"), lambda state: [], backplay)
+    coach = Coach(pool, practice, LabRun(tmp_path / "no-lab-run"), lambda state: Lesson([], IMITATION_WEIGHT), backplay)
     deadline = time.monotonic() + COACH_WAIT_SECONDS
     while practice.steps < 5 and time.monotonic() < deadline:
         coach.check()

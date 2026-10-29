@@ -20,11 +20,15 @@ class LevelDrill:
     def __init__(self, root: Path) -> None:
         self.root = root
         self.level: str | None = None
+        self.state: str | None = None
 
     def pick(self, frontier: str | None, targets: LevelTargets) -> str | None:
-        drilled = self.target(frontier) if targets.is_level(frontier) else None
-        self.level = None if drilled is None else frontier
-        return drilled or frontier
+        self.state = self.target(frontier) if targets.is_level(frontier) else None
+        self.level = None if self.state is None else frontier
+        return self.state or frontier
+
+    def drills(self, state: str) -> bool:
+        return state == self.state
 
     def finish(self, state: str, passed: bool) -> None:
         if self.record_drill(self.level, passed):

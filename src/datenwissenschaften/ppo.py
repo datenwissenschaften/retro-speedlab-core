@@ -12,6 +12,8 @@ EPOCHS = 4
 CLIP = 0.2
 VALUE_WEIGHT = 0.5
 ENTROPY_WEIGHT = 0.01
+ENTROPY_FLOOR = 0.05
+MAX_ENTROPY_BOOST = 10.0
 MAX_GRADIENT_NORM = 0.5
 NORMALIZATION_EPSILON = 1e-8
 MAX_LOG_RATIO = 20.0
@@ -26,7 +28,9 @@ class PpoLearner:
         self.minibatch = minibatch
         self.optimizer = torch.optim.AdamW([p for part in parts for p in part.parameters()], lr=learning_rate)
 
-    def update(self, rollout: Rollout[Step], evaluate: Evaluate, imitate: Imitate) -> dict[str, float]:
+    def update(
+        self, rollout: Rollout[Step], evaluate: Evaluate, imitate: Imitate, entropy_weight: float
+    ) -> dict[str, float]:
         device = next(self.parts[0].parameters()).device
         actions, old = rollout.actions(device), rollout.policy(device)
         exploration_weight = (old / rollout.behavior(device)).clamp(max=1.0)
@@ -50,7 +54,7 @@ class PpoLearner:
                 value_loss = (values - returns[index]).pow(2).mean()
                 entropy = -(log_probs.exp() * log_probs).sum(-1).mean()
                 imitation = imitate(index)
-                loss = policy_loss + VALUE_WEIGHT * value_loss - ENTROPY_WEIGHT * entropy + imitation
+                loss = policy_loss + VALUE_WEIGHT * value_loss - entropy_weight * entropy + imitation
                 self.optimizer.zero_grad(set_to_none=True)
                 if not loss.isfinite():
                     skipped += 1
@@ -85,6 +89,11 @@ class PpoLearner:
 
     def load_state_dict(self, state: dict[str, Any]) -> None:
         self.optimizer.load_state_dict(state["optimizer"])
+
+
+def entropy_weight(entropy_share: float) -> float:
+    boost = ENTROPY_FLOOR / max(entropy_share, ENTROPY_FLOOR / MAX_ENTROPY_BOOST)
+    return ENTROPY_WEIGHT * max(1.0, boost)
 
 
 def explained_variance(returns: torch.Tensor, values: torch.Tensor) -> float:

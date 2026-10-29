@@ -7,6 +7,7 @@ import torch
 from datenwissenschaften.accelerator import configure_accelerator
 from datenwissenschaften.advisor.advisors import Advisors
 from datenwissenschaften.advisor.backplay import Backplay
+from datenwissenschaften.advisor.backplay_follower import BackplayFollower
 from datenwissenschaften.advisor.team import AdvisorTeam
 from datenwissenschaften.environment.curriculum_run import FULL_RUN
 from datenwissenschaften.environment.demonstration import load_demonstrations
@@ -21,6 +22,7 @@ from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
 from datenwissenschaften.tracking.run import ending, start_tracking
 from datenwissenschaften.training.beaten_level_hook import BeatenLevelHook
 from datenwissenschaften.training.checkpoint_hook import CheckpointHook, model_metadata
+from datenwissenschaften.training.collapse_hook import CollapseHook
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.curriculum_upload_hook import CurriculumUploadHook
 from datenwissenschaften.training.hooks import TrainingHook
@@ -28,8 +30,10 @@ from datenwissenschaften.training.identity import TrainingIdentity, engine_versi
 from datenwissenschaften.training.knowledge import knowledge
 from datenwissenschaften.training.lab_run import LabRun
 from datenwissenschaften.training.laya_practice import LayaPractice
+from datenwissenschaften.training.learning import Learning
 from datenwissenschaften.training.lessons import Lessons
 from datenwissenschaften.training.live_stream_hook import LiveStreamHook
+from datenwissenschaften.training.own_wins import OwnWins
 from datenwissenschaften.training.practice import PracticeEnvironments
 from datenwissenschaften.training.report_upload_hook import ReportUploadHook
 from datenwissenschaften.training.session import MAIN_ENVIRONMENT, TrainingSession
@@ -113,13 +117,17 @@ class LayaTrainer:
         demonstrations, starts = load_demonstrations(env, self.config.paths.demonstrations_dir)
         publish_metadata("knowledge", knowledge(env, self.config.laya.checkpoint, demonstrations), replace=True)
         deadline = time.monotonic() + seconds
-        lessons = Lessons(demonstrations, env.curriculum.curriculum)
+        learning = Learning(env.curriculum.curriculum, env.curriculum.drill)
+        lessons = Lessons(demonstrations, learning, OwnWins(phases(self.wrapper_cls), self.context.wins_path, learning))
         lab_run = LabRun(self.config.paths.lab_run_marker)
         advisors = Advisors(
             tuple(self.wrapper_cls.action_descriptions), configure_accelerator(), self.context.advisor_path
         )
         env.observer.advisor = advisors.advise
-        practice, laya_practice = practice_environments(self.wrapper_cls, self.config, self.speedrun, workers, advisors)
+        laya_backplay = Backplay(starts, phases(self.wrapper_cls), self.context.laya_backplay_path)
+        practice, laya_practice = practice_environments(
+            self.wrapper_cls, self.config, self.speedrun, workers, advisors, laya_backplay
+        )
         backplay = Backplay(starts, phases(self.wrapper_cls), self.context.backplay_path)
         team = AdvisorTeam(advisors, practice, lab_run, lessons, backplay)
         tracking = start_tracking(
@@ -155,6 +163,7 @@ class LayaTrainer:
             *(stream if self.config.ui.twitch else []),
             TelemetryHook(self.context),
             CheckpointHook(models),
+            CollapseHook(models, env.curriculum.drill),
             BestVideoHook(self.context, self._curricula()),
             BeatenLevelHook(env.curriculum),
             UploadHook(self.context, models.agent, frame_rate, frozenset(env.curriculum.targets.levels)),
@@ -204,11 +213,13 @@ def practice_environments(
     speedrun: bool,
     workers: range,
     advisors: Advisors,
+    laya_backplay: Backplay,
 ) -> tuple[PracticeEnvironments, LayaPractice]:
     laya_workers = workers[: min(LAYA_EMULATORS, len(workers) // 2)]
     advisor_practice = PracticeEnvironments(wrapper_cls, config, speedrun, workers[len(laya_workers) :])
     laya_practice = PracticeEnvironments(wrapper_cls, config, speedrun, laya_workers)
-    return advisor_practice, LayaPractice(laya_practice, advisors, tuple(wrapper_cls.action_descriptions))
+    follower = BackplayFollower(laya_backplay, laya_practice)
+    return advisor_practice, LayaPractice(laya_practice, advisors, tuple(wrapper_cls.action_descriptions), follower)
 
 
 def publish_run(wrapper_cls: type[StateMachineGymWrapper], context: RunContext, speedrun: bool, emulators: int) -> None:

@@ -8,6 +8,7 @@ from fakes import ACTIONS, fake_decision, fake_laya_load, write_config
 from datenwissenschaften.laya import network as network_module
 from datenwissenschaften.laya.agent import LayaAgent
 from datenwissenschaften.laya.decision import Decision
+from datenwissenschaften.laya.imitation import IMITATION_WEIGHT, Lesson
 from datenwissenschaften.laya.network import LayaNetwork
 from datenwissenschaften.ppo import GAMMA, LAMBDA
 from datenwissenschaften.rollout import Rollout
@@ -72,7 +73,7 @@ def test_a_state_learns_from_the_rollouts_of_all_emulators(models: StateModels):
     for environment in range(3):
         models.rollouts[("Survive", environment)].decisions[0] = decision
 
-    models.learn("Survive", [])
+    models.learn("Survive", Lesson([], IMITATION_WEIGHT))
 
     assert models.agent.num_timesteps == 3
     assert models.collected("Survive") == 0

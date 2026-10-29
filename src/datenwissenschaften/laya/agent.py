@@ -1,3 +1,4 @@
+import math
 import random
 from typing import Any
 
@@ -5,17 +6,34 @@ import torch
 
 from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.laya.heads import Heads
-from datenwissenschaften.laya.imitation import DemonstrationStep, imitation_loss
+from datenwissenschaften.laya.imitation import IMITATION_WEIGHT, Lesson, Shown, imitation_loss
 from datenwissenschaften.laya.network import Features, LayaNetwork
 from datenwissenschaften.laya.policy import Policy
-from datenwissenschaften.ppo import PpoLearner
+from datenwissenschaften.ppo import PpoLearner, entropy_weight
 from datenwissenschaften.rollout import Rollout
 
 LEARNING_RATE = 3e-4
 MINIBATCH = 64
 NO_ADVICE = -1
+UNTRAINED_ENTROPY_SHARE = 1.0
 
 Observation = dict[str, str]
+
+
+def advisor_agreement(rollout: Rollout[Decision], names: list[str]) -> dict[str, float]:
+    advised = [decision for decision in rollout.decisions if decision.advice is not None]
+    if not advised:
+        return {}
+    agreeing = sum(max(d.probabilities, key=d.probabilities.__getitem__) == names[d.advice] for d in advised)
+    return {"advisor_agreement": agreeing / len(advised)}
+
+
+def demonstration_batch(network: LayaNetwork, examples: list[Shown]) -> tuple[torch.Tensor, torch.Tensor] | None:
+    if not examples:
+        return None
+    sample = random.sample(examples, min(len(examples), MINIBATCH))
+    options, _ = network.features([step.state for step in sample], [step.question for step in sample])
+    return options, torch.tensor([step.action for step in sample], device=options.device)
 
 
 class LayaAgent:
@@ -32,6 +50,12 @@ class LayaAgent:
     @property
     def last_update(self) -> dict[str, float]:
         return self.policy.last_update
+
+    @property
+    def entropy_share(self) -> float:
+        if "entropy" not in self.last_update:
+            return UNTRAINED_ENTROPY_SHARE
+        return self.last_update["entropy"] / math.log(len(self.network.question.options))
 
     def read(self, observations: list[Observation]) -> Features:
         states = [observation["state"] for observation in observations]
@@ -62,7 +86,7 @@ class LayaAgent:
     def act(self, observation: Observation, exploration: float, advice: int | None) -> Decision:
         return self.decide(self.read([observation]), exploration, [advice])[0]
 
-    def learn(self, rollout: Rollout[Decision], demonstrations: list[DemonstrationStep]) -> None:
+    def learn(self, rollout: Rollout[Decision], lesson: Lesson[Shown]) -> None:
         device = self.network.device
         options = torch.stack([decision.options for decision in rollout.decisions]).to(device)
         pooled = torch.stack([decision.pooled for decision in rollout.decisions]).to(device)
@@ -70,7 +94,7 @@ class LayaAgent:
             [NO_ADVICE if decision.advice is None else decision.advice for decision in rollout.decisions],
             device=device,
         )
-        demonstration = self._demonstration(demonstrations)
+        demonstration = demonstration_batch(self.network, lesson.examples)
         heads = self.policy.heads
 
         def evaluate(index: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -80,32 +104,17 @@ class LayaAgent:
             advised = index[advice[index] != NO_ADVICE]
             loss = options.new_zeros(())
             if len(advised):
-                loss = loss + imitation_loss(heads.policy, options[advised], advice[advised])
+                loss = loss + imitation_loss(heads.policy, options[advised], advice[advised], IMITATION_WEIGHT)
             if demonstration is not None:
-                loss = loss + imitation_loss(heads.policy, *demonstration)
+                loss = loss + imitation_loss(heads.policy, *demonstration, lesson.weight)
             return loss
 
         self.policy.last_update = {
-            **self.policy.learner.update(rollout, evaluate, imitate),
-            **self._agreement(rollout),
+            **self.policy.learner.update(rollout, evaluate, imitate, entropy_weight(self.entropy_share)),
+            **advisor_agreement(rollout, list(self.network.question.options)),
             "demonstration_decisions": 0 if demonstration is None else len(demonstration[1]),
         }
         self.policy.num_timesteps += len(rollout)
-
-    def _agreement(self, rollout: Rollout[Decision]) -> dict[str, float]:
-        names = list(self.network.question.options)
-        advised = [decision for decision in rollout.decisions if decision.advice is not None]
-        if not advised:
-            return {}
-        agreeing = sum(max(d.probabilities, key=d.probabilities.__getitem__) == names[d.advice] for d in advised)
-        return {"advisor_agreement": agreeing / len(advised)}
-
-    def _demonstration(self, demonstrations: list[DemonstrationStep]) -> tuple[torch.Tensor, torch.Tensor] | None:
-        if not demonstrations:
-            return None
-        sample = random.sample(demonstrations, min(len(demonstrations), MINIBATCH))
-        options, _ = self.network.features([step.state for step in sample], [step.question for step in sample])
-        return options, torch.tensor([step.action for step in sample], device=options.device)
 
     def restart(self) -> None:
         heads = Heads(self.network.scorer, self.network.width, len(self.network.question.options))

@@ -6,14 +6,16 @@ from fakes import fake_decision, fake_environment, write_config
 
 from datenwissenschaften.advisor.advice import Advice
 from datenwissenschaften.laya.decision import Decision
-from datenwissenschaften.laya.imitation import DemonstrationStep
+from datenwissenschaften.laya.imitation import IMITATION_WEIGHT, MASTERED_IMITATION_WEIGHT, DemonstrationStep, Lesson
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.training import session as session_module
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
 from datenwissenschaften.training.lab_run import LabRun
+from datenwissenschaften.training.learning import Learning
 from datenwissenschaften.training.lessons import Lessons
+from datenwissenschaften.training.own_wins import OwnWins
 from datenwissenschaften.training.practice import PracticeStep, PracticeView
 from datenwissenschaften.training.session import (
     EXPLORATION_ONCE_MASTERED,
@@ -73,9 +75,9 @@ class RecordingAgent:
         self.advice += advice
         return [fake_decision(1, {"left": 0.2, "right": 0.8}, 0.74) for _ in range(len(features[0]))]
 
-    def learn(self, rollout, demonstrations) -> None:
+    def learn(self, rollout, lesson) -> None:
         self.rollouts.append(len(rollout))
-        self.demonstrations.append(len(demonstrations))
+        self.demonstrations.append(len(lesson.examples))
         self.policy.num_timesteps += len(rollout)
 
 
@@ -87,8 +89,15 @@ class FakeCoach:
         self.checks += 1
 
 
+def lessons_of(env, demonstrations: dict[str, list[DemonstrationStep]]) -> Lessons:
+    curriculum = env.curriculum.curriculum
+    learning = Learning(curriculum, env.curriculum.drill)
+    wins = OwnWins(curriculum.state_names, lambda state: curriculum.root / f"{state}.wins.json", learning)
+    return Lessons(demonstrations, learning, wins)
+
+
 def no_lessons(env) -> Lessons:
-    return Lessons({}, env.curriculum.curriculum)
+    return lessons_of(env, {})
 
 
 class RecordingHook:
@@ -146,6 +155,8 @@ def test_mastered_states_explore_less(tmp_path: Path):
 
     assert session._exploration("Survive") == EXPLORATION_ONCE_MASTERED
     assert session._exploration("Boss") == EXPLORATION_WHILE_LEARNING
+    env.curriculum.drill.state = "Survive"
+    assert session._exploration("Survive") == EXPLORATION_WHILE_LEARNING
 
 
 def test_session_hands_over_to_the_next_level_after_an_episode_past_the_deadline(tmp_path: Path, monkeypatch):
@@ -163,7 +174,7 @@ def test_session_hands_over_to_the_next_level_after_an_episode_past_the_deadline
     assert len(hook.episodes) == 1
 
 
-def test_only_unmastered_states_learn_from_their_demonstrations(tmp_path: Path):
+def test_mastered_states_keep_a_light_imitation_and_a_drilled_state_learns_in_full(tmp_path: Path):
     env = fake_environment(tmp_path, [(3, 0)])
     step = DemonstrationStep(
         "{}", "Which move survives?", 1, np.zeros(1, dtype=np.uint8), np.zeros(1, dtype=np.float32)
@@ -171,11 +182,13 @@ def test_only_unmastered_states_learn_from_their_demonstrations(tmp_path: Path):
     for _ in range(env.curriculum.curriculum.WIN_TARGET):
         env.curriculum.curriculum.record_success("Survive", 1)
 
-    lessons = Lessons({"Survive": [step], "Boss": [step]}, env.curriculum.curriculum)
+    lessons = lessons_of(env, {"Survive": [step], "Boss": [step]})
 
-    assert lessons("Survive") == []
-    assert lessons("Boss") == [step]
-    assert no_lessons(env)("Boss") == []
+    assert lessons("Survive") == Lesson([step], MASTERED_IMITATION_WEIGHT)
+    assert lessons("Boss") == Lesson([step], IMITATION_WEIGHT)
+    assert no_lessons(env)("Boss") == Lesson([], IMITATION_WEIGHT)
+    env.curriculum.drill.state = "Survive"
+    assert lessons("Survive") == Lesson([step], IMITATION_WEIGHT)
 
 
 def test_laya_decides_with_the_advice_it_read_and_the_coach_is_watched(tmp_path: Path, monkeypatch):

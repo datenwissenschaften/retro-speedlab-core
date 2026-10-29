@@ -1,6 +1,7 @@
 import time
 
 from datenwissenschaften.advisor.coach import Coach
+from datenwissenschaften.environment.observer import Observation
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.training.episode_record import EpisodeRecord
@@ -55,10 +56,11 @@ class TrainingSession:
             decision, *practice = self.models.decide(observations, states, exploration, [advice, *practice_advice])
             self.laya_practice.send(practice)
             next_observation, reward, terminated, truncated, info = self.env.step(decision.action)
-            self._practise(states[1:], practice)
+            self._practise(states[1:], practice_observations, practice)
             done = terminated or truncated
             terminal = terminated or info["state"] != state_name
             self.models.rollout(state_name, MAIN_ENVIRONMENT).add(decision, reward, terminal, truncated)
+            self.lessons.wins.add(MAIN_ENVIRONMENT, state_name, observation, decision.action, info["state"], done)
             episode.add_step(info, reward)
             timesteps = self.models.timesteps(state_name)
             transition = Transition(timesteps, observation, decision, self.env.frames, reward, done, info)
@@ -79,20 +81,20 @@ class TrainingSession:
                 self._learn(state)
         return request
 
-    def _practise(self, states: list[str], decisions: list[Decision]) -> None:
+    def _practise(self, states: list[str], observations: list[Observation], decisions: list[Decision]) -> None:
         steps = self.laya_practice.receive()
-        for worker, (state, decision, step) in enumerate(
-            zip(states, decisions, steps, strict=True), MAIN_ENVIRONMENT + 1
+        for worker, (state, observation, decision, step) in enumerate(
+            zip(states, observations, decisions, steps, strict=True), MAIN_ENVIRONMENT + 1
         ):
             self.models.rollout(state, worker).add(decision, step.reward, step.terminal, step.truncated)
+            self.lessons.wins.add(worker, state, observation, decision.action, step.reached, step.ended)
 
     def _learn(self, state_name: str) -> None:
         if self.models.collected(state_name) < ROLLOUT_STEPS:
             return
-        self.models.learn(state_name, self.lessons(state_name))
+        self.models.learn(state_name, self.lessons.laya(state_name))
         for hook in self.hooks:
             hook.on_update()
 
     def _exploration(self, state_name: str) -> float:
-        mastered = self.env.curriculum.curriculum.is_mastered(state_name)
-        return EXPLORATION_ONCE_MASTERED if mastered else EXPLORATION_WHILE_LEARNING
+        return EXPLORATION_WHILE_LEARNING if self.lessons.learning(state_name) else EXPLORATION_ONCE_MASTERED
