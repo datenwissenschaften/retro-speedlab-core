@@ -3,7 +3,7 @@ import random
 import threading
 from collections.abc import Callable
 from concurrent.futures import Executor, ProcessPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
 
@@ -38,6 +38,7 @@ IMPROVE_ROUNDS = 1
 
 SEED_SPACE = 2**31
 MAIN_WORKER = 0
+TRIAL_MOVIE = f"trial-{TAS_MOVIE}"
 
 Footage = Callable[[RetroSpeedlabPaths, Path, tuple[bytes, ...]], Path]
 
@@ -121,12 +122,15 @@ class Tas:
     def verified(self, segments: list[Segment]) -> list[Segment]:
         movie = self.output / TAS_MOVIE
         replay = verified_segments(self.runner, segments, movie)
-        if replay.verified == len(segments):
-            if frames(segments):
-                self.movie.queue(movie_cut(self.feed.course, segments, movie, replay.memory))
-            return segments
-        logger.warning(f"Only {replay.verified} of {len(segments)} segments replay from power-on; searching again")
-        return segments[: replay.verified]
+        replayed = [
+            replace(segment, emulator_state=end)
+            for segment, end in zip(segments[: replay.verified], replay.ends, strict=True)
+        ]
+        if replay.verified < len(segments):
+            logger.warning(f"Only {replay.verified} of {len(segments)} segments replay from power-on; searching again")
+        elif frames(replayed):
+            self.movie.queue(movie_cut(self.feed.course, replayed, movie, replay.memory))
+        return replayed
 
     def extend(self, segments: list[Segment], until: str) -> list[Segment]:
         while not finished(segments := self.verified(segments), until):
@@ -152,11 +156,8 @@ class Tas:
     def improve(self, segments: list[Segment]) -> list[Segment]:
         if not segments:
             raise RuntimeError(f"{self.output / PROGRESS_FILE} holds no movie to improve; search one first")
-        until, index = segments[-1].state, 0
-        while index < len(segments):
-            if (shorter := self.shorten(segments, index)) is not segments:
-                segments = self.extend(shorter, until)
-            index += 1
+        for index in range(len(segments)):
+            segments = self.shorten(segments, index)
         return segments
 
     def shorten(self, segments: list[Segment], index: int) -> list[Segment]:
@@ -165,10 +166,14 @@ class Tas:
         if crossing is None or crossing.frames >= len(segments[index].pressed):
             return segments
         saved = len(segments[index].pressed) - crossing.frames
-        logger.info(f"Segment {index} into {crossing.end.state} is {saved} frames faster; the rest is rebuilt")
+        shorter = [*segments[:index], segment_of(crossing), *segments[index + 1 :]]
+        if verified_segments(self.runner, shorter, self.output / TRIAL_MOVIE).verified < len(shorter):
+            logger.info(f"Segment {index} is {saved} frames faster but the rest of the run breaks; the run stays")
+            return segments
+        logger.info(f"Segment {index} into {crossing.end.state} is {saved} frames faster")
         self.feed.event("improved", crossing.end.state, crossing.frames)
         self.compare.queue(compare_cut(self.runner, self.output, start, segments[index], crossing))
-        return self.keep([*segments[:index], segment_of(crossing)], start.state)
+        return self.keep(self.verified(shorter), shorter[-1].state)
 
     def _job(self, start: Start, bound: int, seed: int, seconds: float) -> tuple[str, Path, Start, int, int, float]:
         return self.wrapper, self.config, start, bound, seed, seconds

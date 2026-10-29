@@ -192,3 +192,14 @@ def test_every_new_piece_is_followed_by_one_try_to_shorten_an_earlier_one(tmp_pa
 
     assert shortened == [0]
     assert tas.turn == 1
+
+
+def test_a_faster_piece_that_breaks_the_rest_of_the_run_is_not_taken(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    segments = [Segment("Survive", [[1, 0]] * 4, bytes([4]), False), Segment("Boss", [[1, 0]], bytes([5]), False)]
+    faster = Crossing(Start("Survive", bytes([2])), np.zeros((2, 2), np.int8), False, ("Survive", 0))
+    monkeypatch.setattr(run.Tas, "best", lambda self, start, bound, rounds: faster)
+    monkeypatch.setattr(run, "verified_segments", lambda runner, shorter, path: movie.Replay(1, {}, [bytes([2])]))
+
+    assert tas.shorten(segments, 0) is segments

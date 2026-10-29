@@ -24,7 +24,8 @@ def tile(screen: np.ndarray) -> bytes:
 
 def shown_tiles(directory: Path) -> list[tuple[int, bytes]]:
     found = []
-    for seed, path in sorted((int(path.stem), path) for path in directory.glob(f"*{TILE_SUFFIX}")):
+    worker_tiles = (path for path in directory.glob(f"*{TILE_SUFFIX}") if path.stem.isdigit())
+    for seed, path in sorted((int(path.stem), path) for path in worker_tiles):
         try:
             found.append((seed, path.read_bytes()))
         except FileNotFoundError:

@@ -65,6 +65,13 @@ def test_the_mosaic_shows_the_first_nine_workers_in_seed_order_in_three_rows(tmp
     assert abs(int(picture[56, 64]) - 20) < 4 and abs(int(picture[280, 320]) - 180) < 4
 
 
+def test_the_mosaic_skips_files_that_are_not_a_worker_tile(tmp_path: Path):
+    (tmp_path / "attempt.jpg").write_bytes(b"")
+    (tmp_path / "4.jpg").write_bytes(tile(np.zeros((224, 256, 3), np.uint8)))
+
+    assert compose(tmp_path).seeds == [4]
+
+
 def test_two_workers_share_one_row_of_the_mosaic(tmp_path: Path):
     for seed in (5, 4):
         (tmp_path / f"{seed}.jpg").write_bytes(tile(np.zeros((224, 256, 3), np.uint8)))
