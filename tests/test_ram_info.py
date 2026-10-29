@@ -32,25 +32,11 @@ def test_from_ram_reads_scalar_and_array_fields_from_raw_memory():
     assert ram_info.inventory == [1, 2, 3]
 
 
-def test_to_dict_reports_scalar_and_list_fields():
-    ram_info = _SampleRam(health=10, inventory=[1, 2, 3])
-
-    assert ram_info.to_dict() == {"health": 10, "inventory": [1, 2, 3]}
-
-
-def test_memory_lists_every_field_with_its_address_and_value():
-    ram_info = _SampleRam(health=10, inventory=[1, 2, 3])
-
-    assert ram_info.memory() == [
-        {"name": "health", "address": "0x0010", "length": 1, "value": 10},
-        {"name": "inventory", "address": "0x0020", "length": 3, "value": [1, 2, 3]},
-    ]
-
-
-def test_a_game_without_a_known_position_has_no_location():
+def test_a_game_without_known_ram_meanings_reports_none():
     @dataclass(frozen=True)
     class Unknown(RamInfo):
         pass
 
-    assert Unknown.from_ram(bytes(16)).location() is None
-    assert Unknown.from_ram(bytes(16)).describe() == {}
+    ram_info = Unknown.from_ram(bytes(16))
+
+    assert (ram_info.position(), ram_info.remaining_lives(), ram_info.dynamics()) == (None, None, ())

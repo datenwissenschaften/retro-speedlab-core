@@ -1,24 +1,18 @@
 from concurrent.futures import Future
 from pathlib import Path
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from fakes import FakeEmulator, FakeWrapper, curriculum_run, fake_routes, write_config
+from fakes import FakeEmulator, FakeWrapper, fake_routes, write_config
 
-from datenwissenschaften.laya.imitation import Example
 from datenwissenschaften.settings import SpeedrunRecord, load_config
-from datenwissenschaften.states.landmarks import Landmarks
 from datenwissenschaften.tas import movie, run, workers
 from datenwissenschaften.tas.movie import Segment
+from datenwissenschaften.tas.paths import PROGRESS_FILE, TAS_MOVIE, tas_dir
+from datenwissenschaften.tas.report import report
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import Crossing, search_segment, shave
 from datenwissenschaften.tas.stuck import STUCK_FILE, Stuck, load_stuck
-from datenwissenschaften.training import expert_hook
-from datenwissenschaften.training.expert_hook import SNAPSHOT_DECISIONS, ExpertHook
-from datenwissenschaften.training.learning import Learning
-from datenwissenschaften.training.lessons import Lessons
-from datenwissenschaften.training.own_wins import OwnWins
 
 SCRIPT = [(3, 0), (3, 1), (3, 2), (3, 5), (3, 6), (3, 6), (3, 6), (3, 6)]
 BOSS_FRAMES = 3
@@ -42,8 +36,8 @@ class SavingEmulator(FakeEmulator):
     def action_to_array(self, action: np.ndarray) -> list[np.ndarray]:
         return [np.asarray(action, dtype=np.uint8)]
 
-    def reset(self, **kwargs):
-        observation = super().reset(**kwargs)
+    def reset(self) -> tuple[np.ndarray, dict]:
+        observation = super().reset()
         if self.movie_path:
             Path(self.movie_path).mkdir(parents=True, exist_ok=True)
             (Path(self.movie_path) / f"{self.gamename}-Level1-{self.movie_id - 1:06d}.bk2").write_bytes(b"movie")
@@ -65,8 +59,7 @@ class SyncPool:
 
 def saving_environment(tmp_path: Path) -> FakeWrapper:
     emulator = SavingEmulator(tmp_path / "recordings", SCRIPT)
-    curriculum = curriculum_run(tmp_path / "curriculum", ("Survive", "Boss"), tmp_path / "seeds")
-    return FakeWrapper(emulator, curriculum, Landmarks(tmp_path / "landmarks.json"), fake_routes(tmp_path), "Level1")
+    return FakeWrapper(emulator, fake_routes(tmp_path))
 
 
 def local_workers(monkeypatch, runner: SegmentRunner) -> None:
@@ -92,21 +85,21 @@ def test_the_runner_restores_savestates_and_tells_when_a_segment_is_left(tmp_pat
 def test_search_and_improve_write_a_verified_movie_and_keep_only_faster_segments(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
     local_workers(monkeypatch, runner)
-    monkeypatch.setattr(run, "make_environment", lambda wrapper_cls, settings, worker, main: runner.wrapper)
+    monkeypatch.setattr(run, "make_environment", lambda wrapper_cls, settings, worker: runner.wrapper)
     monkeypatch.setattr(run, "worker_pool", lambda count: SyncPool())
     monkeypatch.setattr(run, "render_video", lambda paths, recording: recording.with_suffix(".mp4"))
     monkeypatch.setattr(run, "SegmentRunner", lambda wrapper: runner)
     config = write_config(tmp_path)
-    output = run.tas_dir(load_config(config))
+    output = tas_dir(load_config(config))
 
     run.search("fakes:FakeWrapper", config, "Boss")
-    searched = run.load_progress(output / run.PROGRESS_FILE)
-    run.save_progress(output / run.PROGRESS_FILE, [Segment("Boss", [[1, 0]] * 6, bytes([6]), False)])
+    searched = run.load_progress(output / PROGRESS_FILE)
+    run.save_progress(output / PROGRESS_FILE, [Segment("Boss", [[1, 0]] * 6, bytes([6]), False)])
     run.improve("fakes:FakeWrapper", config)
 
     assert [(segment.state, len(segment.pressed)) for segment in searched] == [("Boss", BOSS_FRAMES)]
-    assert run.frames(run.load_progress(output / run.PROGRESS_FILE)) == BOSS_FRAMES
-    assert (output / run.TAS_MOVIE).read_bytes() == b"movie"
+    assert run.frames(run.load_progress(output / PROGRESS_FILE)) == BOSS_FRAMES
+    assert (output / TAS_MOVIE).read_bytes() == b"movie"
 
 
 def test_a_movie_that_no_longer_reaches_its_segments_is_cut_back(tmp_path: Path, monkeypatch):
@@ -126,12 +119,12 @@ def test_a_movie_that_no_longer_reaches_its_segments_is_cut_back(tmp_path: Path,
 
 def test_verify_accepts_a_movie_that_replays_and_rejects_one_that_does_not(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
-    monkeypatch.setattr(run, "make_environment", lambda wrapper_cls, settings, worker, main: runner.wrapper)
+    monkeypatch.setattr(run, "make_environment", lambda wrapper_cls, settings, worker: runner.wrapper)
     config = write_config(tmp_path)
     good, bad = tmp_path / "good.msgpack", tmp_path / "bad.msgpack"
     run.save_progress(good, [Segment("Boss", [[1, 0]] * BOSS_FRAMES, bytes([BOSS_FRAMES]), False)])
     run.save_progress(bad, [Segment("Boss", [[1, 0]], bytes([1]), False)])
-    run.tas_dir(load_config(config)).mkdir(parents=True)
+    tas_dir(load_config(config)).mkdir(parents=True)
 
     run.verify("fakes:FakeWrapper", config, good)
 
@@ -145,14 +138,14 @@ def test_the_speedrun_reports_level_splits_against_the_records():
 
     stuck = Stuck("Level2", "2026-10-29T10:01:00+00:00", 2)
 
-    report = run.report(segments, levels, "Menu", 60.0, (SpeedrunRecord("TAS", 400.0),), "Level2", stuck)
+    speedrun = report(segments, levels, "Menu", 60.0, (SpeedrunRecord("TAS", 400.0),), "Level2", stuck)
 
-    assert report["seconds"] == 3.0
-    assert report["splits"] == [{"level": "Level 1", "seconds": 3.0}]
-    assert report["records"] == [{"name": "TAS", "seconds": 400.0}]
-    assert (report["reached"], report["won"], report["searching"]) == ("Level2", False, "Level2")
-    assert report["levels"] == ["Level 1", "Level 2"]
-    assert report["stuck"] == {"state": "Level2", "since": "2026-10-29T10:01:00+00:00", "searches": 2}
+    assert speedrun["seconds"] == 3.0
+    assert speedrun["splits"] == [{"level": "Level 1", "seconds": 3.0}]
+    assert speedrun["records"] == [{"name": "TAS", "seconds": 400.0}]
+    assert (speedrun["reached"], speedrun["won"], speedrun["searching"]) == ("Level2", False, "Level2")
+    assert speedrun["levels"] == ["Level 1", "Level 2"]
+    assert speedrun["stuck"] == {"state": "Level2", "since": "2026-10-29T10:01:00+00:00", "searches": 2}
 
 
 def test_a_segment_without_a_way_out_is_marked_stuck_and_the_way_into_it_searched_again(tmp_path: Path, monkeypatch):
@@ -177,39 +170,13 @@ def test_a_segment_without_a_way_out_is_marked_stuck_and_the_way_into_it_searche
     assert load_stuck(tas.output / STUCK_FILE) is None
 
 
-def test_workers_search_shave_and_teach_from_a_savestate(tmp_path: Path, monkeypatch):
+def test_workers_search_and_shave_from_a_savestate(tmp_path: Path, monkeypatch):
     env = saving_environment(tmp_path)
-    monkeypatch.setattr(workers, "make_environment", lambda wrapper_cls, settings, worker, main: env)
+    monkeypatch.setattr(workers, "make_environment", lambda wrapper_cls, settings, worker: env)
     runner = workers.worker_runner.__wrapped__("fakes:FakeWrapper", write_config(tmp_path))
     start = runner.power_on()
     crossing = search_segment(runner, start, 100, 1, SECONDS)[0]
     monkeypatch.setattr(workers, "worker_runner", lambda wrapper, config: runner)
 
-    examples = workers.teach("fakes:FakeWrapper", tmp_path, start, 1, SECONDS)
-
     assert workers.explore("fakes:FakeWrapper", tmp_path, start, 100, 1, SECONDS)[0].frames == BOSS_FRAMES
     assert workers.polish("fakes:FakeWrapper", tmp_path, start, crossing, SECONDS) == shave(runner, start, crossing, 0)
-    assert len(examples) == BOSS_FRAMES
-    assert examples[0].question == "Which move survives?"
-
-
-def test_a_failed_attempt_in_a_learning_state_becomes_a_lesson(tmp_path: Path, monkeypatch):
-    env = saving_environment(tmp_path)
-    env.reset()
-    curriculum = env.curriculum.curriculum
-    learning = Learning(curriculum, env.curriculum.drill)
-    wins = OwnWins(curriculum.state_names, lambda state: tmp_path / f"{state}.wins.json", learning)
-    taught = [Example("{}", "Which move survives?", 1)]
-    monkeypatch.setattr(expert_hook, "teacher_pool", lambda: SyncPool())
-    monkeypatch.setattr(expert_hook, "teach", lambda wrapper, config, start, seed, seconds: taught)
-    hook = ExpertHook(env, Lessons({}, learning, wins), tmp_path / "config.yaml")
-    step = SimpleNamespace(info={"state": "Survive"})
-
-    for _ in range(SNAPSHOT_DECISIONS):
-        hook.on_step(step)
-    hook.on_episode_end(SimpleNamespace(curriculum_succeeded=False))
-    hook.on_step(step)
-    hook.on_update()
-
-    assert wins.examples("Survive") == taught
-    assert hook.lesson is None

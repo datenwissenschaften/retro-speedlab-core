@@ -7,7 +7,6 @@ from datenwissenschaften.environment.wrapper import StateMachineGymWrapper, lost
 
 CELL_PIXELS = 8
 TIME_BUCKET_FRAMES = 30
-NO_FRAME = np.zeros(0, dtype=np.uint8)
 
 CellKey = tuple[object, ...]
 
@@ -30,23 +29,23 @@ class Outcome:
 class SegmentRunner:
     def __init__(self, wrapper: StateMachineGymWrapper) -> None:
         self.wrapper = wrapper
-        self.emulator = wrapper.env.unwrapped
+        self.emulator = wrapper.env
         self.order = phases(type(wrapper))
         self.classes = (wrapper.start_state_cls, *wrapper.state_classes)
-        wrapper.env.reset()
+        self.emulator.reset()
         self.ram = wrapper.read_ram()
 
     def power_on(self) -> Start:
-        self.wrapper.env.reset()
+        self.emulator.reset()
         self.ram = self.wrapper.read_ram()
-        self.wrapper.state_machine.reset(self.ram, NO_FRAME, None)
+        self.wrapper.state_machine.reset(self.ram, None)
         return Start(self.order[0], self.snapshot())
 
     def restore(self, start: Start) -> None:
         restore_emulator_state(self.emulator, start.emulator_state)
         self.ram = self.wrapper.read_ram()
         state_type = None if start.state == self.order[0] else state_class(self.classes, start.state)
-        self.wrapper.state_machine.reset(self.ram, NO_FRAME, state_type)
+        self.wrapper.state_machine.reset(self.ram, state_type)
 
     def press(self, buttons: np.ndarray) -> tuple[bool, bool, float]:
         for player, mask in enumerate(self.emulator.action_to_array(buttons)):
@@ -55,7 +54,7 @@ class SegmentRunner:
         self.emulator.data.update_ram()
         ram = self.wrapper.read_ram()
         machine = self.wrapper.state_machine
-        reward, terminated, truncated = machine.step(ram, NO_FRAME)
+        reward, terminated, truncated = machine.step(ram)
         won = machine.current_state._won()
         alive = won or not (terminated or truncated or lost_life(self.ram, ram))
         self.ram = ram

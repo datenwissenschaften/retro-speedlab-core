@@ -28,7 +28,7 @@ class NoPool:
 
 def test_the_stream_relay_runs_only_with_the_ui_and_needs_a_key(tmp_path: Path, monkeypatch):
     started: list[str] = []
-    relay = lambda url, key, ui, root: SimpleNamespace(start=lambda: started.append(url))  # noqa: E731
+    relay = lambda url, key, ui: SimpleNamespace(start=lambda: started.append(url))  # noqa: E731
     monkeypatch.setattr(speedrun_module, "LiveRelay", relay)
     settings = load_config(write_config(tmp_path))
     with_ui = dataclasses.replace(settings, ui=dataclasses.replace(settings.ui, enabled=True))
@@ -43,14 +43,13 @@ def test_the_stream_relay_runs_only_with_the_ui_and_needs_a_key(tmp_path: Path, 
     assert started == ["https://upload.test"]
 
 
-def test_the_lab_status_is_published_until_stopped():
-    published: list[int] = []
+def test_the_lab_status_is_published_until_stopped(tmp_path: Path, monkeypatch):
+    published: list[Path] = []
+    monkeypatch.setattr(speedrun_module, "publish_lab_run", published.append)
 
-    speedrun_module.watch_lab(
-        SimpleNamespace(publish=lambda: published.append(1)), SimpleNamespace(wait=lambda seconds: bool(published))
-    )
+    speedrun_module.watch_lab(tmp_path / ".lab-run", SimpleNamespace(wait=lambda seconds: bool(published)))
 
-    assert published == [1]
+    assert published == [tmp_path / ".lab-run"]
 
 
 def test_the_speedrun_extends_the_movie_then_publishes_every_faster_one(tmp_path: Path, monkeypatch):

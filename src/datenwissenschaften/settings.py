@@ -11,25 +11,13 @@ class RetroSpeedlabPaths:
     roms_path: Path
     integrations_dir: Path
     models_dir: Path
-    record_dir: Path
     cache_dir: Path
-    database_path: Path
-    reports_dir: Path
-    curriculum_dir: Path
-    demonstrations_dir: Path
     lab_run_marker: Path
 
 
 @dataclass(frozen=True)
 class TrainingSettings:
     game: str
-    game_identity: str
-    fingerprint: str | None
-
-
-@dataclass(frozen=True)
-class LayaSettings:
-    checkpoint: str
 
 
 @dataclass(frozen=True)
@@ -41,11 +29,8 @@ class UploadSettings:
 @dataclass(frozen=True)
 class UISettings:
     enabled: bool
-    max_episodes: int
     release: str
-    persona: str
     twitch: bool
-    summary_models: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -67,21 +52,13 @@ class SpeedrunSettings:
 
 
 @dataclass(frozen=True)
-class TrackingSettings:
-    url: str
-    token: str | None
-
-
-@dataclass(frozen=True)
 class RetroSpeedlabConfig:
     paths: RetroSpeedlabPaths
     training: TrainingSettings
-    laya: LayaSettings
     upload: UploadSettings
     ui: UISettings
     lab: LabSettings
     speedrun: SpeedrunSettings
-    tracking: TrackingSettings
     log_level: str
 
 
@@ -91,40 +68,24 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
         raise RuntimeError(f"Configuration file not found: {config_path}")
     document = Box(yaml.safe_load(config_path.read_text(encoding="utf-8")), box_dots=False)
     base_dir = config_path.parent
-    training = document.training
     ui = document.ui
     return RetroSpeedlabConfig(
         paths=RetroSpeedlabPaths(
             roms_path=_path(document.paths.roms, base_dir),
             integrations_dir=_path(document.paths.integrations, base_dir),
             models_dir=_path(document.paths.models, base_dir),
-            record_dir=_path(document.paths.recordings, base_dir),
             cache_dir=_path(document.paths.cache, base_dir),
-            database_path=_path(document.paths.database, base_dir),
-            reports_dir=_path(document.paths.reports, base_dir),
-            curriculum_dir=_path(document.paths.curriculum, base_dir),
-            demonstrations_dir=_path(document.paths.demonstrations, base_dir),
             lab_run_marker=_path(document.paths.lab_run, base_dir),
         ),
-        training=TrainingSettings(
-            game=_text(training.game, "training.game"),
-            game_identity=_text(training.game_identity, "training.game_identity")
-            if "game_identity" in training
-            else _text(training.game, "training.game"),
-            fingerprint=_optional_text(training.fingerprint, "training.fingerprint"),
-        ),
-        laya=LayaSettings(checkpoint=_text(document.laya.checkpoint, "laya.checkpoint")),
+        training=TrainingSettings(game=_text(document.training.game, "training.game")),
         upload=UploadSettings(
             url=_text(document.upload.url, "upload.url"),
             api_key=_optional_text(document.upload.api_key, "upload.api_key"),
         ),
         ui=UISettings(
             enabled=_boolean(ui.enable, "ui.enable"),
-            max_episodes=_positive_int(ui.max_episodes, "ui.max_episodes"),
             release=_text(ui.release, "ui.release"),
-            persona=_text(ui.persona, "ui.persona"),
             twitch=_boolean(document.twitch.enabled, "twitch.enabled"),
-            summary_models=_texts(document.twitch.summary_models, "twitch.summary_models"),
         ),
         lab=LabSettings(stall_minutes=_positive_int(document.agent.stall_minutes, "agent.stall_minutes")),
         speedrun=SpeedrunSettings(
@@ -135,10 +96,6 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
                 for name, seconds in document.speedrun.records.items()
             ),
         ),
-        tracking=TrackingSettings(
-            url=_text(document.tracking.url, "tracking.url"),
-            token=_optional_text(document.tracking.token, "tracking.token"),
-        ),
         log_level=_text(document.log_level, "log_level").upper(),
     )
 
@@ -147,12 +104,6 @@ def _text(value: Any, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise RuntimeError(f"Configuration value '{name}' must be a non-empty string.")
     return value.strip()
-
-
-def _texts(value: Any, name: str) -> tuple[str, ...]:
-    if not isinstance(value, list) or not value:
-        raise RuntimeError(f"Configuration value '{name}' must be a non-empty list.")
-    return tuple(_text(item, name) for item in value)
 
 
 def _optional_text(value: Any, name: str) -> str | None:

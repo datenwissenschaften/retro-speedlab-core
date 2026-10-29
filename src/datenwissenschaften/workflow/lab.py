@@ -4,13 +4,10 @@ from pathlib import Path
 
 from loguru import logger
 
-from datenwissenschaften.environment.demonstration import TAS_DIR, TAS_PROGRESS
-from datenwissenschaften.environment.level_drill import DRILLED_SUFFIX
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
+from datenwissenschaften.tas.paths import PROGRESS_FILE, tas_dir
 from datenwissenschaften.tas.stuck import STUCK_FILE, load_stuck
-from datenwissenschaften.tracking.stale import close_stale_lab_runs
-from datenwissenschaften.tracking.task_run import task_run
 from datenwissenschaften.workflow.environment import speedlab
 
 SECONDS_PER_MINUTE = 60
@@ -18,10 +15,7 @@ LAST_LAB_RUN = ".agent-last-run"
 
 
 def last_progress(config: RetroSpeedlabConfig) -> float:
-    curricula = config.paths.cache_dir / "curriculum"
-    wins = [*curricula.glob("*/*.successes"), *curricula.glob(f"*/*{DRILLED_SUFFIX}")]
-    speedrun = config.paths.cache_dir / TAS_DIR / TAS_PROGRESS
-    marks = [*wins, speedrun, config.paths.lab_run_marker.with_name(LAST_LAB_RUN)]
+    marks = [tas_dir(config) / PROGRESS_FILE, config.paths.lab_run_marker.with_name(LAST_LAB_RUN)]
     return max((mark.stat().st_mtime for mark in marks if mark.is_file()), default=0.0)
 
 
@@ -32,8 +26,7 @@ def lab_run_due(config: str) -> bool:
     if settings.paths.lab_run_marker.exists():
         logger.info("No lab run: one is running")
         return False
-    close_stale_lab_runs(settings)
-    stuck = load_stuck(settings.paths.cache_dir / TAS_DIR / STUCK_FILE)
+    stuck = load_stuck(tas_dir(settings) / STUCK_FILE)
     if stuck is not None:
         logger.info(f"Lab run: the search is stuck in {stuck.state} after {stuck.searches} searches")
         return True
@@ -46,12 +39,11 @@ def lab_run_due(config: str) -> bool:
 
 
 @speedlab.task
-def lab_run(config: str, project: str) -> None:
-    with task_run(Path(config), "lab_run"):
-        subprocess.run([Path(project) / "agent" / "daily.sh"], check=True)
+def lab_run(project: str) -> None:
+    subprocess.run([Path(project) / "agent" / "daily.sh"], check=True)
 
 
 @speedlab.task
 def lab(config: str, project: str) -> None:
     if lab_run_due(config):
-        lab_run(config, project)
+        lab_run(project)

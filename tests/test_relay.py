@@ -5,20 +5,18 @@ from pathlib import Path
 import httpx
 
 from datenwissenschaften.settings import UISettings
-from datenwissenschaften.ui import live, relay
+from datenwissenschaften.ui import live, relay, telemetry
 from datenwissenschaften.ui.live import LiveFeed
 
-RESULT = {"score": 1.0, "succeeded": False, "curriculum": "Play"}
-SETTINGS = UISettings(True, 10, "2026.10.08-1", "Retra", True, ("model",))
+RESULT = {"start": "PowerOn", "reached": "Play", "seconds": 1.0, "verified": 1}
+SETTINGS = UISettings(True, "2026.10.08-1", True)
 
 
-def backend(held: list[str], requests: list[tuple[str, str, bytes]], reset: str | None) -> httpx.Client:
+def backend(held: list[str], requests: list[tuple[str, str, bytes]]) -> httpx.Client:
     def answer(request: httpx.Request) -> httpx.Response:
         requests.append((request.method, request.url.path, request.content))
         if request.method == "GET" and request.url.path == "/live/media":
             return httpx.Response(200, json=held)
-        if request.method == "GET" and request.url.path == "/live/reset":
-            return httpx.Response(200, json={"game": reset})
         return httpx.Response(204)
 
     return httpx.Client(base_url="https://api.test/live", transport=httpx.MockTransport(answer))
@@ -29,13 +27,13 @@ def test_the_relay_uploads_each_attempt_once_before_the_feed_names_it(monkeypatc
     monkeypatch.setattr(live, "encode_video", lambda jpegs, frame_rate: b"mp4")
     monkeypatch.setattr(relay, "live_feed", feed)
     feed.record(b"jpeg", {"action": "right"})
-    feed.finish_episode(1, 60.0, RESULT, {})
+    feed.finish_episode(1, 60.0, RESULT)
     key = feed.latest_episode()["episode"]["key"]
     requests: list[tuple[str, str, bytes]] = []
-    pusher = relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path)
+    pusher = relay.LiveRelay("https://api.test", "key", SETTINGS)
 
-    pusher._push_feed(backend([f"{key}.mp4"], requests, None))
-    pusher._push_feed(backend([], requests, None))
+    pusher._push_feed(backend([f"{key}.mp4"], requests))
+    pusher._push_feed(backend([], requests))
 
     uploads = [(path, body) for method, path, body in requests if method == "PUT" and "/parts/" in path]
     pushed = json.loads(gzip.decompress(next(body for method, path, body in requests if path == "/live/feed")))
@@ -45,27 +43,11 @@ def test_the_relay_uploads_each_attempt_once_before_the_feed_names_it(monkeypatc
     assert [method for method, path, _ in requests if path == "/live/media"] == ["GET", "PUT"]
 
 
-def test_a_reset_requested_through_the_backend_reaches_the_training(monkeypatch, tmp_path: Path):
-    resets: list[str] = []
-    monkeypatch.setattr(relay, "request_model_reset", resets.append)
-    monkeypatch.setattr(relay, "stream_snapshot", lambda settings: {"status": "running"})
-    requests: list[tuple[str, str, bytes]] = []
-
-    relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path)._push_snapshot(backend([], requests, "Game-v0"))
-
-    assert resets == ["Game-v0"]
-    assert [(method, path) for method, path, _ in requests] == [
-        ("PUT", "/live/snapshot"),
-        ("GET", "/live/reset"),
-        ("DELETE", "/live/reset"),
-    ]
-
-
 def test_large_media_goes_up_in_parts_below_the_waf_body_limit(monkeypatch):
     requests: list[tuple[str, str, bytes]] = []
     monkeypatch.setattr(relay, "PART_BYTES", 4)
 
-    relay._upload(backend([], requests, None), "name.mp4", b"0123456789")
+    relay._upload(backend([], requests), "name.mp4", b"0123456789")
 
     assert [(path, body) for _, path, body in requests] == [
         ("/live/media/name.mp4/parts/0", b"0123"),
@@ -74,46 +56,30 @@ def test_large_media_goes_up_in_parts_below_the_waf_body_limit(monkeypatch):
     ]
 
 
-def test_recorded_attempts_go_up_with_their_metadata(monkeypatch, tmp_path: Path):
-    monkeypatch.setattr(relay, "live_feed", LiveFeed())
-    (tmp_path / "run.mp4").write_bytes(b"mp4")
-    (tmp_path / "run.rollout.json").write_text(json.dumps({"score": 2.0}), encoding="utf-8")
-    (tmp_path / "lost.rollout.json").write_text("{}", encoding="utf-8")
+def test_the_snapshot_names_the_release_and_carries_the_published_metadata(monkeypatch):
+    monkeypatch.setattr(relay, "metadata", lambda: {"speedrun": {"frames": 3}})
+
+    snapshot = relay.stream_snapshot(SETTINGS)
+
+    assert snapshot["server"]["release"] == SETTINGS.release
+    assert snapshot["server"]["twitch"] is True
+    assert snapshot["metadata"] == {"speedrun": {"frames": 3}}
+
+
+def test_the_snapshot_goes_up_gzipped(monkeypatch):
+    monkeypatch.setattr(relay, "stream_snapshot", lambda settings: {"metadata": {}})
     requests: list[tuple[str, str, bytes]] = []
 
-    relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path)._push_feed(backend([], requests, None))
+    relay.LiveRelay("https://api.test", "key", SETTINGS)._push_snapshot(backend([], requests))
 
-    pushed = json.loads(gzip.decompress(next(body for method, path, body in requests if path == "/live/feed")))
-    uploads = [body for method, path, body in requests if "/parts/" in path]
-    assert [attempt["score"] for attempt in pushed["attempts"]] == [2.0]
-    assert uploads == [b"mp4"]
-
-
-def test_a_refused_reset_leaves_the_training_running(monkeypatch, tmp_path: Path):
-    def refuse(game: str) -> None:
-        raise ValueError(game)
-
-    monkeypatch.setattr(relay, "request_model_reset", refuse)
-    monkeypatch.setattr(relay, "stream_snapshot", lambda settings: {"status": "running"})
-    requests: list[tuple[str, str, bytes]] = []
-
-    relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path)._push_snapshot(backend([], requests, "Other-v0"))
-
-    assert ("DELETE", "/live/reset") in [(method, path) for method, path, _ in requests]
-
-
-def test_the_snapshot_names_the_release_and_its_persona():
-    server = relay.stream_snapshot(SETTINGS)["server"]
-
-    assert server["release"] == SETTINGS.release
-    assert server["persona"] == "Retra"
-    assert len(server["persona_tag"]) == 6
+    assert [(method, path) for method, path, _ in requests] == [("PUT", "/live/snapshot")]
+    assert json.loads(gzip.decompress(requests[0][2])) == {"metadata": {}}
 
 
 def test_the_relay_keeps_pushing_after_the_backend_is_unreachable_until_it_stops(monkeypatch, tmp_path: Path):
     outcomes = [httpx.ConnectError("down"), None, None]
     pushes: list[httpx.Client] = []
-    pusher = relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path)
+    pusher = relay.LiveRelay("https://api.test", "key", SETTINGS)
     monkeypatch.setattr(relay, "RELAY_SECONDS", 0.0)
 
     def push(client: httpx.Client) -> None:
@@ -141,18 +107,9 @@ def test_the_relay_starts_one_thread_for_the_snapshot_and_one_for_the_feed(monke
 
     monkeypatch.setattr(relay.threading, "Thread", Thread)
 
-    relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path).start()
+    relay.LiveRelay("https://api.test", "key", SETTINGS).start()
 
     assert started == ["relay_push_snapshot", "relay_push_feed"]
-
-
-def test_without_a_pending_reset_only_the_snapshot_goes_up(monkeypatch, tmp_path: Path):
-    monkeypatch.setattr(relay, "stream_snapshot", lambda settings: {"status": "running"})
-    requests: list[tuple[str, str, bytes]] = []
-
-    relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path)._push_snapshot(backend([], requests, None))
-
-    assert [(method, path) for method, path, _ in requests] == [("PUT", "/live/snapshot"), ("GET", "/live/reset")]
 
 
 def test_media_that_vanished_before_the_upload_is_skipped(monkeypatch, tmp_path: Path):
@@ -161,6 +118,13 @@ def test_media_that_vanished_before_the_upload_is_skipped(monkeypatch, tmp_path:
     monkeypatch.setattr(relay, "live_feed", feed)
     requests: list[tuple[str, str, bytes]] = []
 
-    relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path)._push_feed(backend([], requests, None))
+    relay.LiveRelay("https://api.test", "key", SETTINGS)._push_feed(backend([], requests))
 
     assert not [path for _, path, _ in requests if "/parts/" in path]
+
+
+def test_published_metadata_replaces_its_section():
+    telemetry.publish_metadata("speedrun", {"frames": 9})
+    telemetry.publish_metadata("speedrun", {"frames": 7})
+
+    assert telemetry.metadata()["speedrun"] == {"frames": 7}

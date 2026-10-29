@@ -4,18 +4,14 @@ from typing import Any, Self, final
 from datenwissenschaften.route.position import Position
 
 
-def ram(address: int):
+def ram(address: int) -> Any:
     return field(default=0, metadata={"address": address, "length": 1})
 
 
-def ram_array(address: int, length: int):
+def ram_array(address: int, length: int) -> Any:
     if length < 1:
         raise ValueError("length must be positive.")
-
-    return field(
-        default_factory=lambda: [0] * length,
-        metadata={"address": address, "length": length},
-    )
+    return field(default_factory=lambda: [0] * length, metadata={"address": address, "length": length})
 
 
 class RamInfo:
@@ -28,38 +24,12 @@ class RamInfo:
     @final
     def from_ram(cls, raw_ram: Any) -> Self:
         values = {}
-
         for name, (address, length) in cls.ram_map().items():
             if length == 1:
                 values[name] = int(raw_ram[address])
             else:
                 values[name] = [int(raw_ram[address + offset]) for offset in range(length)]
-
         return cls(**values)
-
-    @final
-    def to_dict(self) -> dict[str, int | list[int]]:
-        values = {}
-
-        for name in self.ram_map():
-            value = getattr(self, name)
-            values[name] = list(value) if isinstance(value, list) else int(value)
-
-        return values
-
-    @final
-    def memory(self) -> list[dict[str, Any]]:
-        values = self.to_dict()
-        return [
-            {"name": name, "address": f"0x{address:04X}", "length": length, "value": values[name]}
-            for name, (address, length) in self.ram_map().items()
-        ]
-
-    def describe(self) -> dict[str, Any]:
-        return self.to_dict()
-
-    def location(self) -> tuple[int, int] | None:
-        return None
 
     def position(self) -> Position | None:
         return None

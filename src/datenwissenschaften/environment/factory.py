@@ -3,54 +3,30 @@ from pathlib import Path
 
 import stable_retro as retro
 
-from datenwissenschaften.environment.curriculum_run import CurriculumRun
-from datenwissenschaften.environment.level_clock import LevelClock
-from datenwissenschaften.environment.levels import LevelTargets, curriculum_targets, level_map
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.roms import import_roms
 from datenwissenschaften.route.route_map import RouteMap
 from datenwissenschaften.settings import RetroSpeedlabConfig
-from datenwissenschaften.states.landmarks import Landmarks
-from datenwissenschaften.training.context import RunContext
 
-LANDMARKS_FILE = "landmarks.json"
-LEVEL_TIMES_FILE = "level_times.json"
 POWER_ON = "PowerOn"
 SESSION_STAMP = "%Y%m%dT%H%M%S"
+ROUTE_FILE = "route.json"
 
 
 def make_environment(
-    wrapper_cls: type[StateMachineGymWrapper], config: RetroSpeedlabConfig, worker: int, main: bool
+    wrapper_cls: type[StateMachineGymWrapper], config: RetroSpeedlabConfig, worker: int
 ) -> StateMachineGymWrapper:
-    training = config.training
     import_roms(config.paths.roms_path, config.paths.integrations_dir)
-    record_dir = config.paths.record_dir / training.game
-    record_dir.mkdir(parents=True, exist_ok=True)
     env = retro.make(
-        training.game,
+        config.training.game,
         retro.State.NONE,
         render_mode="rgb_array",
-        record=str(record_dir) if main else False,
         use_restricted_actions=retro.Actions.ALL,
     )
-    emulator = env.unwrapped
-    emulator.initial_state = emulator.em.get_state()
-    emulator.statename = f"{POWER_ON}-{datetime.now(UTC):{SESSION_STAMP}}-{worker}"
-    root = curriculum_root(config)
-    levels = level_map(wrapper_cls.levels, wrapper_cls.state_classes)
-    targets = curriculum_targets(wrapper_cls.state_classes, levels)
-    clock = LevelClock(root / LEVEL_TIMES_FILE, emulator.em.get_screen_rate())
-    curriculum = CurriculumRun(
-        root,
-        LevelTargets(targets, levels, wrapper_cls.curriculum_beats_game),
-        POWER_ON,
-        config.paths.curriculum_dir,
-        clock,
-        main,
-    )
-    routes = RouteMap(RunContext(config, POWER_ON).route_path, tuple(wrapper_cls.action_descriptions.values()))
-    return wrapper_cls(env, curriculum, Landmarks(root / LANDMARKS_FILE), routes, POWER_ON)
+    env.initial_state = env.em.get_state()
+    env.statename = f"{POWER_ON}-{datetime.now(UTC):{SESSION_STAMP}}-{worker}"
+    return wrapper_cls(env, RouteMap(lambda state: route_path(config, state)))
 
 
-def curriculum_root(config: RetroSpeedlabConfig) -> Path:
-    return config.paths.cache_dir / "curriculum" / config.training.game_identity
+def route_path(config: RetroSpeedlabConfig, state: str) -> Path:
+    return config.paths.models_dir / config.training.game / state / ROUTE_FILE

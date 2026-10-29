@@ -1,13 +1,9 @@
-import base64
 import threading
 from collections import deque
-from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from datenwissenschaften.ui.media import episode_key, episode_media, episode_media_names
-from datenwissenschaften.ui.replay_rotation import ReplayRotation
-from datenwissenschaften.ui.replay_store import ReplayStore
 from datenwissenschaften.ui.replay_video import encode_video
 
 MAX_COMPLETED_EPISODES = 4
@@ -16,46 +12,17 @@ MAX_COMPLETED_EPISODES = 4
 class LiveFeed:
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._replays = ReplayRotation()
-        self._start_generation()
-
-    def keep_replays_in(self, directory: Path, curricula: frozenset[str]) -> None:
-        with self._lock:
-            self._replays.persist_in(ReplayStore(directory), curricula)
-
-    def clear(self) -> None:
-        with self._lock:
-            self._start_generation()
-            self._replays.clear()
-
-    def _start_generation(self) -> None:
         self._generation = uuid4().hex
         self._recording: list[dict[str, Any]] = []
         self._episodes: deque[dict[str, Any]] = deque(maxlen=MAX_COMPLETED_EPISODES)
-        self._summary: dict[str, Any] = {}
 
     def record(self, jpeg: bytes, status: dict[str, Any]) -> None:
         with self._lock:
             self._recording.append({"image": jpeg, "status": status})
 
-    def last_status(self) -> dict[str, Any]:
-        with self._lock:
-            if not self._recording:
-                raise RuntimeError("No frame has been recorded for this episode.")
-            return self._recording[-1]["status"]
-
-    def last_image(self) -> str:
-        with self._lock:
-            if not self._recording:
-                raise RuntimeError("No frame has been recorded for this episode.")
-            return base64.b64encode(self._recording[-1]["image"]).decode("ascii")
-
-    def finish_episode(
-        self, episode_id: int, frame_rate: float, result: dict[str, Any], summary: dict[str, Any]
-    ) -> None:
+    def finish_episode(self, episode_id: int, frame_rate: float, result: dict[str, Any]) -> None:
         with self._lock:
             frames, self._recording = self._recording, []
-            self._summary = summary
         if not frames:
             return
         episode = {
@@ -68,34 +35,22 @@ class LiveFeed:
         episode["key"] = episode_key(episode)
         with self._lock:
             self._episodes.append(episode)
-            self._replays.keep(episode)
-
-    def drop_replays(self, curricula: tuple[str, ...]) -> None:
-        with self._lock:
-            self._replays.drop(curricula)
 
     def latest_episode(self) -> dict[str, Any]:
         with self._lock:
-            return {
-                "generation": self._generation,
-                "episode": _overview(self._episodes[-1]) if self._episodes else None,
-                "replays": [_overview(episode) for episode in self._replays.episodes()],
-                "summary": dict(self._summary),
-            }
+            latest = _overview(self._episodes[-1]) if self._episodes else None
+            return {"generation": self._generation, "episode": latest}
 
     def media_names(self) -> set[str]:
         with self._lock:
-            return {name for episode in self._all() for name in episode_media_names(episode)}
+            return {name for episode in self._episodes for name in episode_media_names(episode)}
 
     def media(self, name: str) -> bytes:
         with self._lock:
-            episodes = [episode for episode in self._all() if name in episode_media_names(episode)]
+            episodes = [episode for episode in self._episodes if name in episode_media_names(episode)]
         if not episodes:
             raise KeyError(name)
         return episode_media(episodes[0], name)
-
-    def _all(self) -> list[dict[str, Any]]:
-        return [*self._episodes, *self._replays.episodes()]
 
 
 def _overview(episode: dict[str, Any]) -> dict[str, Any]:

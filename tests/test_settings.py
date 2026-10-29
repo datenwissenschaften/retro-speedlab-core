@@ -14,30 +14,15 @@ def _document() -> dict[str, Any]:
             "roms": "roms",
             "integrations": "integrations",
             "models": "models",
-            "recordings": "recordings",
             "cache": "cache",
-            "database": "database.json",
-            "reports": "agent/reports",
-            "curriculum": "curriculum",
-            "demonstrations": "demonstrations",
             "lab_run": "lab-run",
         },
-        "training": {
-            "game": "TestGame",
-            "fingerprint": None,
-        },
-        "laya": {"checkpoint": "convaiinnovations/laya"},
+        "training": {"game": "TestGame"},
         "upload": {"url": "https://example.test", "api_key": None},
-        "ui": {
-            "enable": True,
-            "max_episodes": 1000,
-            "release": "local",
-            "persona": "Retra",
-        },
-        "twitch": {"enabled": True, "summary_models": ["test/model:free"]},
+        "ui": {"enable": True, "release": "local"},
+        "twitch": {"enabled": True},
         "agent": {"stall_minutes": 30},
         "speedrun": {"workers": 4, "segment_seconds": 60, "records": {"Human Any%": 332.6}},
-        "tracking": {"url": "https://training.test", "token": None},
         "log_level": "info",
     }
 
@@ -52,12 +37,9 @@ def test_complete_config_loads(tmp_path: Path):
     config = load_config(_write(tmp_path, _document()))
 
     assert config.training.game == "TestGame"
-    assert config.training.game_identity == "TestGame"
-    assert config.training.fingerprint is None
-    assert config.laya.checkpoint == "convaiinnovations/laya"
     assert config.lab.stall_minutes == 30
     assert config.speedrun == SpeedrunSettings(4, 60.0, (SpeedrunRecord("Human Any%", 332.6),))
-    assert config.tracking.token is None
+    assert config.upload.api_key is None
     assert config.log_level == "INFO"
 
 
@@ -66,22 +48,14 @@ def test_paths_resolve_relative_to_the_config_file(tmp_path: Path):
 
     assert config.paths.roms_path == (tmp_path / "roms").resolve()
     assert config.paths.integrations_dir == (tmp_path / "integrations").resolve()
-    assert config.paths.curriculum_dir == (tmp_path / "curriculum").resolve()
-    assert config.paths.demonstrations_dir == (tmp_path / "demonstrations").resolve()
-    assert config.paths.record_dir == (tmp_path / "recordings").resolve()
-    assert config.paths.database_path == (tmp_path / "database.json").resolve()
+    assert config.paths.models_dir == (tmp_path / "models").resolve()
+    assert config.paths.cache_dir == (tmp_path / "cache").resolve()
+    assert config.paths.lab_run_marker == (tmp_path / "lab-run").resolve()
 
 
-def test_explicit_game_identity_wins(tmp_path: Path):
+def test_missing_speedrun_settings_fail_fast(tmp_path: Path):
     document = _document()
-    document["training"]["game_identity"] = "TestGame-v2"
-
-    assert load_config(_write(tmp_path, document)).training.game_identity == "TestGame-v2"
-
-
-def test_missing_laya_checkpoint_fails_fast(tmp_path: Path):
-    document = _document()
-    del document["laya"]
+    del document["speedrun"]
 
     with pytest.raises(BoxKeyError):
         load_config(_write(tmp_path, document))

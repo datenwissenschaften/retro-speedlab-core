@@ -8,30 +8,28 @@ import msgspec
 import typer
 from loguru import logger
 
-from datenwissenschaften.curriculum import atomic_write
-from datenwissenschaften.environment.demonstration import TAS_DIR, TAS_MOVIE, TAS_PROGRESS
 from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.environment.levels import level_map
 from datenwissenschaften.environment.wrapper import phases
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
 from datenwissenschaften.tas.movie import Segment, verified_segments
+from datenwissenschaften.tas.paths import PROGRESS_FILE, TAS_MOVIE, atomic_write, tas_dir
 from datenwissenschaften.tas.report import SECTION, report
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import UNBOUNDED, Crossing, fastest_distinct
 from datenwissenschaften.tas.stuck import STUCK_FILE, load_stuck, mark_stuck
+from datenwissenschaften.tas.video import render_video
 from datenwissenschaften.tas.workers import explore, polish
-from datenwissenschaften.training.session import MAIN_ENVIRONMENT
-from datenwissenschaften.training.video_render import render_video
 from datenwissenschaften.ui.telemetry import publish_metadata
 from datenwissenschaften.workflow.wrapper import wrapper_class
 
-PROGRESS_FILE = TAS_PROGRESS
 LOG_FILE = "search.log"
 SEARCH_ROUNDS = 2
 IMPROVE_ROUNDS = 1
 
 SEED_SPACE = 2**31
+MAIN_WORKER = 0
 
 app = typer.Typer()
 
@@ -54,10 +52,6 @@ def frames(segments: list[Segment]) -> int:
 
 def segment_of(crossing: Crossing) -> Segment:
     return Segment(crossing.end.state, crossing.pressed.tolist(), crossing.end.emulator_state, crossing.won)
-
-
-def tas_dir(settings: RetroSpeedlabConfig) -> Path:
-    return settings.paths.cache_dir / TAS_DIR
 
 
 @dataclass(slots=True)
@@ -114,7 +108,7 @@ class Tas:
         frame_rate = self.runner.emulator.em.get_screen_rate()
         records, stuck = self.settings.speedrun.records, load_stuck(self.output / STUCK_FILE)
         speedrun = report(segments, levels, self.runner.order[0], frame_rate, records, searching, stuck)
-        publish_metadata(SECTION, speedrun, replace=True)
+        publish_metadata(SECTION, speedrun)
         return segments
 
     def verified(self, segments: list[Segment], shown: int) -> list[Segment]:
@@ -174,7 +168,7 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
     setup_logging(settings.log_level)
     tas_dir(settings).mkdir(parents=True, exist_ok=True)
     logger.add(tas_dir(settings) / LOG_FILE)
-    runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, MAIN_ENVIRONMENT, False))
+    runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, MAIN_WORKER))
     return Tas(wrapper, config, settings, runner, pool)
 
 
@@ -213,7 +207,7 @@ def verify(wrapper: str, config: Path, progress: Path) -> None:
     settings = load_config(config)
     setup_logging(settings.log_level)
     segments = load_progress(progress)
-    runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, MAIN_ENVIRONMENT, False))
+    runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, MAIN_WORKER))
     verified = verified_segments(runner, segments, tas_dir(settings) / f"verify-{TAS_MOVIE}", len(segments))
     if verified < len(segments):
         raise RuntimeError(f"Only {verified} of {len(segments)} segments of {progress} replay with {wrapper}")

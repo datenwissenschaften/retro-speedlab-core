@@ -1,13 +1,9 @@
 from dataclasses import dataclass
-from pathlib import Path
 
-import numpy as np
+import pytest
 
 from datenwissenschaften.ram import RamInfo
-from datenwissenschaften.states.landmarks import Landmarks
 from datenwissenschaften.states.state import State
-
-FRAME = np.zeros((4, 4, 3), np.uint8)
 
 
 @dataclass
@@ -16,11 +12,15 @@ class _FakeRam(RamInfo):
 
 
 class _Idle(State):
-    description = "Wait."
+    goal = "Wait"
+
+
+class _Aimless(State):
+    pass
 
 
 class _Counting(State):
-    description = "Count."
+    goal = "Count"
 
     def _on_reset(self) -> None:
         self.resets = 1
@@ -32,19 +32,23 @@ class _Counting(State):
         return self.ram.value > 1
 
 
-def test_default_state_is_neutral(tmp_path: Path):
-    state = _Idle(Landmarks(tmp_path / "landmarks.json"))
-    state.reset(_FakeRam(), FRAME)
+def test_default_state_is_neutral():
+    state = _Idle()
+    state.reset(_FakeRam())
 
-    assert state.step(_FakeRam(), FRAME) == (0.0, False, False, None)
+    assert state.step(_FakeRam()) == (0.0, False, False, None)
     assert state._won() is False
-    assert state.describe() == {}
-    assert state.detections() == ()
+    assert state.goal == "Wait"
 
 
-def test_state_hooks_see_the_latest_ram(tmp_path: Path):
-    state = _Counting(Landmarks(tmp_path / "landmarks.json"))
-    state.reset(_FakeRam(), FRAME)
+def test_a_state_without_a_goal_fails_when_it_is_read():
+    with pytest.raises(AttributeError):
+        _Aimless().goal
+
+
+def test_state_hooks_see_the_latest_ram():
+    state = _Counting()
+    state.reset(_FakeRam())
 
     assert state.resets == 1
-    assert state.step(_FakeRam(value=2), FRAME) == (2.0, True, False, None)
+    assert state.step(_FakeRam(value=2)) == (2.0, True, False, None)

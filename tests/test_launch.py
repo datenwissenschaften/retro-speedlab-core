@@ -1,62 +1,17 @@
-import signal
-import threading
 from pathlib import Path
-
-import pytest
 
 from datenwissenschaften.workflow import launch
 from datenwissenschaften.workflow.speedrun import speedrun
 
 
-class Exited(Exception):
-    pass
-
-
-def test_a_stopped_container_kills_the_open_runs_and_exits_at_once(monkeypatch):
-    calls: list[str] = []
-    monkeypatch.setattr(launch, "kill_active_runs", lambda: calls.append("killed"))
-
-    def exit_now(status: int) -> None:
-        calls.append(f"exit {status}")
-        raise Exited
-
-    monkeypatch.setattr(launch.os, "_exit", exit_now)
-
-    with pytest.raises(Exited):
-        launch.terminate(signal.SIGTERM, None)
-
-    assert calls == ["killed", "exit 143"]
-
-
-def test_a_task_starts_after_the_stop_handler_is_installed(monkeypatch):
+def test_a_task_runs_after_flyte_starts(monkeypatch):
     calls: list[tuple] = []
-    monkeypatch.setattr(launch.signal, "signal", lambda number, handler: calls.append(("signal", number, handler)))
     monkeypatch.setattr(launch.flyte, "init", lambda: calls.append(("init",)))
     monkeypatch.setattr(launch.flyte, "run", lambda task, **inputs: calls.append(("run", task, inputs)))
 
     launch.launch(speedrun, "src.game.wrapper:GameWrapper", Path("config.yaml"))
 
     assert calls == [
-        ("signal", signal.SIGTERM, launch.terminate),
         ("init",),
         ("run", speedrun, {"wrapper": "src.game.wrapper:GameWrapper", "config": "config.yaml"}),
     ]
-
-
-def test_a_hanging_close_does_not_keep_the_container_alive(monkeypatch):
-    release = threading.Event()
-    exits: list[int] = []
-    monkeypatch.setattr(launch, "kill_active_runs", release.wait)
-    monkeypatch.setattr(launch, "CLOSE_SECONDS", 0.1)
-
-    def exit_now(status: int) -> None:
-        exits.append(status)
-        raise Exited
-
-    monkeypatch.setattr(launch.os, "_exit", exit_now)
-
-    with pytest.raises(Exited):
-        launch.terminate(signal.SIGTERM, None)
-    release.set()
-
-    assert exits == [launch.TERMINATED]

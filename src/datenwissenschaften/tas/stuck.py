@@ -3,7 +3,7 @@ from pathlib import Path
 
 import msgspec
 
-from datenwissenschaften.curriculum import atomic_write
+from datenwissenschaften.tas.paths import atomic_write
 
 STUCK_FILE = "stuck.json"
 

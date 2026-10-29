@@ -2,65 +2,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
-import gymnasium as gym
 import numpy as np
-import torch
-from torch import nn
 
-from datenwissenschaften.environment.curriculum_run import CurriculumRun
-from datenwissenschaften.environment.level_clock import LevelClock
-from datenwissenschaften.environment.levels import LevelTargets
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
-from datenwissenschaften.laya.decision import Decision
 from datenwissenschaften.ram import RamInfo, ram
 from datenwissenschaften.route.route_map import RouteMap
-from datenwissenschaften.states.landmarks import Landmarks
 from datenwissenschaften.states.state import State
 
-VOCABULARY = 64
-HIDDEN = 8
-MAX_LENGTH = 128
-ACTIONS = {"left": "move left", "right": "move right"}
-
-PRETRAINED_SEED = 7
 FRAME_RATE = 60.0
-
-
-class FakeTokenizer:
-    mask_token = "[MASK]"
-    mask_token_id = 1
-    cls_token_id = 2
-    sep_token_id = 3
-    pad_token_id = 0
-
-    def __call__(self, text: str, **kwargs) -> dict[str, list[int]]:
-        ids = [4 + ord(character) % (VOCABULARY - 4) for character in text]
-        return {"input_ids": ids[: kwargs["max_length"]] if "max_length" in kwargs else ids}
-
-
-class FakeEncoder(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.embedding = nn.Embedding(VOCABULARY, HIDDEN)
-        self.position = nn.Embedding(MAX_LENGTH, HIDDEN)
-
-    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> SimpleNamespace:
-        positions = torch.arange(input_ids.size(1), device=input_ids.device)
-        return SimpleNamespace(last_hidden_state=self.embedding(input_ids) + self.position(positions)[None])
-
-
-class FakeDecision(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.encoder = FakeEncoder()
-        self.type_emb = nn.Embedding(3, HIDDEN)
-        self.head = None
-        self.scorer = nn.Sequential(nn.LayerNorm(HIDDEN), nn.Linear(HIDDEN, HIDDEN), nn.GELU(), nn.Linear(HIDDEN, 1))
-
-
-def fake_laya_load(checkpoint: str, device: str) -> SimpleNamespace:
-    torch.manual_seed(PRETRAINED_SEED)
-    return SimpleNamespace(tok=FakeTokenizer(), cfg={"max_len": MAX_LENGTH, "head_max_len": 48}, model=FakeDecision())
 
 
 @dataclass
@@ -70,7 +19,7 @@ class FakeRam(RamInfo):
 
 
 class Survive(State[FakeRam]):
-    description = "Which move survives?"
+    goal = "Survive"
 
     def _reward(self) -> float:
         return float(self.ram.score)
@@ -86,13 +35,13 @@ class Survive(State[FakeRam]):
 
 
 class Boss(State[FakeRam]):
-    description = "Which move beats the boss?"
+    goal = "Beat the boss"
 
     def _won(self) -> bool:
         return self.ram.score >= 7
 
 
-class FakeEmulator(gym.Env):
+class FakeEmulator:
     def __init__(self, movie_path: Path, script: list[tuple[int, int]]) -> None:
         self.movie_path = str(movie_path)
         self.movie_id = 0
@@ -103,13 +52,11 @@ class FakeEmulator(gym.Env):
             get_state=lambda: b"emulator", set_state=lambda state: None, get_screen_rate=lambda: FRAME_RATE
         )
         self.data = SimpleNamespace(reset=lambda: None, update_ram=lambda: None)
-        self.action_space = gym.spaces.MultiBinary(2)
-        self.observation_space = gym.spaces.Box(0, 255, (2, 2, 3), np.uint8)
         self.script = script
         self.position = 0
         self.pressed: list[np.ndarray] = []
 
-    def reset(self, **kwargs):
+    def reset(self) -> tuple[np.ndarray, dict]:
         self.movie_id += 1
         self.position = 0
         return np.zeros((2, 2, 3), np.uint8), {}
@@ -137,19 +84,16 @@ class FakeWrapper(StateMachineGymWrapper[FakeRam]):
     state_classes = (Survive, Boss)
     ram_info_cls = FakeRam
     action_table = np.array([[[1, 0]], [[0, 1]]], dtype=np.int8)
-    action_descriptions = ACTIONS
     levels = ()
-    curriculum_beats_game = True
 
 
 def fake_environment(tmp_path: Path, script: list[tuple[int, int]]) -> FakeWrapper:
     emulator = FakeEmulator(tmp_path / "recordings", script)
-    curriculum = curriculum_run(tmp_path / "curriculum", ("Survive", "Boss"), tmp_path / "seeds")
-    return FakeWrapper(emulator, curriculum, Landmarks(tmp_path / "landmarks.json"), fake_routes(tmp_path), "Level1")
+    return FakeWrapper(emulator, fake_routes(tmp_path))
 
 
 def fake_routes(tmp_path: Path) -> RouteMap:
-    return RouteMap(lambda state: tmp_path / "models" / state / "route.json", tuple(ACTIONS.values()))
+    return RouteMap(lambda state: tmp_path / "models" / state / "route.json")
 
 
 def write_config(tmp_path: Path) -> Path:
@@ -157,39 +101,16 @@ def write_config(tmp_path: Path) -> Path:
     config_path.write_text(
         "\n".join(
             [
-                "paths: {roms: roms, integrations: integrations, models: models, recordings: recordings, cache: cache,"
-                " database: database.json, reports: reports, curriculum: curriculum,"
-                " demonstrations: demonstrations, lab_run: lab-run}",
-                "training: {game: FakeGame-v0, fingerprint: null}",
-                "laya: {checkpoint: fake/laya}",
+                "paths: {roms: roms, integrations: integrations, models: models, cache: cache, lab_run: lab-run}",
+                "training: {game: FakeGame-v0}",
                 "upload: {url: 'https://upload.test', api_key: null}",
-                "ui: {enable: false, max_episodes: 10, release: local, persona: Retra}",
-                "twitch: {enabled: true, summary_models: [test/model:free]}",
+                "ui: {enable: false, release: local}",
+                "twitch: {enabled: true}",
                 "agent: {stall_minutes: 30}",
                 "speedrun: {workers: 1, segment_seconds: 0.05, records: {Fake TAS: 60.0}}",
-                "tracking: {url: 'https://training.test', token: null}",
                 "log_level: INFO",
             ]
         ),
         encoding="utf-8",
     )
     return config_path
-
-
-def curriculum_run(root: Path, state_names: tuple[str, ...], seeds: Path) -> CurriculumRun:
-    return CurriculumRun(
-        root,
-        LevelTargets(state_names, {}, True),
-        "Level1",
-        seeds,
-        LevelClock(root / "level_times.json", FRAME_RATE),
-        True,
-    )
-
-
-def fake_decision(action: int, probabilities: dict[str, float], behavior_probability: float) -> Decision:
-    options = torch.zeros(len(probabilities), HIDDEN)
-    policy_probability = list(probabilities.values())[action]
-    return Decision(
-        action, probabilities, behavior_probability, policy_probability, 0.0, options, torch.zeros(HIDDEN), None
-    )

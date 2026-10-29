@@ -3,17 +3,14 @@ import subprocess
 from pathlib import Path
 
 import cv2
-import msgspec
 import numpy as np
 import pytest
 
 from datenwissenschaften.ui import live
 from datenwissenschaften.ui.live import MAX_COMPLETED_EPISODES, LiveFeed
-from datenwissenschaften.ui.replay_rotation import MAX_REPLAYS_PER_STATE
 from datenwissenschaften.ui.replay_video import encode_video
 
-LOST = {"score": 1.0, "won": False, "new_best": False, "full_run": False, "succeeded": False, "curriculum": "Play"}
-SUCCEEDED = {**LOST, "succeeded": True}
+RESULT = {"start": "PowerOn", "reached": "Play", "seconds": 1.0, "verified": 1}
 
 
 @pytest.fixture(autouse=True)
@@ -24,15 +21,15 @@ def fake_video(monkeypatch):
 def play(feed: LiveFeed, episode_id: int, frames: int, result: dict) -> None:
     for index in range(frames):
         feed.record(b"jpeg", {"timesteps": index, "attempt": episode_id, "level": "Level1"})
-    feed.finish_episode(episode_id, 60.0, result, {})
+    feed.finish_episode(episode_id, 60.0, result)
 
 
 def test_the_latest_attempts_are_kept_as_a_video_and_their_decisions_under_one_content_key():
     feed = LiveFeed()
     generation = feed.latest_episode()["generation"]
-    assert feed.latest_episode() == {"generation": generation, "episode": None, "replays": [], "summary": {}}
+    assert feed.latest_episode() == {"generation": generation, "episode": None}
     for episode_id in range(1, MAX_COMPLETED_EPISODES + 3):
-        play(feed, episode_id, episode_id, LOST)
+        play(feed, episode_id, episode_id, RESULT)
 
     newest = feed.latest_episode()["episode"]
     key = newest["key"]
@@ -44,73 +41,12 @@ def test_the_latest_attempts_are_kept_as_a_video_and_their_decisions_under_one_c
         feed.media("0" * 32 + ".mp4")
 
 
-def test_clearing_the_live_feed_starts_a_new_generation_without_old_attempts():
+def test_an_episode_without_frames_is_not_kept():
     feed = LiveFeed()
-    play(feed, 1, 1, LOST)
-    old = feed.latest_episode()["generation"]
+    feed.finish_episode(1, 60.0, RESULT)
 
-    feed.clear()
-    play(feed, 1, 1, {**LOST, "score": 3.0})
-
-    assert feed.latest_episode()["generation"] != old
-    assert feed.latest_episode()["episode"]["result"]["score"] == 3.0
-    assert len(feed.media_names()) == 2
-
-
-CURRICULA = frozenset({"Play", "Grow", "Heavy"})
-
-
-def test_every_success_of_every_curriculum_state_takes_its_turn_as_a_replay():
-    feed = LiveFeed()
-    attempts = [("Play", 5), ("Grow", 4), ("Play", 2), ("Grow", 3), ("Heavy", 6), ("Play", 3)]
-    for episode_id, (curriculum, frames) in enumerate(attempts, start=1):
-        play(feed, episode_id, frames, {**SUCCEEDED, "curriculum": curriculum})
-
-    replays = [(replay["result"]["curriculum"], replay["id"]) for replay in feed.latest_episode()["replays"]]
-    assert replays == [("Play", 1), ("Play", 3), ("Play", 6), ("Grow", 2), ("Grow", 4), ("Heavy", 5)]
-
-
-def test_only_the_latest_successes_of_a_state_stay_as_replays(tmp_path: Path):
-    feed = LiveFeed()
-    feed.keep_replays_in(tmp_path / "replays", CURRICULA)
-    for episode_id in range(1, MAX_REPLAYS_PER_STATE + 3):
-        play(feed, episode_id, episode_id, SUCCEEDED)
-
-    kept = [replay["id"] for replay in feed.latest_episode()["replays"]]
-    assert kept == list(range(3, MAX_REPLAYS_PER_STATE + 3))
-    assert len(list((tmp_path / "replays" / "Play").iterdir())) == MAX_REPLAYS_PER_STATE
-
-
-def test_the_replays_survive_a_restart_on_disk_and_go_with_a_reset(tmp_path: Path):
-    feed = LiveFeed()
-    feed.keep_replays_in(tmp_path / "replays", CURRICULA)
-    for episode_id, (curriculum, frames) in enumerate([("Play", 3), ("Grow", 2), ("Play", 2)], start=1):
-        play(feed, episode_id, frames, {**SUCCEEDED, "curriculum": curriculum})
-
-    restarted = LiveFeed()
-    restarted.keep_replays_in(tmp_path / "replays", CURRICULA)
-    replays = {replay["id"]: replay for replay in restarted.latest_episode()["replays"]}
-
-    assert sorted((replay["result"]["curriculum"], replay["id"]) for replay in replays.values()) == [
-        ("Grow", 2),
-        ("Play", 1),
-        ("Play", 3),
-    ]
-    assert restarted.media(f"{replays[3]['key']}.mp4") == b"mp4:jpegjpeg"
-    restarted.clear()
-    assert list((tmp_path / "replays").iterdir()) == []
-
-
-def test_replays_stored_outside_a_curriculum_state_are_deleted_instead_of_read(tmp_path: Path):
-    old = tmp_path / "replays" / "Play.replay"
-    old.parent.mkdir()
-    old.write_bytes(msgspec.msgpack.encode({"id": 1, "frame_rate": 60.0, "result": SUCCEEDED, "frames": []}))
-
-    feed = LiveFeed()
-    feed.keep_replays_in(old.parent, CURRICULA)
-
-    assert feed.latest_episode()["replays"] == []
-    assert not old.exists()
+    assert feed.latest_episode()["episode"] is None
+    assert feed.media_names() == set()
 
 
 def test_frames_are_encoded_into_a_playable_h264_video(tmp_path: Path):
@@ -138,49 +74,3 @@ def test_frames_are_encoded_into_a_playable_h264_video(tmp_path: Path):
     )
 
     assert probe.stdout.strip() == f"h264,240,224,{len(frames)}"
-
-
-def test_failed_attempts_never_become_replays():
-    feed = LiveFeed()
-    play(feed, 1, 1, {**LOST, "score": 50.0, "curriculum": "Door"})
-    play(feed, 2, 4, {**SUCCEEDED, "score": 1.0, "curriculum": "Heavy"})
-    play(feed, 3, 2, {**SUCCEEDED, "score": 0.5, "curriculum": "Heavy"})
-    play(feed, 4, 3, {**SUCCEEDED, "score": 9.0, "curriculum": "Heavy"})
-
-    assert [replay["id"] for replay in feed.latest_episode()["replays"]] == [2, 3, 4]
-
-
-def test_stored_failed_replays_are_deleted_at_start(tmp_path: Path):
-    old = tmp_path / "replays" / "Heavy" / "attempt.replay"
-    old.parent.mkdir(parents=True)
-    old.write_bytes(msgspec.msgpack.encode({"id": 1, "frame_rate": 60.0, "result": LOST, "statuses": [], "video": b""}))
-
-    feed = LiveFeed()
-    feed.keep_replays_in(old.parent.parent, CURRICULA)
-
-    assert feed.latest_episode()["replays"] == []
-    assert not old.exists()
-
-
-def test_replays_of_states_the_curriculum_no_longer_has_are_deleted(tmp_path: Path):
-    feed = LiveFeed()
-    feed.keep_replays_in(tmp_path / "replays", CURRICULA)
-    play(feed, 1, 1, {**SUCCEEDED, "curriculum": "Grow"})
-    play(feed, 2, 1, {**SUCCEEDED, "curriculum": "Heavy"})
-
-    feed.keep_replays_in(tmp_path / "replays", frozenset({"Heavy"}))
-
-    assert [replay["result"]["curriculum"] for replay in feed.latest_episode()["replays"]] == ["Heavy"]
-    assert [path.name for path in (tmp_path / "replays").iterdir()] == ["Heavy"]
-
-
-def test_the_replays_of_a_beaten_level_s_states_are_dropped(tmp_path: Path):
-    feed = LiveFeed()
-    feed.keep_replays_in(tmp_path / "replays", CURRICULA)
-    for episode_id, curriculum in enumerate(("Play", "Grow", "Heavy"), start=1):
-        play(feed, episode_id, 1, {**SUCCEEDED, "curriculum": curriculum})
-
-    feed.drop_replays(("Play", "Grow"))
-
-    assert [replay["result"]["curriculum"] for replay in feed.latest_episode()["replays"]] == ["Heavy"]
-    assert [path.name for path in (tmp_path / "replays").iterdir()] == ["Heavy"]

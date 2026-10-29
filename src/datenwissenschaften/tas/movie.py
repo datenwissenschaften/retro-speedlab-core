@@ -27,8 +27,8 @@ def verified_segments(runner: SegmentRunner, segments: list[Segment], movie: Pat
     verified, played = 0, 0
     for index, segment in enumerate(segments):
         for buttons in np.asarray(segment.pressed, dtype=np.int8):
-            frame, *_ = runner.wrapper.env.step(buttons)
-            machine.step(runner.wrapper.read_ram(), frame)
+            frame, *_ = emulator.step(buttons)
+            machine.step(runner.wrapper.read_ram())
             played += 1
             if index >= shown:
                 status = {"step": played, "training_state": machine.state_name, "seconds": played / frame_rate}
@@ -39,13 +39,6 @@ def verified_segments(runner: SegmentRunner, segments: list[Segment], movie: Pat
     emulator.stop_record()
     shutil.move(recording, movie)
     start = segments[shown - 1].state if 0 < shown <= len(segments) else origin.state
-    result = {
-        "start": start,
-        "reached": machine.state_name,
-        "seconds": played / frame_rate,
-        "verified": verified,
-        "succeeded": verified == len(segments),
-        "curriculum": start,
-    }
-    live_feed.finish_episode(len(segments), frame_rate, result, {})
+    result = {"start": start, "reached": machine.state_name, "seconds": played / frame_rate, "verified": verified}
+    live_feed.finish_episode(len(segments), frame_rate, result)
     return verified

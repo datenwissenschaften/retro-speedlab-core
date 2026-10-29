@@ -1,23 +1,34 @@
-import argparse
 import subprocess
+import sys
 from pathlib import Path
 
 import stable_retro as retro
+import typer
 
 from datenwissenschaften.environment.recording import recorded_buttons, restore_emulator_state
 from datenwissenschaften.roms import import_roms
+from datenwissenschaften.settings import RetroSpeedlabPaths
 
 CONSTANT_RATE_FACTOR = "23"
+PLAYBACK_MODULE = "datenwissenschaften.tas.video"
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--roms-dir", type=Path, required=True)
-    parser.add_argument("--integrations-dir", type=Path, required=True)
-    parser.add_argument("movies", nargs="+", type=Path)
-    args = parser.parse_args()
-    import_roms(args.roms_dir, args.integrations_dir)
-    for movie in args.movies:
+def render_video(paths: RetroSpeedlabPaths, recording: Path) -> Path:
+    playback = [
+        sys.executable,
+        "-m",
+        PLAYBACK_MODULE,
+        str(paths.roms_path),
+        str(paths.integrations_dir),
+        str(recording),
+    ]
+    subprocess.run(playback, check=True, capture_output=True, text=True)
+    return recording.with_suffix(".mp4")
+
+
+def main(roms_dir: Path, integrations_dir: Path, movies: list[Path]) -> None:
+    import_roms(roms_dir, integrations_dir)
+    for movie in movies:
         render(movie)
 
 
@@ -75,4 +86,4 @@ def encoder_command(width: int, height: int, frame_rate: float, recording: Path)
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

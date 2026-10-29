@@ -1,6 +1,5 @@
 from collections.abc import Sequence
 
-from datenwissenschaften.curriculum import ReverseCurriculum
 from datenwissenschaften.states.state import State
 
 Levels = tuple[tuple[str, tuple[type[State], ...]], ...]
@@ -20,39 +19,3 @@ def level_map(levels: Levels, state_classes: Sequence[type[State]]) -> dict[str,
             raise ValueError(f"The states of {level} must follow each other in state_classes")
         mapped[level] = members
     return mapped
-
-
-def curriculum_targets(state_classes: Sequence[type[State]], levels: dict[str, tuple[str, ...]]) -> tuple[str, ...]:
-    level_after = {members[-1]: level for level, members in levels.items()}
-    targets = []
-    for state_cls in state_classes:
-        targets.append(state_cls.__name__)
-        if state_cls.__name__ in level_after:
-            targets.append(level_after[state_cls.__name__])
-    return tuple(targets)
-
-
-class LevelTargets:
-    def __init__(self, state_names: tuple[str, ...], levels: dict[str, tuple[str, ...]], beats_game: bool) -> None:
-        self.state_names = state_names
-        self.levels = levels
-        self.beats_game = beats_game
-
-    def is_level(self, target: str | None) -> bool:
-        return target in self.levels
-
-    def starts(self, target: str, state: str) -> bool:
-        return state == target or (self.is_level(target) and self.levels[target][0] == state)
-
-    def completes(self, target: str, previous_state: str, new_state: str) -> bool:
-        if not self.is_level(target):
-            return previous_state == target
-        members = self.levels[target]
-        return previous_state in members and new_state not in members
-
-    def start_checkpoint(self, target: str, curriculum: ReverseCurriculum) -> str | None:
-        if not self.is_level(target):
-            return curriculum.episode_start_state(target)
-        first = self.state_names.index(self.levels[target][0])
-        candidates = reversed(self.state_names[1 : first + 1])
-        return next((state for state in candidates if curriculum.has_checkpoint(state)), None)

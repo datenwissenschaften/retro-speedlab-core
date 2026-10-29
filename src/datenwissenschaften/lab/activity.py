@@ -7,7 +7,7 @@ import msgspec
 
 TAIL_BYTES = 256 * 1024
 RECENT_ACTIONS = 6
-SHOWN_DIRECTORIES = frozenset({"src", "tests", "integrations", "curriculum"})
+SHOWN_DIRECTORIES = frozenset({"src", "tests", "integrations"})
 SAFE_PART = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
 THINKING = "thinking"
 WORKING = "working"
