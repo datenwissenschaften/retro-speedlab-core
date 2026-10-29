@@ -221,7 +221,7 @@ wheels = [
 
 [[package]]
 name = "datenwissenschaften"
-version = "3.0.50"
+version = "3.0.52"
 source = { editable = "." }
 dependencies = [
     { name = "flyte" },
