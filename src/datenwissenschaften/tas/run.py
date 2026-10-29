@@ -21,6 +21,7 @@ from datenwissenschaften.training.video_render import render_video
 from datenwissenschaften.workflow.wrapper import wrapper_class
 
 PROGRESS_FILE = "progress.msgpack"
+LOG_FILE = "search.log"
 SEARCH_ROUNDS = 3
 IMPROVE_ROUNDS = 1
 
@@ -140,6 +141,7 @@ def tas_run(wrapper: str, config: Path, workers: int, seconds: float, pool: Exec
     setup_logging(settings.log_level)
     output = settings.paths.cache_dir / TAS_DIR
     output.mkdir(parents=True, exist_ok=True)
+    logger.add(output / LOG_FILE)
     runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, MAIN_ENVIRONMENT, False))
     return Tas(wrapper, config, output, workers, seconds, runner, pool)
 
