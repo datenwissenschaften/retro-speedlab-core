@@ -1,4 +1,5 @@
 import multiprocessing
+import random
 from concurrent.futures import Executor, ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,7 +30,13 @@ LOG_FILE = "search.log"
 SEARCH_ROUNDS = 3
 IMPROVE_ROUNDS = 1
 
+SEED_SPACE = 2**31
+
 app = typer.Typer()
+
+
+class StuckSegment(RuntimeError):
+    pass
 
 
 def load_progress(path: Path) -> list[Segment]:
@@ -77,7 +84,8 @@ class Tas:
         workers = self.settings.speedrun.workers
         for round_index in range(rounds):
             seconds = self.settings.speedrun.segment_seconds * 2**round_index
-            seeds = range(round_index * workers, (round_index + 1) * workers)
+            first = random.randrange(SEED_SPACE)
+            seeds = range(first, first + workers)
             searches = [self.pool.submit(explore, *self._job(start, bound, seed, seconds)) for seed in seeds]
             if found := fastest_distinct([crossing for search in searches for crossing in search.result()]):
                 return found
@@ -125,7 +133,7 @@ class Tas:
             self.report(segments, start.state)
             crossing = self.best(start, UNBOUNDED, SEARCH_ROUNDS)
             if crossing is None:
-                raise RuntimeError(f"The search found no way out of {start.state} in {SEARCH_ROUNDS} rounds")
+                raise StuckSegment(f"The search found no way out of {start.state} in {SEARCH_ROUNDS} rounds")
             segments = self.keep([*segments, segment_of(crossing)], crossing.end.state)
             logger.info(f"{start.state} -> {crossing.end.state} in {crossing.frames} frames; run at {frames(segments)}")
         return self.report(segments, segments[-1].state)
@@ -168,10 +176,18 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
     return Tas(wrapper, config, settings, runner, pool)
 
 
+def extended(tas: Tas, until: str) -> list[Segment]:
+    while True:
+        try:
+            return tas.extend(load_progress(tas.output / PROGRESS_FILE), until)
+        except StuckSegment as stuck:
+            logger.warning(f"{stuck}; searching again with new seeds")
+
+
 def speedrun_forever(wrapper: str, config: Path) -> None:
     with worker_pool(load_config(config).speedrun.workers) as pool:
         tas = tas_run(wrapper, config, pool)
-        segments = tas.extend(load_progress(tas.output / PROGRESS_FILE), phases(wrapper_class(wrapper))[-1])
+        segments = extended(tas, phases(wrapper_class(wrapper))[-1])
         publish(tas.settings, segments)
         while True:
             improved = tas.improve(segments)
