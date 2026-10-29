@@ -6,6 +6,7 @@ from pathlib import Path
 from loguru import logger
 
 from datenwissenschaften.lab.activity import WORKING
+from datenwissenschaften.lab.critic import CRITIC_FILE, read_critic
 from datenwissenschaften.lab.marker import LabMarker, read_marker
 from datenwissenschaften.lab.status import IDLE, lab_status
 from datenwissenschaften.ui.control import ModelResetRequest, consume_model_reset
@@ -13,6 +14,7 @@ from datenwissenschaften.ui.telemetry import publish_metadata
 
 POLL_SECONDS = 10.0
 SECTION = "lab_run"
+CRITIC_SECTION = "critic"
 
 
 def pausing(lab: LabMarker | None) -> bool:
@@ -46,4 +48,6 @@ class LabRun:
     def publish(self) -> LabMarker | None:
         lab = read_marker(self.marker)
         publish_metadata(SECTION, IDLE if lab is None else asdict(lab_status(lab)), replace=True)
+        if (critic := read_critic(self.marker.with_name(CRITIC_FILE))) is not None:
+            publish_metadata(CRITIC_SECTION, asdict(critic), replace=True)
         return lab

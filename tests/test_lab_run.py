@@ -3,7 +3,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from datenwissenschaften.lab.activity import Action, recent_actions, shown_file
+from datenwissenschaften.lab.activity import Action, log_events, recent_actions, shown_file
 from datenwissenschaften.lab.branch import branch_changes, shown_subject
 from datenwissenschaften.training import lab_run as lab_run_module
 from datenwissenschaften.training.lab_run import LabRun
@@ -103,9 +103,16 @@ def test_claude_activity_shows_kinds_and_safe_files_only(tmp_path: Path):
         {"type": "tool_use", "id": "2", "name": "Edit", "input": {"file_path": f"{tmp_path.as_posix()}/src/a.py"}},
         {"type": "tool_use", "id": "3", "name": "Read", "input": {"file_path": f"{tmp_path.as_posix()}/config.yaml"}},
     ]
-    write_log(log, [{"type": "system"}, {"type": "assistant", "message": {"content": content}}, {"type": "assistant"}])
+    write_log(
+        log,
+        [
+            {"type": "system"},
+            {"type": "assistant", "message": {"content": content}, "parent_tool_use_id": None},
+            {"type": "assistant"},
+        ],
+    )
 
-    assert recent_actions("claude", log, tmp_path) == [
+    assert recent_actions("claude", log_events(log), tmp_path) == [
         Action("thinking", None),
         Action("running", None),
         Action("editing", "src/a.py"),
@@ -127,7 +134,10 @@ def test_codex_activity_counts_every_item_once(tmp_path: Path):
         ],
     )
 
-    assert recent_actions("codex", log, tmp_path) == [Action("running", None), Action("editing", "src/b.py")]
+    assert recent_actions("codex", log_events(log), tmp_path) == [
+        Action("running", None),
+        Action("editing", "src/b.py"),
+    ]
 
 
 def test_commit_subjects_hide_urls_and_secret_like_words():

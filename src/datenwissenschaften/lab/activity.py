@@ -5,7 +5,6 @@ from typing import Any
 
 import msgspec
 
-TAIL_BYTES = 256 * 1024
 RECENT_ACTIONS = 6
 SHOWN_DIRECTORIES = frozenset({"src", "tests", "integrations", "curriculum"})
 SAFE_PART = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
@@ -21,6 +20,8 @@ CLAUDE_TOOLS = {
     "Write": "editing",
     "WebSearch": "researching",
     "WebFetch": "researching",
+    "Agent": "delegating",
+    "Task": "delegating",
 }
 CLAUDE_TEXT = frozenset({"text", "thinking"})
 CODEX_ITEMS = {
@@ -56,12 +57,8 @@ def shown_file(path: str, worktree: Path) -> str | None:
 def log_events(log: Path) -> list[Any]:
     if not log.is_file():
         return []
-    with log.open("rb") as stream:
-        start = max(0, stream.seek(0, 2) - TAIL_BYTES)
-        stream.seek(start)
-        lines = stream.read().splitlines()[1 if start else 0 :]
     events = []
-    for line in lines:
+    for line in log.read_bytes().splitlines():
         try:
             events.append(msgspec.json.decode(line))
         except msgspec.DecodeError:
@@ -69,20 +66,27 @@ def log_events(log: Path) -> list[Any]:
     return events
 
 
+def claude_action(block: dict[str, Any], worktree: Path) -> Action | None:
+    if block["type"] in CLAUDE_TEXT:
+        return Action(THINKING, None)
+    if block["type"] != "tool_use":
+        return None
+    name, arguments = block["name"], block["input"]
+    kind = CLAUDE_TOOLS[name] if name in CLAUDE_TOOLS else WORKING
+    file = shown_file(arguments["file_path"], worktree) if "file_path" in arguments else None
+    return Action(kind, file)
+
+
+def lead_event(event: dict[str, Any]) -> bool:
+    return event["type"] == "assistant" and event["parent_tool_use_id"] is None
+
+
 def claude_actions(key: int, event: dict[str, Any], worktree: Path) -> dict[str, Action]:
-    if event["type"] != "assistant":
+    if not lead_event(event):
         return {}
-    actions = {}
-    for index, block in enumerate(event["message"]["content"]):
-        if block["type"] in CLAUDE_TEXT:
-            actions[f"{key}:{index}"] = Action(THINKING, None)
-        if block["type"] != "tool_use":
-            continue
-        name, arguments = block["name"], block["input"]
-        kind = CLAUDE_TOOLS[name] if name in CLAUDE_TOOLS else WORKING
-        file = shown_file(arguments["file_path"], worktree) if "file_path" in arguments else None
-        actions[f"{key}:{index}"] = Action(kind, file)
-    return actions
+    blocks = enumerate(event["message"]["content"])
+    actions = {f"{key}:{index}": claude_action(block, worktree) for index, block in blocks}
+    return {key: action for key, action in actions.items() if action is not None}
 
 
 def codex_actions(key: int, event: dict[str, Any], worktree: Path) -> dict[str, Action]:
@@ -98,10 +102,10 @@ def codex_actions(key: int, event: dict[str, Any], worktree: Path) -> dict[str, 
 PARSERS = {"claude": claude_actions, "codex": codex_actions}
 
 
-def recent_actions(agent: str, log: Path, worktree: Path) -> list[Action]:
+def recent_actions(agent: str, events: list[Any], worktree: Path) -> list[Action]:
     parse = PARSERS[agent]
     actions: dict[str, Action] = {}
-    for key, event in enumerate(log_events(log)):
+    for key, event in enumerate(events):
         try:
             actions.update(parse(key, event, worktree))
         except (KeyError, TypeError, AttributeError):

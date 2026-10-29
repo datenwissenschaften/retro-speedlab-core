@@ -1,11 +1,13 @@
 import subprocess
 import time
+from datetime import datetime
 from pathlib import Path
 
 from loguru import logger
 
 from datenwissenschaften.environment.demonstration import TAS_DIR, TAS_PROGRESS
 from datenwissenschaften.environment.level_drill import DRILLED_SUFFIX
+from datenwissenschaften.lab.critic import CRITIC_FILE, read_critic
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
 from datenwissenschaften.tas.stuck import STUCK_FILE, load_stuck
@@ -15,6 +17,8 @@ from datenwissenschaften.workflow.environment import speedlab
 
 SECONDS_PER_MINUTE = 60
 LAST_LAB_RUN = ".agent-last-run"
+CRITIC_RUNS = 5
+REPORT_STAMP = "%Y-%m-%dT%H%M"
 
 
 def last_progress(config: RetroSpeedlabConfig) -> float:
@@ -51,7 +55,28 @@ def lab_run(config: str, project: str) -> None:
         subprocess.run([Path(project) / "agent" / "daily.sh"], check=True)
 
 
+def reports_since_critic(config: str, project: str) -> int:
+    critic = read_critic(load_config(Path(config)).paths.lab_run_marker.with_name(CRITIC_FILE))
+    stamps = [report.stem for report in (Path(project) / "agent" / "reports").glob("*.md")]
+    if critic is None:
+        return len(stamps)
+    reviewed = datetime.fromisoformat(critic.at).strftime(REPORT_STAMP)
+    return sum(stamp > reviewed for stamp in stamps)
+
+
+@speedlab.task
+def critic_run(project: str) -> None:
+    subprocess.run([Path(project) / "agent" / "critic.sh"], check=True)
+
+
 @speedlab.task
 def lab(config: str, project: str) -> None:
     if lab_run_due(config):
         lab_run(config, project)
+        return
+    reports = reports_since_critic(config, project)
+    if reports < CRITIC_RUNS:
+        logger.info(f"No critic: {reports} lab reports since the last one")
+        return
+    logger.info(f"Critic: {reports} lab reports since the last one")
+    critic_run(project)

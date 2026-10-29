@@ -322,7 +322,12 @@ commits, its tests pass and the current movie still replays with it
 runs out. While it works, the stream shows its latest actions (only the kind of
 action and the source files it touches), its commit subjects with URLs and
 secret-like words hidden, and the lines it changed; afterwards it shows whether
-the change shipped. Every task runs locally with `flyte run --local`.
+the change shipped. The lead session delegates to the subagents defined in the
+game package's `.claude/agents/`; the stream shows each member's role, state and
+latest step and every hand-off with its short task. When no lab run is due and
+five new reports landed in `agent/reports/` since the last review, `lab` starts
+the critic (`agent/critic.sh`), whose lessons the stream shows as
+`metadata.critic`. Every task runs locally with `flyte run --local`.
 
 With `tracking.token` set, every session is an [MLflow](https://mlflow.org) run
 at `tracking.url`. Every attempt counts toward the part it practised, as
