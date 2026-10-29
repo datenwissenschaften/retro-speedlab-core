@@ -52,31 +52,26 @@ def test_the_lab_status_is_published_until_stopped(tmp_path: Path, monkeypatch):
     assert published == [tmp_path / ".lab-run"]
 
 
-def test_the_speedrun_extends_the_movie_then_publishes_every_faster_one(tmp_path: Path, monkeypatch):
-    published: list[int] = []
+def test_the_speedrun_extends_the_movie_then_keeps_improving_it(tmp_path: Path, monkeypatch):
+    improved: list[int] = []
 
     def extend(segments: list[Segment], until: str) -> list[Segment]:
         return SLOW
 
     def improve(segments: list[Segment]) -> list[Segment]:
-        if len(published) == 2:
+        improved.append(run.frames(segments))
+        if len(improved) == 2:
             raise OnePass
         return FAST
 
-    tas = SimpleNamespace(
-        output=tmp_path,
-        settings=load_config(write_config(tmp_path)),
-        extend=extend,
-        improve=improve,
-    )
+    tas = SimpleNamespace(output=tmp_path, extend=extend, improve=improve)
     monkeypatch.setattr(run, "tas_run", lambda wrapper, config, pool: tas)
     monkeypatch.setattr(run, "worker_pool", lambda workers: NoPool())
-    monkeypatch.setattr(run, "publish", lambda settings, segments: published.append(run.frames(segments)))
 
     with pytest.raises(OnePass):
         run.speedrun_forever("fakes:FakeWrapper", write_config(tmp_path))
 
-    assert published == [6, 3]
+    assert improved == [6, 3]
 
 
 def test_the_speedrun_task_relays_watches_the_lab_and_runs(tmp_path: Path, monkeypatch):

@@ -6,7 +6,7 @@ import pytest
 from fakes import FakeEmulator, FakeWrapper, fake_routes, write_config
 
 from datenwissenschaften.settings import load_config
-from datenwissenschaften.tas import movie, run, workers
+from datenwissenschaften.tas import movie, run, screen, workers
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.paths import PROGRESS_FILE, TAS_MOVIE, tas_dir
 from datenwissenschaften.tas.runner import SegmentRunner, Start
@@ -61,7 +61,14 @@ def saving_environment(tmp_path: Path) -> FakeWrapper:
     return FakeWrapper(emulator, fake_routes(tmp_path))
 
 
+def fake_render(paths: object, recording: Path) -> Path:
+    video = recording.with_suffix(".mp4")
+    video.write_bytes(recording.read_bytes())
+    return video
+
+
 def local_workers(monkeypatch, runner: SegmentRunner) -> None:
+    monkeypatch.setattr(screen, "render_video", fake_render)
     monkeypatch.setattr(workers, "worker_runner", lambda wrapper, config: runner)
     monkeypatch.setattr(run, "explore", workers.explore)
     monkeypatch.setattr(run, "polish", workers.polish)
@@ -93,7 +100,6 @@ def test_search_and_improve_write_a_verified_movie_and_keep_only_faster_segments
     local_workers(monkeypatch, runner)
     monkeypatch.setattr(run, "make_environment", lambda wrapper_cls, settings, worker: runner.wrapper)
     monkeypatch.setattr(run, "worker_pool", lambda count: SyncPool())
-    monkeypatch.setattr(run, "render_video", lambda paths, recording: recording.with_suffix(".mp4"))
     monkeypatch.setattr(run, "SegmentRunner", lambda wrapper: runner)
     config = write_config(tmp_path)
     output = tas_dir(load_config(config))
@@ -106,16 +112,17 @@ def test_search_and_improve_write_a_verified_movie_and_keep_only_faster_segments
     assert [(segment.state, len(segment.pressed)) for segment in searched] == [("Boss", BOSS_FRAMES)]
     assert run.frames(run.load_progress(output / PROGRESS_FILE)) == BOSS_FRAMES
     assert (output / TAS_MOVIE).read_bytes() == b"movie"
+    assert (output / "screen.mp4").read_bytes() == b"movie"
 
 
 def test_a_movie_that_no_longer_reaches_its_segments_is_cut_back(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
 
-    kept = tas.verified([Segment("Boss", [[1, 0]], bytes([1]), False)], 0)
+    kept = tas.verified([Segment("Boss", [[1, 0]], bytes([1]), False)])
 
     assert kept == []
-    assert movie.verified_segments(runner, [], tas.output / "again.bk2", 0).verified == 0
+    assert movie.verified_segments(runner, [], tas.output / "again.bk2").verified == 0
     assert tas.best(runner.power_on(), 1, 1) is None
 
 

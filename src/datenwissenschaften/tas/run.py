@@ -21,10 +21,12 @@ from datenwissenschaften.tas.movie import Segment, frames, verified_segments
 from datenwissenschaften.tas.paths import PROGRESS_FILE, TAS_MOVIE, atomic_write, tas_dir
 from datenwissenschaften.tas.report import course_of
 from datenwissenschaften.tas.runner import SegmentRunner, Start
+from datenwissenschaften.tas.screen import MovieScreen
 from datenwissenschaften.tas.search import UNBOUNDED, Crossing, fastest_distinct
 from datenwissenschaften.tas.stuck import STUCK_FILE, mark_stuck
-from datenwissenschaften.tas.video import render_video
 from datenwissenschaften.tas.workers import explore, polish
+from datenwissenschaften.ui.movie_upload import MovieUpload
+from datenwissenschaften.ui.relay import relay_key
 from datenwissenschaften.workflow.wrapper import wrapper_class
 
 LOG_FILE = "search.log"
@@ -61,6 +63,7 @@ class Tas:
     runner: SegmentRunner
     pool: Executor
     feed: SpeedrunFeed
+    screen: MovieScreen
 
     @property
     def output(self) -> Path:
@@ -108,16 +111,18 @@ class Tas:
         self.feed.show(segments, searching)
         return segments
 
-    def verified(self, segments: list[Segment], shown: int) -> list[Segment]:
-        replay = verified_segments(self.runner, segments, self.output / TAS_MOVIE, shown)
+    def verified(self, segments: list[Segment]) -> list[Segment]:
+        movie = self.output / TAS_MOVIE
+        replay = verified_segments(self.runner, segments, movie)
         self.feed.follow(replay.route)
         if replay.verified == len(segments):
+            self.screen.screen(segments, movie)
             return segments
         logger.warning(f"Only {replay.verified} of {len(segments)} segments replay from power-on; searching again")
         return segments[: replay.verified]
 
     def extend(self, segments: list[Segment], until: str) -> list[Segment]:
-        while not finished(segments := self.verified(segments, len(segments) - 1), until):
+        while not finished(segments := self.verified(segments), until):
             start = self.start(segments, len(segments))
             self.feed.show(segments, start.state)
             crossing = self.best(start, UNBOUNDED, SEARCH_ROUNDS)
@@ -154,11 +159,13 @@ class Tas:
         return self.wrapper, self.config, start, bound, seed, seconds
 
 
-def publish(settings: RetroSpeedlabConfig, segments: list[Segment]) -> None:
-    movie = tas_dir(settings) / TAS_MOVIE
-    movie.with_suffix(".mp4").unlink(missing_ok=True)
-    video = render_video(settings.paths, movie)
-    logger.info(f"Verified movie {movie} reaches {segments[-1].state} in {frames(segments)} frames; video {video}")
+def publish(tas: Tas, segments: list[Segment]) -> None:
+    video = tas.screen.settle()
+    logger.info(f"Verified movie reaches {segments[-1].state} in {frames(segments)} frames; video {video}")
+
+
+def movie_upload(settings: RetroSpeedlabConfig) -> MovieUpload | None:
+    return MovieUpload(settings.upload.url, relay_key(settings.upload)) if settings.ui.enabled else None
 
 
 def worker_pool(workers: int) -> ProcessPoolExecutor:
@@ -176,19 +183,17 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
     journal = JournalStore(output / JOURNAL_FILE)
     feed = SpeedrunFeed(course, journal, output / LIVE_DIR, output / STUCK_FILE, settings.paths.lab_run_marker)
     threading.Thread(target=feed.publish_every, args=(threading.Event(),), name="speedrun-feed", daemon=True).start()
-    return Tas(wrapper, config, settings, runner, pool, feed)
+    screen = MovieScreen(settings.paths, output, course, movie_upload(settings), feed.screen)
+    screen.start()
+    return Tas(wrapper, config, settings, runner, pool, feed, screen)
 
 
 def speedrun_forever(wrapper: str, config: Path) -> None:
     with worker_pool(load_config(config).speedrun.workers) as pool:
         tas = tas_run(wrapper, config, pool)
         segments = tas.extend(load_progress(tas.output / PROGRESS_FILE), phases(wrapper_class(wrapper))[-1])
-        publish(tas.settings, segments)
         while True:
-            improved = tas.improve(segments)
-            if frames(improved) < frames(segments):
-                publish(tas.settings, improved)
-            segments = improved
+            segments = tas.improve(segments)
 
 
 @app.command()
@@ -197,7 +202,7 @@ def search(wrapper: str, config: Path, until: str) -> None:
     with worker_pool(settings.speedrun.workers) as pool:
         tas = tas_run(wrapper, config, pool)
         segments = tas.extend(load_progress(tas.output / PROGRESS_FILE), until)
-    publish(settings, segments)
+        publish(tas, segments)
 
 
 @app.command()
@@ -205,8 +210,8 @@ def improve(wrapper: str, config: Path) -> None:
     settings = load_config(config)
     with worker_pool(settings.speedrun.workers) as pool:
         tas = tas_run(wrapper, config, pool)
-        segments = tas.improve(tas.verified(load_progress(tas.output / PROGRESS_FILE), 0))
-    publish(settings, segments)
+        segments = tas.improve(tas.verified(load_progress(tas.output / PROGRESS_FILE)))
+        publish(tas, segments)
 
 
 @app.command()
@@ -215,7 +220,7 @@ def verify(wrapper: str, config: Path, progress: Path) -> None:
     setup_logging(settings.log_level)
     segments = load_progress(progress)
     runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, MAIN_WORKER))
-    verified = verified_segments(runner, segments, tas_dir(settings) / f"verify-{TAS_MOVIE}", len(segments)).verified
+    verified = verified_segments(runner, segments, tas_dir(settings) / f"verify-{TAS_MOVIE}").verified
     if verified < len(segments):
         raise RuntimeError(f"Only {verified} of {len(segments)} segments of {progress} replay with {wrapper}")
     logger.info(f"All {len(segments)} segments of {progress} replay with {wrapper}")

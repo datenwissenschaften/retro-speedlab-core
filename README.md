@@ -30,8 +30,8 @@ flowchart TD
     Game["Game package<br/>RAM · States · Rewards · Actions"]
     Env["Stable Retro emulator<br/>StateMachineGymWrapper"]
     Search["Segment search<br/>one worker per process"]
-    Movie["Verified movie<br/>progress.msgpack · tas.bk2 · tas.mp4"]
-    Relay["Live relay<br/>snapshot · latest segment"]
+    Movie["Verified movie<br/>progress.msgpack · tas.bk2 · screen.mp4"]
+    Relay["Live relay<br/>snapshot · whole movie"]
     Lab["Lab run<br/>agent/daily.sh"]
 
     Game --> Env
@@ -72,7 +72,7 @@ wait frames to change it. A segment without a way out is marked stuck in
 
 After every segment the whole movie is replayed from power-on; segments that do
 not reproduce are searched again. `cache/tas/progress.msgpack` lets a run
-resume, `cache/tas/tas.bk2` is the verified movie, `tas.mp4` its video and
+resume, `cache/tas/tas.bk2` is the verified movie, `screen.mp4` its video and
 `search.log` the search's log. `metadata.speedrun` tells the stream the run's
 time from power-on and from Start, its segments, the level splits (from
 `GameWrapper.levels`), each state's `goal`, the game and its record sources,
@@ -81,8 +81,12 @@ segment being searched. While a segment is searched every worker writes its
 cells, frames, map visits and RAM to `live/<seed>.msgpack` every 2 s, one
 worker its latest frame to `live/attempt.jpg` twice a second; the main process
 folds them into `search`, `map`, `ram` and `position` every 5 s and the relay
-puts the frame to `/live/attempt.jpg`. The newest verified segment plays as the
-stream's latest episode. `improve` searches every segment
+puts the frame to `/live/attempt.jpg`. Whenever the verified movie changes a
+background thread renders it from power-on to an H.264 MP4 at twice the NES
+resolution, puts it to `/live/movie.mp4` in parts and publishes
+`speedrun.movie`: its version (the first 12 hex digits of its SHA-256), frames,
+seconds, frame rate and each segment's state and start frame, so the stream
+plays the whole run in sync with its splits. `improve` searches every segment
 again, bounded by its current frames; a faster crossing replaces it and the rest
 is searched anew. `verify` fails unless a progress file still replays with a
 game package.
@@ -116,9 +120,9 @@ runs locally with `flyte run --local`.
 
 With `ui.enable: true` and an upload key, the engine relays to the Retro
 Speedlab backend (`upload.url`) every few seconds the snapshot (the published
-metadata and the release) and the feed of the newest verified segment, whose
-video and frame statuses go up once, named by their content hash. The website's
-`/stream` page, opened with the stream key (`?api_key=`), plays them for OBS.
+metadata and the release) and the search's newest frame; the whole verified movie
+goes up whenever it changes. The website's `/stream` page, opened with the stream
+key (`?api_key=`), plays them for OBS.
 The engine itself serves nothing.
 
 ## Installation

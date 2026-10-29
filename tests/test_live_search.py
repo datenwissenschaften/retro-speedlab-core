@@ -191,9 +191,11 @@ def test_the_feed_publishes_the_movie_with_the_live_search_and_notices_a_lab_run
     marker.write_text("{}", encoding="utf-8")
     feed.publish_every(SimpleNamespace(wait=lambda seconds: len(published) > 2))
     feed.end()
+    feed.screen({"version": "abc", "frames": 120})
 
+    assert searching["movie"] is None and published[-1]["movie"] == {"version": "abc", "frames": 120}
     assert searching["search"]["state"] == "Level2" and searching["map"]["route"] == [[63, 62]]
     assert searching["splits"][0]["first_seconds"] == 2.0 and searching["history"][0]["seconds"] == 2.0
-    assert [(event["kind"], event["state"]) for event in published[-1]["events"]] == [("lab", "Level2")]
-    assert published[-1]["search"] is None and "updated_at" in published[-1]
+    assert [(event["kind"], event["state"]) for event in published[-2]["events"]] == [("lab", "Level2")]
+    assert published[-2]["search"] is None and "updated_at" in published[-1]
     assert feed.watch(0) == Watch(tmp_path / "live", True) and not feed.watch(1).shows

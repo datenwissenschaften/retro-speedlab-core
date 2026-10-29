@@ -23,24 +23,30 @@ class SpeedrunFeed:
         self.stuck = stuck
         self.lab_marker = lab_marker
         self.lock = threading.Lock()
-        self.movie: dict[str, Any] = {}
+        self.summary: dict[str, Any] = {}
         self.searching: str | None = None
         self.search: SearchRound | None = None
         self.route: list[Spot] = []
+        self.screened: dict[str, Any] | None = None
         self.lab_running = lab_marker.exists()
         live.mkdir(parents=True, exist_ok=True)
 
     def show(self, segments: list[Segment], searching: str) -> None:
         found = splits(self.course, segments)
         firsts = self.journal.track(found, frames(segments) / self.course.frame_rate)
-        movie = report(self.course, segments, found, firsts, searching, load_stuck(self.stuck))
+        summary = report(self.course, segments, found, firsts, searching, load_stuck(self.stuck))
         with self.lock:
-            self.movie, self.searching = movie, searching
+            self.summary, self.searching = summary, searching
         self.publish()
 
     def follow(self, route: list[Spot]) -> None:
         with self.lock:
             self.route = route
+
+    def screen(self, movie: dict[str, Any]) -> None:
+        with self.lock:
+            self.screened = movie
+        self.publish()
 
     def watch(self, worker: int) -> Watch:
         return Watch(self.live, worker == 0)
@@ -62,12 +68,12 @@ class SpeedrunFeed:
 
     def publish(self) -> None:
         with self.lock:
-            movie, search, route = self.movie, self.search, self.route
+            summary, search, route, screened = self.summary, self.search, self.route, self.screened
         reports = [] if search is None else read_reports(self.live)
         now = datetime.now(UTC)
         live = live_fields(search, reports, route, now)
         updated = {"updated_at": now.isoformat(timespec="seconds")}
-        publish_metadata(SECTION, {**movie, **self.journal.fields(), **live, **updated})
+        publish_metadata(SECTION, {**summary, "movie": screened, **self.journal.fields(), **live, **updated})
 
     def notice_lab(self) -> None:
         running = self.lab_marker.exists()

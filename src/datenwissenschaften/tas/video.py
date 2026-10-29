@@ -9,7 +9,8 @@ from datenwissenschaften.environment.recording import recorded_buttons, restore_
 from datenwissenschaften.roms import import_roms
 from datenwissenschaften.settings import RetroSpeedlabPaths
 
-CONSTANT_RATE_FACTOR = "23"
+CONSTANT_RATE_FACTOR = "26"
+PIXEL_SCALE = 2
 PLAYBACK_MODULE = "datenwissenschaften.tas.video"
 
 
@@ -71,6 +72,8 @@ def encoder_command(width: int, height: int, frame_rate: float, recording: Path)
         f"{frame_rate:.6f}",
         "-i",
         "pipe:",
+        "-vf",
+        f"scale=iw*{PIXEL_SCALE}:ih*{PIXEL_SCALE}:flags=neighbor",
         "-c:v",
         "libx264",
         "-preset",
