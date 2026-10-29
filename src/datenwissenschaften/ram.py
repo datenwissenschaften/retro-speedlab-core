@@ -66,3 +66,6 @@ class RamInfo:
 
     def remaining_lives(self) -> int | None:
         return None
+
+    def dynamics(self) -> tuple[int, ...]:
+        return ()

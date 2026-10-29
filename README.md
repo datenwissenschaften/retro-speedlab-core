@@ -269,6 +269,31 @@ same relay. The engine itself serves nothing. With `twitch.enabled: true`, free
 models on OpenRouter (`OPENROUTER_API_KEY`) write the short version of the
 latest lab report for the stream.
 
+## Tool-assisted speedrun search
+
+`datenwissenschaften.tas.run` writes a movie of the buttons to press on every
+frame from power-on, searched for the fewest frames, independent of Laya:
+
+```bash
+python -m datenwissenschaften.tas.run search <wrapper> <config> <output> <until-state> <workers> <segment-seconds>
+python -m datenwissenschaften.tas.run improve <wrapper> <config> <output> <workers> <segment-seconds>
+```
+
+The run is split at the state machine's transitions. Each segment is searched
+Go-Explore style on `<workers>` emulator processes: an archive keeps the fastest
+savestate per cell (state, 8 px position, height, airborne and
+`RamInfo.dynamics()`, the game's coarse view of whatever moves nearby) and
+branches from rarely visited cells with short random input bursts. The fastest
+crossing into a later state ends the segment; deaths and backward transitions
+end a branch. Random numbers live in the savestates, so the search plans
+against the real RNG and can wait frames to change it.
+
+After every segment the whole movie is replayed from power-on; segments that do
+not reproduce are searched again. `<output>/progress.msgpack` lets a run resume,
+`<output>/tas.bk2` is the verified movie (a valid demonstration) and
+`tas.mp4` its video. `improve` searches every segment again, bounded by its
+current frames; a faster crossing replaces it and the rest is searched anew.
+
 ## Workflows, tracking and the lab duel
 
 [Flyte](https://flyte.org) runs the training as tasks (`datenwissenschaften.workflow`):
