@@ -19,6 +19,7 @@ from datenwissenschaften.tas.movie import Segment, verified_segments
 from datenwissenschaften.tas.report import SECTION, report
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import UNBOUNDED, Crossing, fastest_distinct
+from datenwissenschaften.tas.stuck import STUCK_FILE, load_stuck, mark_stuck
 from datenwissenschaften.tas.workers import explore, polish
 from datenwissenschaften.training.session import MAIN_ENVIRONMENT
 from datenwissenschaften.training.video_render import render_video
@@ -27,16 +28,12 @@ from datenwissenschaften.workflow.wrapper import wrapper_class
 
 PROGRESS_FILE = TAS_PROGRESS
 LOG_FILE = "search.log"
-SEARCH_ROUNDS = 3
+SEARCH_ROUNDS = 2
 IMPROVE_ROUNDS = 1
 
 SEED_SPACE = 2**31
 
 app = typer.Typer()
-
-
-class StuckSegment(RuntimeError):
-    pass
 
 
 def load_progress(path: Path) -> list[Segment]:
@@ -109,15 +106,15 @@ class Tas:
 
     def keep(self, segments: list[Segment], searching: str) -> list[Segment]:
         save_progress(self.output / PROGRESS_FILE, segments)
+        (self.output / STUCK_FILE).unlink(missing_ok=True)
         return self.report(segments, searching)
 
     def report(self, segments: list[Segment], searching: str) -> list[Segment]:
         levels = level_map(self.runner.wrapper.levels, self.runner.wrapper.state_classes)
         frame_rate = self.runner.emulator.em.get_screen_rate()
-        records = self.settings.speedrun.records
-        publish_metadata(
-            SECTION, report(segments, levels, self.runner.order[0], frame_rate, records, searching), replace=True
-        )
+        records, stuck = self.settings.speedrun.records, load_stuck(self.output / STUCK_FILE)
+        speedrun = report(segments, levels, self.runner.order[0], frame_rate, records, searching, stuck)
+        publish_metadata(SECTION, speedrun, replace=True)
         return segments
 
     def verified(self, segments: list[Segment], shown: int) -> list[Segment]:
@@ -133,7 +130,12 @@ class Tas:
             self.report(segments, start.state)
             crossing = self.best(start, UNBOUNDED, SEARCH_ROUNDS)
             if crossing is None:
-                raise StuckSegment(f"The search found no way out of {start.state} in {SEARCH_ROUNDS} rounds")
+                searches = mark_stuck(self.output / STUCK_FILE, start.state).searches
+                logger.warning(
+                    f"No way out of {start.state} after {searches} searches; searching the way into it again"
+                )
+                segments = segments[:-1]
+                continue
             segments = self.keep([*segments, segment_of(crossing)], crossing.end.state)
             logger.info(f"{start.state} -> {crossing.end.state} in {crossing.frames} frames; run at {frames(segments)}")
         return self.report(segments, segments[-1].state)
@@ -176,18 +178,10 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
     return Tas(wrapper, config, settings, runner, pool)
 
 
-def extended(tas: Tas, until: str) -> list[Segment]:
-    while True:
-        try:
-            return tas.extend(load_progress(tas.output / PROGRESS_FILE), until)
-        except StuckSegment as stuck:
-            logger.warning(f"{stuck}; searching again with new seeds")
-
-
 def speedrun_forever(wrapper: str, config: Path) -> None:
     with worker_pool(load_config(config).speedrun.workers) as pool:
         tas = tas_run(wrapper, config, pool)
-        segments = extended(tas, phases(wrapper_class(wrapper))[-1])
+        segments = tas.extend(load_progress(tas.output / PROGRESS_FILE), phases(wrapper_class(wrapper))[-1])
         publish(tas.settings, segments)
         while True:
             improved = tas.improve(segments)

@@ -1,7 +1,10 @@
 from datetime import UTC, datetime
 
+import msgspec
+
 from datenwissenschaften.settings import SpeedrunRecord
 from datenwissenschaften.tas.movie import Segment
+from datenwissenschaften.tas.stuck import Stuck
 
 SECTION = "speedrun"
 
@@ -24,6 +27,7 @@ def report(
     frame_rate: float,
     records: tuple[SpeedrunRecord, ...],
     searching: str,
+    stuck: Stuck | None,
 ) -> dict:
     frames = sum(len(segment.pressed) for segment in segments)
     return {
@@ -32,9 +36,11 @@ def report(
         "frame_rate": frame_rate,
         "segments": [{"state": segment.state, "frames": len(segment.pressed)} for segment in segments],
         "splits": splits(segments, levels, first, frame_rate),
+        "levels": list(levels),
         "records": [{"name": record.name, "seconds": record.seconds} for record in records],
         "reached": segments[-1].state if segments else first,
         "won": bool(segments) and segments[-1].won,
         "searching": searching,
+        "stuck": msgspec.to_builtins(stuck),
         "updated_at": datetime.now(UTC).isoformat(),
     }

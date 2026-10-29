@@ -56,12 +56,7 @@ def test_the_lab_status_is_published_until_stopped():
 def test_the_speedrun_extends_the_movie_then_publishes_every_faster_one(tmp_path: Path, monkeypatch):
     published: list[int] = []
 
-    attempts: list[int] = []
-
     def extend(segments: list[Segment], until: str) -> list[Segment]:
-        attempts.append(1)
-        if len(attempts) == 1:
-            raise run.StuckSegment("stuck")
         return SLOW
 
     def improve(segments: list[Segment]) -> list[Segment]:
@@ -83,7 +78,6 @@ def test_the_speedrun_extends_the_movie_then_publishes_every_faster_one(tmp_path
         run.speedrun_forever("fakes:FakeWrapper", write_config(tmp_path))
 
     assert published == [6, 3]
-    assert len(attempts) == 2
 
 
 def test_the_speedrun_task_relays_watches_the_lab_and_runs(tmp_path: Path, monkeypatch):

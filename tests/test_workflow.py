@@ -7,6 +7,7 @@ import pytest
 from fakes import FakeWrapper, write_config
 
 from datenwissenschaften.environment import level_drill
+from datenwissenschaften.tas.stuck import STUCK_FILE, mark_stuck
 from datenwissenschaften.workflow import lab as lab_module
 from datenwissenschaften.workflow import training as training_module
 from datenwissenschaften.workflow.lab import lab, lab_run_due
@@ -77,6 +78,14 @@ def test_no_lab_run_while_training_progresses(tmp_path: Path):
     progress(tmp_path, 60)
 
     assert not lab_run_due(config)
+
+
+def test_a_stuck_search_lets_the_lab_in_at_once(tmp_path: Path):
+    config = str(write_config(tmp_path))
+    progress(tmp_path, 60)
+    mark_stuck(tmp_path / "cache" / "tas" / STUCK_FILE, "Boss")
+
+    assert lab_run_due(config)
 
 
 def test_the_end_of_the_last_lab_run_counts_as_progress(tmp_path: Path):

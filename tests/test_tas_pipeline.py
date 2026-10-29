@@ -11,8 +11,9 @@ from datenwissenschaften.settings import SpeedrunRecord, load_config
 from datenwissenschaften.states.landmarks import Landmarks
 from datenwissenschaften.tas import movie, run, workers
 from datenwissenschaften.tas.movie import Segment
-from datenwissenschaften.tas.runner import SegmentRunner
-from datenwissenschaften.tas.search import search_segment, shave
+from datenwissenschaften.tas.runner import SegmentRunner, Start
+from datenwissenschaften.tas.search import Crossing, search_segment, shave
+from datenwissenschaften.tas.stuck import STUCK_FILE, Stuck, load_stuck
 from datenwissenschaften.training import expert_hook
 from datenwissenschaften.training.expert_hook import SNAPSHOT_DECISIONS, ExpertHook
 from datenwissenschaften.training.learning import Learning
@@ -142,12 +143,38 @@ def test_the_speedrun_reports_level_splits_against_the_records():
     segments = [Segment("Play", [[0]] * 60, b"", False), Segment("Level2", [[0]] * 120, b"", False)]
     levels = {"Level 1": ("Menu", "Play"), "Level 2": ("Level2",)}
 
-    report = run.report(segments, levels, "Menu", 60.0, (SpeedrunRecord("TAS", 400.0),), "Level2")
+    stuck = Stuck("Level2", "2026-10-29T10:01:00+00:00", 2)
+
+    report = run.report(segments, levels, "Menu", 60.0, (SpeedrunRecord("TAS", 400.0),), "Level2", stuck)
 
     assert report["seconds"] == 3.0
     assert report["splits"] == [{"level": "Level 1", "seconds": 3.0}]
     assert report["records"] == [{"name": "TAS", "seconds": 400.0}]
     assert (report["reached"], report["won"], report["searching"]) == ("Level2", False, "Level2")
+    assert report["levels"] == ["Level 1", "Level 2"]
+    assert report["stuck"] == {"state": "Level2", "since": "2026-10-29T10:01:00+00:00", "searches": 2}
+
+
+def test_a_segment_without_a_way_out_is_marked_stuck_and_the_way_into_it_searched_again(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    config = write_config(tmp_path)
+    tas = run.Tas("fakes:FakeWrapper", config, load_config(config), runner, SyncPool())
+    tas.output.mkdir(parents=True)
+    local_workers(monkeypatch, runner)
+    found = run.Tas.best
+    stuck: list[Stuck | None] = []
+
+    def best(self: run.Tas, start: Start, bound: int, rounds: int) -> Crossing | None:
+        stuck.append(load_stuck(tas.output / STUCK_FILE))
+        return found(self, start, bound, rounds) if len(stuck) > 1 else None
+
+    monkeypatch.setattr(run.Tas, "best", best)
+
+    segments = tas.extend([], "Boss")
+
+    assert run.frames(segments) == BOSS_FRAMES
+    assert [marked and (marked.state, marked.searches) for marked in stuck] == [None, ("Survive", 1)]
+    assert load_stuck(tas.output / STUCK_FILE) is None
 
 
 def test_workers_search_shave_and_teach_from_a_savestate(tmp_path: Path, monkeypatch):

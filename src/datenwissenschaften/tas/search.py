@@ -9,6 +9,8 @@ import numpy as np
 from datenwissenschaften.tas.runner import CellKey, SegmentRunner, Start
 
 EXPLORE_DECISIONS = 24
+STILL_FRAMES = 1800
+HOLD_FRAMES = 240
 KEEP_ACTION = 0.8
 MAX_CELLS = 8000
 BEAM = 3
@@ -78,6 +80,23 @@ def leaves(runner: SegmentRunner, start: Start, state: str, won: bool) -> bool:
     return won or (state != start.state and runner.forward(start.state, state))
 
 
+def holds(runner: SegmentRunner, state: str, idle: np.ndarray) -> bool:
+    machine = runner.wrapper.state_machine
+    for _ in range(HOLD_FRAMES):
+        alive, won, _ = runner.press(idle)
+        if won:
+            return True
+        if not alive or runner.forward(machine.state_name, state):
+            return False
+    return True
+
+
+def confirmed(runner: SegmentRunner, pressed: np.ndarray, won: bool) -> Crossing | None:
+    state = runner.wrapper.state_machine.state_name
+    crossing = Crossing(Start(state, runner.snapshot()), pressed, won, runner.key(0))
+    return crossing if won or holds(runner, state, np.zeros_like(pressed[-1])) else None
+
+
 def search_segment(runner: SegmentRunner, start: Start, bound: int, seed: int, seconds: float) -> list[Crossing]:
     rng, deadline = random.Random(seed), time.monotonic() + seconds
     actions = len(runner.wrapper.action_table)
@@ -88,7 +107,8 @@ def search_segment(runner: SegmentRunner, start: Start, bound: int, seed: int, s
         cell = choose(list(archive.values()), rng)
         runner.restore(cell.start)
         trail, frames, score, action = cell.trail, cell.frames, cell.score, rng.randrange(actions)
-        for _ in range(EXPLORE_DECISIONS):
+        last, decisions, still = runner.key(frames), 0, 0
+        while decisions < EXPLORE_DECISIONS and still < STILL_FRAMES:
             if rng.random() > KEEP_ACTION:
                 action = rng.randrange(actions)
             outcome = runner.decide(action)
@@ -96,12 +116,16 @@ def search_segment(runner: SegmentRunner, start: Start, bound: int, seed: int, s
             if frames >= (bound if len(crossings) < BEAM else crossings[-1].frames):
                 break
             if leaves(runner, start, outcome.state, outcome.won):
-                ending = Start(outcome.state, runner.snapshot())
-                crossings = fastest_distinct([*crossings, Crossing(ending, trail.frames(), outcome.won, runner.key(0))])
+                if (crossing := confirmed(runner, trail.frames(), outcome.won)) is not None:
+                    crossings = fastest_distinct([*crossings, crossing])
                 break
             if not outcome.alive or outcome.state != start.state:
                 break
             key = runner.key(frames)
+            if key == last:
+                still += len(outcome.pressed)
+                continue
+            last, decisions, still = key, decisions + 1, 0
             if key in archive and archive[key].frames <= frames:
                 continue
             if key not in archive and len(archive) >= MAX_CELLS:
@@ -116,7 +140,7 @@ def replay(runner: SegmentRunner, start: Start, pressed: np.ndarray) -> Crossing
     for frame, buttons in enumerate(pressed, 1):
         alive, won, _ = runner.press(buttons)
         if leaves(runner, start, machine.state_name, won):
-            return Crossing(Start(machine.state_name, runner.snapshot()), pressed[:frame], won, runner.key(0))
+            return confirmed(runner, pressed[:frame], won)
         if not alive or machine.state_name != start.state:
             return None
     return None

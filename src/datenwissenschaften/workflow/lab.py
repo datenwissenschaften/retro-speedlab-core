@@ -8,6 +8,7 @@ from datenwissenschaften.environment.demonstration import TAS_DIR, TAS_PROGRESS
 from datenwissenschaften.environment.level_drill import DRILLED_SUFFIX
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
+from datenwissenschaften.tas.stuck import STUCK_FILE, load_stuck
 from datenwissenschaften.tracking.stale import close_stale_lab_runs
 from datenwissenschaften.tracking.task_run import task_run
 from datenwissenschaften.workflow.environment import speedlab
@@ -32,6 +33,10 @@ def lab_run_due(config: str) -> bool:
         logger.info("No lab run: one is running")
         return False
     close_stale_lab_runs(settings)
+    stuck = load_stuck(settings.paths.cache_dir / TAS_DIR / STUCK_FILE)
+    if stuck is not None:
+        logger.info(f"Lab run: the search is stuck in {stuck.state} after {stuck.searches} searches")
+        return True
     stalled_minutes = (time.time() - last_progress(settings)) / SECONDS_PER_MINUTE
     if stalled_minutes < settings.lab.stall_minutes:
         logger.info(f"No lab run: the last progress was {stalled_minutes:.0f} minutes ago")

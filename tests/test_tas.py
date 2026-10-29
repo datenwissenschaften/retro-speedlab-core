@@ -6,7 +6,7 @@ import numpy as np
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.run import finished, load_progress, save_progress
 from datenwissenschaften.tas.runner import Outcome, Start
-from datenwissenschaften.tas.search import UNBOUNDED, Cell, Crossing, Trail, search_segment, shave
+from datenwissenschaften.tas.search import UNBOUNDED, Cell, Crossing, Trail, holds, search_segment, shave
 
 ORDER = ("Walk", "Goal")
 GOAL_X = 6
@@ -98,3 +98,22 @@ def test_progress_survives_a_restart_and_a_won_or_target_segment_finishes_the_ru
     assert not finished(segments, "Level3")
     assert finished([Segment("Door5", [], b"", True)], "Level3")
     assert not finished([], "Level2")
+
+
+def idle_runner(alive: bool, after: str) -> SimpleNamespace:
+    machine = SimpleNamespace(state_name="Step")
+
+    def press(idle: np.ndarray) -> tuple[bool, bool, float]:
+        machine.state_name = after
+        return alive, False, 0.0
+
+    forward = lambda origin, reached: ORDER.index(reached) > ORDER.index(origin)  # noqa: E731
+    return SimpleNamespace(wrapper=SimpleNamespace(state_machine=machine), press=press, forward=forward)
+
+
+def test_an_ending_holds_only_while_the_idle_player_lives_and_stays_in_it():
+    idle = np.zeros(1, dtype=np.int8)
+
+    assert holds(idle_runner(True, "Goal"), "Goal", idle)
+    assert not holds(idle_runner(True, "Walk"), "Goal", idle)
+    assert not holds(idle_runner(False, "Goal"), "Goal", idle)
