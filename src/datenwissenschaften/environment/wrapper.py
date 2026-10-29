@@ -40,6 +40,11 @@ def state_class(state_classes: tuple[type[State[T]], ...], state_name: str) -> t
     raise ValueError(f"Unknown state: {state_name}")
 
 
+def phases(wrapper_cls: type["StateMachineGymWrapper"]) -> tuple[str, ...]:
+    classes = (wrapper_cls.start_state_cls, *wrapper_cls.state_classes)
+    return tuple(dict.fromkeys(state_cls.__name__ for state_cls in classes))
+
+
 def lost_life(before: RamInfo, after: RamInfo) -> bool:
     lives_before, lives_after = before.remaining_lives(), after.remaining_lives()
     return lives_before is not None and lives_after is not None and lives_after < lives_before

@@ -25,6 +25,12 @@ class RouteMap:
         x, y = nearest
         return {"to_route": Offset(x - position.x, y - position.y)}
 
+    def remaining(self, state: str, position: Position | None) -> int | None:
+        if position is None:
+            return None
+        move = self._route(state).move(position)
+        return None if move is None else move.remaining
+
     def record(self, state: str, trail: list[Step]) -> None:
         if trail:
             self._route(state).record(trail)

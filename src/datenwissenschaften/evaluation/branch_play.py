@@ -7,12 +7,12 @@ import typer
 from datenwissenschaften.accelerator import configure_accelerator
 from datenwissenschaften.advisor.advisors import Advisors
 from datenwissenschaften.environment.factory import POWER_ON, make_environment
-from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
+from datenwissenschaften.environment.wrapper import StateMachineGymWrapper, phases
 from datenwissenschaften.evaluation.player import Attempt, Player
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.session import MAIN_ENVIRONMENT
-from datenwissenschaften.training.trainer import laya_network, phases, state_models
+from datenwissenschaften.training.trainer import laya_network, state_models
 from datenwissenschaften.workflow.wrapper import wrapper_class
 
 EPISODES = 5

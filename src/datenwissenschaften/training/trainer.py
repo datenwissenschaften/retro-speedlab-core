@@ -10,10 +10,10 @@ from datenwissenschaften.advisor.backplay import Backplay
 from datenwissenschaften.advisor.backplay_follower import BackplayFollower
 from datenwissenschaften.advisor.team import AdvisorTeam
 from datenwissenschaften.environment.curriculum_run import FULL_RUN
-from datenwissenschaften.environment.demonstration import load_demonstrations
+from datenwissenschaften.environment.demonstration import demonstration_movies, load_demonstrations
 from datenwissenschaften.environment.factory import POWER_ON, make_environment
 from datenwissenschaften.environment.levels import level_map
-from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
+from datenwissenschaften.environment.wrapper import StateMachineGymWrapper, phases
 from datenwissenschaften.laya.agent import LayaAgent
 from datenwissenschaften.laya.network import LayaNetwork
 from datenwissenschaften.logger import setup_logging
@@ -25,6 +25,7 @@ from datenwissenschaften.training.checkpoint_hook import CheckpointHook, model_m
 from datenwissenschaften.training.collapse_hook import CollapseHook
 from datenwissenschaften.training.context import RunContext
 from datenwissenschaften.training.curriculum_upload_hook import CurriculumUploadHook
+from datenwissenschaften.training.expert_hook import ExpertHook
 from datenwissenschaften.training.hooks import TrainingHook
 from datenwissenschaften.training.identity import TrainingIdentity, engine_version
 from datenwissenschaften.training.knowledge import knowledge
@@ -58,11 +59,6 @@ LAYA_EMULATORS = 3
 ADVISOR_THREADS = 2
 
 
-def phases(wrapper_cls: type[StateMachineGymWrapper]) -> tuple[str, ...]:
-    classes = (wrapper_cls.start_state_cls, *wrapper_cls.state_classes)
-    return tuple(dict.fromkeys(state_cls.__name__ for state_cls in classes))
-
-
 def laya_network(wrapper_cls: type[StateMachineGymWrapper], config: RetroSpeedlabConfig) -> LayaNetwork:
     return LayaNetwork(config.laya.checkpoint, wrapper_cls.action_descriptions, configure_accelerator())
 
@@ -75,6 +71,7 @@ def state_models(wrapper_cls: type[StateMachineGymWrapper], network: LayaNetwork
 
 class LayaTrainer:
     def __init__(self, wrapper_cls: type[StateMachineGymWrapper], config_path: Path) -> None:
+        self.config_path = config_path
         self.config = load_config(config_path)
         setup_logging(self.config.log_level)
         self.context = RunContext(self.config, POWER_ON)
@@ -114,7 +111,7 @@ class LayaTrainer:
         story = StoryBook(
             database, self.config.training.game_identity, self.context.savestate, phases(self.wrapper_cls)
         )
-        demonstrations, starts = load_demonstrations(env, self.config.paths.demonstrations_dir)
+        demonstrations, starts = load_demonstrations(env, demonstration_movies(self.config.paths))
         publish_metadata("knowledge", knowledge(env, self.config.laya.checkpoint, demonstrations), replace=True)
         deadline = time.monotonic() + seconds
         learning = Learning(env.curriculum.curriculum, env.curriculum.drill)
@@ -139,7 +136,11 @@ class LayaTrainer:
         tracked = [] if tracking is None else [TrackingHook(tracking, models, phases(self.wrapper_cls), self._levels())]
         try:
             with ending(tracking):
-                hooks = [*self._hooks(env, models, StoryTeller(story)), *tracked]
+                hooks = [
+                    *self._hooks(env, models, StoryTeller(story)),
+                    *tracked,
+                    ExpertHook(env, lessons, self.config_path),
+                ]
                 return TrainingSession(env, models, hooks, deadline, lessons, lab_run, team.coach, laya_practice).run()
         finally:
             laya_practice.close()

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from datenwissenschaften.environment.level_drill import DRILLED_SUFFIX, drilling
+from datenwissenschaften.environment.level_drill import DRILLED_SUFFIX
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
 from datenwissenschaften.tracking.stale import close_stale_lab_runs
@@ -30,9 +30,6 @@ def lab_run_due(config: str) -> bool:
         logger.info("No lab run: one is running")
         return False
     close_stale_lab_runs(settings)
-    if any(drilling(root) for root in (settings.paths.cache_dir / "curriculum").glob("*/")):
-        logger.info("No lab run: the engine is drilling a level")
-        return False
     stalled_minutes = (time.time() - last_progress(settings)) / SECONDS_PER_MINUTE
     if stalled_minutes < settings.lab.stall_minutes:
         logger.info(f"No lab run: the last progress was {stalled_minutes:.0f} minutes ago")

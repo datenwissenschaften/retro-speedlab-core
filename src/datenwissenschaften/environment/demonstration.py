@@ -9,20 +9,28 @@ from datenwissenschaften.advisor.inputs import fact_slots
 from datenwissenschaften.environment.recording import recorded_buttons
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.laya.imitation import DemonstrationStep
+from datenwissenschaften.settings import RetroSpeedlabPaths
 
 Demonstrations = dict[str, list[DemonstrationStep]]
 StartPoints = dict[str, list[bytes]]
 POINT_STRIDE = 4
+TAS_DIR = "tas"
+TAS_MOVIE = "tas.bk2"
 
 
-def load_demonstrations(wrapper: StateMachineGymWrapper, directory: Path) -> tuple[Demonstrations, StartPoints]:
+def demonstration_movies(paths: RetroSpeedlabPaths) -> list[Path]:
+    tas = paths.cache_dir / TAS_DIR / TAS_MOVIE
+    return [*sorted(paths.demonstrations_dir.glob("*.bk2")), *([tas] if tas.is_file() else [])]
+
+
+def load_demonstrations(wrapper: StateMachineGymWrapper, movies: list[Path]) -> tuple[Demonstrations, StartPoints]:
     emulator = wrapper.env.unwrapped
     record_dir = emulator.movie_path
     demonstrations: Demonstrations = {}
     starts: StartPoints = {}
     emulator.stop_record()
     try:
-        for path in sorted(directory.glob("*.bk2")):
+        for path in movies:
             steps, points = replay(wrapper, movie_buttons(path, emulator))
             for state, state_steps in steps.items():
                 demonstrations.setdefault(state, []).extend(state_steps)
@@ -45,6 +53,10 @@ def movie_buttons(path: Path, emulator: RetroEnv) -> np.ndarray:
     return recorded_buttons(movie, emulator.num_buttons)
 
 
+def nearest_action(table: np.ndarray, chunk: np.ndarray) -> int:
+    return int((table[:, : len(chunk)] != chunk).sum(axis=(1, 2)).argmin())
+
+
 def replay(wrapper: StateMachineGymWrapper, buttons: np.ndarray) -> tuple[Demonstrations, StartPoints]:
     frames_per_decision = wrapper.action_table.shape[1]
     order = [state_cls.__name__ for state_cls in (wrapper.start_state_cls, *wrapper.state_classes)]
@@ -63,7 +75,7 @@ def replay(wrapper: StateMachineGymWrapper, buttons: np.ndarray) -> tuple[Demons
         chunk = buttons[start : start + frames_per_decision]
         if chunk.any():
             observation = wrapper.observer.observation(ram)
-            action = int((wrapper.current_action_table() != chunk).sum(axis=(1, 2)).argmin())
+            action = nearest_action(wrapper.current_action_table(), chunk)
             memory = np.array(wrapper.observer.read_bytes(), dtype=np.uint8)
             slots = fact_slots(wrapper.observer.facts(ram))
             step = DemonstrationStep(observation["state"], observation["question"], action, memory, slots)

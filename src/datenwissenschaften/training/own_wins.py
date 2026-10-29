@@ -37,5 +37,8 @@ class OwnWins:
             return
         del self.attempts[environment]
         if reached in self.order and self.order.index(reached) > self.order.index(state):
-            self.wins[state] = [*self.examples(state), *attempt][-WIN_EXAMPLES:]
-            atomic_write(self.path(state), msgspec.json.encode(self.wins[state]))
+            self.keep(state, attempt)
+
+    def keep(self, state: str, examples: list[Example]) -> None:
+        self.wins[state] = [*self.examples(state), *examples][-WIN_EXAMPLES:]
+        atomic_write(self.path(state), msgspec.json.encode(self.wins[state]))

@@ -114,15 +114,6 @@ def drill_files(tmp_path: Path, endings: int, tries: int) -> Path:
     return root
 
 
-def test_no_lab_run_while_the_engine_collects_endings_or_drills_a_level(tmp_path: Path):
-    config = str(write_config(tmp_path))
-    drill_files(tmp_path, level_drill.MIN_ENDINGS - 1, 0)
-    assert not lab_run_due(config)
-
-    drill_files(tmp_path, level_drill.MIN_ENDINGS, level_drill.DRILL_WINDOW - 1)
-    assert not lab_run_due(config)
-
-
 def test_a_drill_that_keeps_failing_lets_the_lab_in(tmp_path: Path):
     config = str(write_config(tmp_path))
     drill_files(tmp_path, level_drill.MIN_ENDINGS, level_drill.DRILL_WINDOW)

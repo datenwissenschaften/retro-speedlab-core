@@ -6,27 +6,36 @@ import numpy as np
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.run import finished, load_progress, save_progress
 from datenwissenschaften.tas.runner import Outcome, Start
-from datenwissenschaften.tas.search import Trail, search_segment
+from datenwissenschaften.tas.search import UNBOUNDED, Cell, Crossing, Trail, search_segment, shave
 
 ORDER = ("Walk", "Goal")
 GOAL_X = 6
 PIT_X = -2
-UNBOUNDED = 10**9
+MOVES = (0, 1, -1)
 START = Start("Walk", (0).to_bytes(2, "big", signed=True))
 
 
 class LineRunner:
     def __init__(self) -> None:
-        self.wrapper = SimpleNamespace(action_table=np.zeros((3, 2, 1), dtype=np.int8))
         self.x = 0
+        self.wrapper = SimpleNamespace(action_table=np.zeros((3, 2, 1), dtype=np.int8), state_machine=self)
+
+    @property
+    def state_name(self) -> str:
+        return "Goal" if self.x >= GOAL_X else "Walk"
 
     def restore(self, start: Start) -> None:
         self.x = int.from_bytes(start.emulator_state, "big", signed=True)
 
+    def press(self, buttons: np.ndarray) -> tuple[bool, bool]:
+        self.x += MOVES[int(buttons[0])]
+        return self.x > PIT_X, False
+
     def decide(self, action: int) -> Outcome:
-        self.x += (0, 1, -1)[action]
-        state = "Goal" if self.x >= GOAL_X else "Walk"
-        return Outcome(np.full((2, 1), action, dtype=np.int8), state, self.x > PIT_X, False)
+        pressed = np.full((2, 1), action, dtype=np.int8)
+        for buttons in pressed:
+            alive, _ = self.press(buttons)
+        return Outcome(pressed, self.state_name, alive, False)
 
     def forward(self, origin: str, reached: str) -> bool:
         return ORDER.index(reached) > ORDER.index(origin)
@@ -34,22 +43,40 @@ class LineRunner:
     def snapshot(self) -> bytes:
         return self.x.to_bytes(2, "big", signed=True)
 
+    def remaining(self) -> int | None:
+        return None
+
     def key(self, frames: int) -> tuple[object, ...]:
-        return ("Walk", self.x)
+        return (self.state_name, self.x)
 
 
 def test_the_search_finds_the_fastest_way_into_the_next_state():
-    crossing = search_segment(LineRunner(), START, UNBOUNDED, 7, 1.0)
+    crossings = search_segment(LineRunner(), START, UNBOUNDED, 7, 1.0)
 
-    assert crossing is not None
-    assert crossing.end.state == "Goal"
-    assert crossing.frames == 2 * GOAL_X
-    assert crossing.pressed.ravel().tolist() == [1] * 2 * GOAL_X
+    assert crossings[0].end.state == "Goal"
+    assert crossings[0].frames == GOAL_X
+    assert crossings[0].pressed.ravel().tolist() == [1] * GOAL_X
 
 
 def test_a_bound_only_accepts_crossings_faster_than_the_movie_has():
-    assert search_segment(LineRunner(), START, 2 * GOAL_X, 7, 0.2) is None
-    assert search_segment(LineRunner(), START, 2 * GOAL_X + 1, 7, 1.0) is not None
+    assert search_segment(LineRunner(), START, GOAL_X, 7, 0.2) == []
+    assert search_segment(LineRunner(), START, GOAL_X + 1, 7, 1.0) != []
+
+
+def test_shaving_drops_every_frame_the_crossing_does_not_need():
+    detour = np.array([[1], [0], [2], [1], [1], [0], [1], [1], [1], [1]], dtype=np.int8)
+    crossing = Crossing(Start("Goal", b""), detour, False, ("Goal", GOAL_X))
+
+    shaved = shave(LineRunner(), START, crossing, 5.0)
+
+    assert shaved.pressed.ravel().tolist() == [1] * GOAL_X
+    assert shaved.end.state == "Goal"
+
+
+def test_cells_near_the_remembered_route_exit_are_picked_more_often():
+    near, unknown = Cell(START, None, 0, 0, 0), Cell(START, None, 0, 0, None)
+
+    assert near.weight > 10 * unknown.weight
 
 
 def test_a_trail_replays_its_chunks_in_order():

@@ -275,23 +275,29 @@ latest lab report for the stream.
 frame from power-on, searched for the fewest frames, independent of Laya:
 
 ```bash
-python -m datenwissenschaften.tas.run search <wrapper> <config> <output> <until-state> <workers> <segment-seconds>
-python -m datenwissenschaften.tas.run improve <wrapper> <config> <output> <workers> <segment-seconds>
+python -m datenwissenschaften.tas.run search <wrapper> <config> <until-state> <workers> <segment-seconds>
+python -m datenwissenschaften.tas.run improve <wrapper> <config> <workers> <segment-seconds>
 ```
 
 The run is split at the state machine's transitions. Each segment is searched
 Go-Explore style on `<workers>` emulator processes: an archive keeps the fastest
 savestate per cell (state, 8 px position, height, airborne and
 `RamInfo.dynamics()`, the game's coarse view of whatever moves nearby) and
-branches from rarely visited cells with short random input bursts. The fastest
-crossing into a later state ends the segment; deaths and backward transitions
-end a branch. Random numbers live in the savestates, so the search plans
-against the real RNG and can wait frames to change it.
+branches from rarely visited cells with short random input bursts, favouring
+cells the route memory knows to be few decisions from the exit. Workers step
+the emulator core without rendering. A crossing into a later state ends a
+branch; deaths and backward transitions drop it. Of the three fastest distinct
+crossings, the one whose next segment is also fastest is kept, and frames it
+does not need are shaved off. Random numbers live in the savestates, so the
+search plans against the real RNG and can wait frames to change it.
 
 After every segment the whole movie is replayed from power-on; segments that do
-not reproduce are searched again. `<output>/progress.msgpack` lets a run resume,
-`<output>/tas.bk2` is the verified movie (a valid demonstration) and
-`tas.mp4` its video. `improve` searches every segment again, bounded by its
+not reproduce are searched again. `cache/tas/progress.msgpack` lets a run
+resume, `cache/tas/tas.bk2` is the verified movie and `tas.mp4` its video.
+Training loads the movie with the demonstrations, so Laya imitates it and
+practises from its backplay points. When an attempt in a learning state fails,
+a teacher process searches a way out from a savestate taken shortly before the
+failure and adds it to Laya's own wins. `improve` searches every segment again, bounded by its
 current frames; a faster crossing replaces it and the rest is searched anew.
 
 ## Workflows, tracking and the lab duel
@@ -299,8 +305,7 @@ current frames; a faster crossing replaces it and the rest is searched anew.
 [Flyte](https://flyte.org) runs the training as tasks (`datenwissenschaften.workflow`):
 `training` trains one two-hour `train_session` after another. `lab` starts a
 lab run (`agent/daily.sh` of the game package) once no curriculum win and no
-passed level drill happened for `agent.stall_minutes` minutes, and never while
-a level drill still collects endings or has fewer than 10 tries: Claude Code and Codex each work on their own git
+passed level drill happened for `agent.stall_minutes` minutes: Claude Code and Codex each work on their own git
 worktree of the game package for `agent.minutes` minutes, and the duel decides which one ships.
 Training keeps running while the agents work and pauses only while the duel judges and the
 winner deploys; the agents' processes are the first the kernel kills when memory runs out.

@@ -56,12 +56,12 @@ def test_loading_replays_every_movie_without_recording_it(tmp_path: Path, monkey
     (tmp_path / "demos" / "menu.bk2").write_bytes(b"")
     monkeypatch.setattr(demonstration, "movie_buttons", lambda path, emulator: BUTTONS)
 
-    demonstrations, starts = load_demonstrations(env, tmp_path / "demos")
+    demonstrations, starts = load_demonstrations(env, [tmp_path / "demos" / "menu.bk2"])
 
     assert {state: len(steps) for state, steps in demonstrations.items()} == {"Survive": 1, "Boss": 2}
     assert list(starts) == ["Survive"]
     assert env.env.unwrapped.movie_path == record_dir
-    assert load_demonstrations(env, tmp_path / "empty") == ({}, {})
+    assert load_demonstrations(env, []) == ({}, {})
 
 
 def test_movie_buttons_skip_the_reset_frame_and_require_a_power_on_movie_of_the_game(tmp_path: Path, monkeypatch):

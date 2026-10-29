@@ -57,12 +57,6 @@ class LevelDrill:
         atomic_write(self._drill_path(level), msgspec.json.encode(outcomes))
         return False
 
-    def busy(self, level: str) -> bool:
-        endings = len(self._read(self._endings_path(level), list[str]))
-        if endings < MIN_ENDINGS:
-            return endings > 0
-        return len(self._read(self._drill_path(level), list[bool])) < DRILL_WINDOW
-
     def progress(self, level: str) -> dict[str, object]:
         outcomes = self._read(self._drill_path(level), list[bool])
         return {
@@ -81,8 +75,3 @@ class LevelDrill:
 
     def _drill_path(self, level: str) -> Path:
         return self.root / f"{level}.drill.json"
-
-
-def drilling(root: Path) -> bool:
-    drill = LevelDrill(root)
-    return any(drill.busy(path.name.removesuffix(ENDINGS_SUFFIX)) for path in root.glob(f"*{ENDINGS_SUFFIX}"))
