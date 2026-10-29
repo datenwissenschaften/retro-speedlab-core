@@ -20,6 +20,7 @@ SHAVE_WINDOWS = (8, 4, 2, 1)
 EXPLOIT = 0.5
 LEADING_SHARE = 10
 UNBOUNDED = sys.maxsize
+CHECKPOINT_GAIN = 1.0
 
 
 @dataclass(slots=True, frozen=True)
@@ -62,6 +63,36 @@ class Crossing:
         return len(self.pressed)
 
 
+@dataclass(slots=True, frozen=True)
+class Checkpoint:
+    end: Start
+    pressed: np.ndarray
+    gain: float
+
+    @property
+    def frames(self) -> int:
+        return len(self.pressed)
+
+
+@dataclass(slots=True, frozen=True)
+class Searched:
+    crossings: list[Crossing]
+    checkpoint: Checkpoint | None
+
+
+def farthest(checkpoints: list[Checkpoint | None]) -> Checkpoint | None:
+    found = [checkpoint for checkpoint in checkpoints if checkpoint is not None]
+    return max(found, key=lambda checkpoint: (checkpoint.gain, -checkpoint.frames), default=None)
+
+
+def checkpoint_of(archive: dict[CellKey, Cell]) -> Checkpoint | None:
+    reached = [cell for cell in archive.values() if cell.trail is not None and cell.score >= CHECKPOINT_GAIN]
+    if not reached:
+        return None
+    cell = max(reached, key=lambda cell: (cell.score, -cell.frames))
+    return Checkpoint(cell.start, cell.trail.frames(), cell.score)
+
+
 def fastest_distinct(crossings: list[Crossing]) -> list[Crossing]:
     fastest: dict[CellKey, Crossing] = {}
     for crossing in sorted(crossings, key=lambda crossing: crossing.frames):
@@ -100,7 +131,7 @@ def confirmed(runner: SegmentRunner, pressed: np.ndarray, won: bool) -> Crossing
 
 def search_segment(
     runner: SegmentRunner, start: Start, bound: int, seed: int, seconds: float, live: WorkerLive | None
-) -> list[Crossing]:
+) -> Searched:
     rng, deadline = random.Random(seed), time.monotonic() + seconds
     actions = len(runner.wrapper.action_table)
     runner.restore(start)
@@ -136,7 +167,7 @@ def search_segment(
             if key not in archive and len(archive) >= MAX_CELLS:
                 del archive[min(archive, key=lambda kept: (archive[kept].score, -archive[kept].visits))]
             archive[key] = Cell(Start(outcome.state, runner.snapshot()), trail, frames, 0, runner.remaining(), score)
-    return crossings
+    return Searched(crossings, checkpoint_of(archive))
 
 
 def replay(runner: SegmentRunner, start: Start, pressed: np.ndarray) -> Crossing | None:

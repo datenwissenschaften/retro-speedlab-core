@@ -6,7 +6,17 @@ import numpy as np
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.routes import finished, load_progress, save_progress
 from datenwissenschaften.tas.runner import Outcome, Start
-from datenwissenschaften.tas.search import UNBOUNDED, Cell, Crossing, Trail, holds, search_segment, shave
+from datenwissenschaften.tas.search import (
+    UNBOUNDED,
+    Cell,
+    Checkpoint,
+    Crossing,
+    Trail,
+    farthest,
+    holds,
+    search_segment,
+    shave,
+)
 
 ORDER = ("Walk", "Goal")
 GOAL_X = 6
@@ -53,7 +63,7 @@ class LineRunner:
 
 
 def test_the_search_finds_the_fastest_way_into_the_next_state():
-    crossings = search_segment(LineRunner(), START, UNBOUNDED, 7, 1.0, None)
+    crossings = search_segment(LineRunner(), START, UNBOUNDED, 7, 1.0, None).crossings
 
     assert crossings[0].end.state == "Goal"
     assert crossings[0].frames == GOAL_X
@@ -61,8 +71,24 @@ def test_the_search_finds_the_fastest_way_into_the_next_state():
 
 
 def test_a_bound_only_accepts_crossings_faster_than_the_movie_has():
-    assert search_segment(LineRunner(), START, GOAL_X, 7, 0.2, None) == []
-    assert search_segment(LineRunner(), START, GOAL_X + 1, 7, 1.0, None) != []
+    assert search_segment(LineRunner(), START, GOAL_X, 7, 0.2, None).crossings == []
+    assert search_segment(LineRunner(), START, GOAL_X + 1, 7, 1.0, None).crossings != []
+
+
+def test_a_search_that_cannot_leave_returns_the_point_with_the_most_reward_as_a_checkpoint():
+    searched = search_segment(LineRunner(), START, GOAL_X, 7, 0.2, None)
+
+    assert searched.crossings == []
+    assert searched.checkpoint.end.state == "Walk"
+    assert searched.checkpoint.gain == GOAL_X - 2
+    assert searched.checkpoint.pressed.ravel().tolist() == [1] * (GOAL_X - 2)
+
+
+def test_without_enough_reward_there_is_no_checkpoint():
+    assert search_segment(LineRunner(), START, 2, 7, 0.2, None).checkpoint is None
+    assert farthest([None, None]) is None
+    near, far = (Checkpoint(START, np.zeros((frames, 1), np.int8), gain) for frames, gain in ((4, 3.0), (2, 1.0)))
+    assert farthest([far, None, near]) is near
 
 
 def test_shaving_drops_every_frame_the_crossing_does_not_need():

@@ -22,7 +22,7 @@ from datenwissenschaften.tas.report import course_of
 from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Routes, finished, load_progress, parts_of
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.screen import Screen
-from datenwissenschaften.tas.search import UNBOUNDED, Crossing
+from datenwissenschaften.tas.search import UNBOUNDED, Checkpoint, Crossing
 from datenwissenschaften.tas.searcher import Searcher
 from datenwissenschaften.tas.stuck import STUCK_FILE, mark_stuck
 from datenwissenschaften.ui.relay import relay_key
@@ -31,6 +31,8 @@ from datenwissenschaften.workflow.wrapper import wrapper_class
 
 LOG_FILE = "search.log"
 SEARCH_ROUNDS = 2
+BACKTRACK_SEARCHES = 3
+MAX_CHECKPOINTS = 5
 IMPROVE_ROUNDS = 1
 
 MAIN_WORKER = 0
@@ -43,6 +45,18 @@ app = typer.Typer()
 
 def segment_of(crossing: Crossing) -> Segment:
     return Segment(crossing.end.state, crossing.pressed.tolist(), crossing.end.emulator_state, crossing.won)
+
+
+def checkpoint_segment(checkpoint: Checkpoint) -> Segment:
+    return Segment(checkpoint.end.state, checkpoint.pressed.tolist(), checkpoint.end.emulator_state, False)
+
+
+def checkpoints_in_a_row(leg: Leg, segments: list[Segment]) -> int:
+    states = [leg.entry.state, *(segment.state for segment in segments)]
+    count = 0
+    while count < len(segments) and states[-1 - count] == states[-2 - count]:
+        count += 1
+    return count
 
 
 @dataclass(slots=True)
@@ -88,24 +102,35 @@ class Tas:
         while not finished(segments := self.verified(leg, segments), leg.exit):
             start = self.start(leg, segments, len(segments))
             self.feed.show(self.routes.view(leg.name, segments), start.state)
-            crossing = self.searcher.best(start, UNBOUNDED, SEARCH_ROUNDS)
-            if crossing is None:
-                searches = mark_stuck(self.output / STUCK_FILE, start.state).searches
-                self.feed.event("stuck", start.state, None)
-                logger.warning(
-                    f"No way out of {start.state} after {searches} searches; searching the way into it again"
-                )
-                segments = segments[:-1]
+            found = self.searcher.best(start, UNBOUNDED, SEARCH_ROUNDS)
+            if isinstance(found, Checkpoint) and checkpoints_in_a_row(leg, segments) >= MAX_CHECKPOINTS:
+                found = None
+            if isinstance(found, Checkpoint):
+                self.feed.event("checkpoint", start.state, found.frames)
+                segments = self.keep(leg, [*segments, checkpoint_segment(found)], start.state)
+                logger.info(f"Checkpoint in {start.state} after {found.frames} frames, {found.gain:.1f} reward on")
                 continue
-            self.feed.event("found", crossing.end.state, crossing.frames)
-            segments = self.keep(leg, [*segments, segment_of(crossing)], crossing.end.state)
+            if found is None:
+                segments = self.stuck(segments, start)
+                continue
+            self.feed.event("found", found.end.state, found.frames)
+            segments = self.keep(leg, [*segments, segment_of(found)], found.end.state)
             logger.info(
-                f"{start.state} -> {crossing.end.state} in {crossing.frames} frames; {leg.name} at {frames(segments)}"
+                f"{start.state} -> {found.end.state} in {found.frames} frames; {leg.name} at {frames(segments)}"
             )
             segments = self.shorten(leg, segments, self.turn % len(segments))
             self.turn += 1
         self.feed.show(self.routes.view(leg.name, segments), segments[-1].state)
         return segments
+
+    def stuck(self, segments: list[Segment], start: Start) -> list[Segment]:
+        searches = mark_stuck(self.output / STUCK_FILE, start.state).searches
+        self.feed.event("stuck", start.state, None)
+        if searches < BACKTRACK_SEARCHES:
+            logger.warning(f"No way out of {start.state} after {searches} searches; searching again")
+            return segments
+        logger.warning(f"No way out of {start.state} after {searches} searches; searching the way into it again")
+        return segments[:-1]
 
     def improve(self, leg: Leg, segments: list[Segment]) -> list[Segment]:
         for index in range(len(segments)):
@@ -115,7 +140,7 @@ class Tas:
     def shorten(self, leg: Leg, segments: list[Segment], index: int) -> list[Segment]:
         start = self.start(leg, segments, index)
         crossing = self.searcher.best(start, len(segments[index].pressed), IMPROVE_ROUNDS)
-        if crossing is None or crossing.frames >= len(segments[index].pressed):
+        if not isinstance(crossing, Crossing) or crossing.frames >= len(segments[index].pressed):
             return segments
         saved = len(segments[index].pressed) - crossing.frames
         shorter = [*segments[:index], segment_of(crossing), *segments[index + 1 :]]

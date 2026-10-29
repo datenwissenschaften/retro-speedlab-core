@@ -6,7 +6,7 @@ from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.tas.live import WorkerLive
 from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.tas.search import Crossing, search_segment, shave
+from datenwissenschaften.tas.search import Crossing, Searched, search_segment, shave
 from datenwissenschaften.workflow.wrapper import wrapper_class
 
 
@@ -17,7 +17,7 @@ def worker_runner(wrapper: str, config: Path) -> SegmentRunner:
 
 def explore(
     wrapper: str, config: Path, start: Start, bound: int, seed: int, seconds: float, live: Path | None
-) -> list[Crossing]:
+) -> Searched:
     watched = None if live is None else WorkerLive(live, seed)
     return search_segment(worker_runner(wrapper, config), start, bound, seed, seconds, watched)
 

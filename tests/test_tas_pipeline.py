@@ -10,8 +10,9 @@ from datenwissenschaften.tas import footage, movie, run, searcher, workers
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.paths import TAS_MOVIE, atomic_write
 from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Route
+from datenwissenschaften.tas.run import BACKTRACK_SEARCHES
 from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.tas.search import Crossing, search_segment, shave
+from datenwissenschaften.tas.search import Checkpoint, Crossing, search_segment, shave
 from datenwissenschaften.tas.stuck import STUCK_FILE, Stuck, load_stuck
 
 SCRIPT = [(3, 0), (3, 1), (3, 2), (3, 5), (3, 6), (3, 6), (3, 6), (3, 6)]
@@ -175,10 +176,12 @@ def test_workers_search_and_shave_from_a_savestate(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(workers, "make_environment", lambda wrapper_cls, settings, worker: env)
     runner = workers.worker_runner.__wrapped__("fakes:FakeWrapper", write_config(tmp_path))
     start = runner.power_on()
-    crossing = search_segment(runner, start, 100, 1, SECONDS, None)[0]
+    crossing = search_segment(runner, start, 100, 1, SECONDS, None).crossings[0]
     monkeypatch.setattr(workers, "worker_runner", lambda wrapper, config: runner)
 
-    assert workers.explore("fakes:FakeWrapper", tmp_path, start, 100, 1, SECONDS, None)[0].frames == BOSS_FRAMES
+    assert (
+        workers.explore("fakes:FakeWrapper", tmp_path, start, 100, 1, SECONDS, None).crossings[0].frames == BOSS_FRAMES
+    )
     assert workers.polish("fakes:FakeWrapper", tmp_path, start, crossing, SECONDS) == shave(runner, start, crossing, 0)
 
 
@@ -204,3 +207,41 @@ def test_a_faster_piece_that_breaks_the_rest_of_the_run_is_not_taken(tmp_path: P
     monkeypatch.setattr(run, "verified_segments", replayed)
 
     assert tas.shorten(Leg(FULL_RUN, runner.power_on(), "Boss"), segments, 0) is segments
+
+
+def test_a_checkpoint_is_kept_as_a_piece_and_the_search_goes_on_from_it(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    found = searcher.Searcher.best
+    checkpoint = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 1.0)
+    calls: list[int] = []
+
+    def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Crossing | Checkpoint | None:
+        calls.append(bound)
+        return checkpoint if len(calls) == 1 else found(self, start, bound, rounds)
+
+    monkeypatch.setattr(searcher.Searcher, "best", best)
+
+    segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [])
+
+    assert [(segment.state, len(segment.pressed)) for segment in segments] == [("Survive", 1), ("Boss", 2)]
+    assert [event.kind for event in tas.feed.journal.journal.events][:2] == ["checkpoint", "found"]
+
+
+def test_the_search_goes_back_a_piece_only_after_three_failed_searches(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    piece = [Segment("Survive", [[0, 0]], bytes([1]), False)]
+
+    kept = [tas.stuck(piece, Start("Survive", bytes([1]))) for _ in range(BACKTRACK_SEARCHES)]
+
+    assert kept == [piece, piece, []]
+
+
+def test_checkpoints_in_a_row_count_the_pieces_that_stay_in_one_state():
+    leg = Leg(FULL_RUN, Start("Survive", b""), "Boss")
+    survive = Segment("Survive", [[0, 0]], b"", False)
+
+    assert run.checkpoints_in_a_row(leg, []) == 0
+    assert run.checkpoints_in_a_row(leg, [survive, survive]) == 2
+    assert run.checkpoints_in_a_row(leg, [survive, Segment("Boss", [[0, 0]], b"", False)]) == 0
