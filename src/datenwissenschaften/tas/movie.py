@@ -20,6 +20,7 @@ class Segment:
 
 def verified_segments(runner: SegmentRunner, segments: list[Segment], movie: Path, shown: int) -> int:
     emulator = runner.emulator
+    movie.parent.mkdir(parents=True, exist_ok=True)
     emulator.auto_record(str(movie.parent))
     origin = runner.power_on()
     recording = Path(active_movie_path(emulator))

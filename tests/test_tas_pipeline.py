@@ -124,7 +124,6 @@ def test_verify_accepts_a_movie_that_replays_and_rejects_one_that_does_not(tmp_p
     good, bad = tmp_path / "good.msgpack", tmp_path / "bad.msgpack"
     run.save_progress(good, [Segment("Boss", [[1, 0]] * BOSS_FRAMES, bytes([BOSS_FRAMES]), False)])
     run.save_progress(bad, [Segment("Boss", [[1, 0]], bytes([1]), False)])
-    tas_dir(load_config(config)).mkdir(parents=True)
 
     run.verify("fakes:FakeWrapper", config, good)
 
