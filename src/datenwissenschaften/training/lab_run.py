@@ -31,7 +31,7 @@ class LabRun:
         if time.monotonic() - self.checked_at < POLL_SECONDS:
             return None
         self.checked_at = time.monotonic()
-        lab = self._publish()
+        lab = self.publish()
         if not pausing(lab):
             return None
         logger.info("A lab run is judging its branches; training pauses until it ends")
@@ -39,11 +39,11 @@ class LabRun:
             if (request := consume_model_reset()) is not None:
                 return request
             time.sleep(POLL_SECONDS)
-            lab = self._publish()
+            lab = self.publish()
         logger.info("The lab run ended; training resumes")
         return None
 
-    def _publish(self) -> LabMarker | None:
+    def publish(self) -> LabMarker | None:
         lab = read_marker(self.marker)
         publish_metadata(SECTION, IDLE if lab is None else asdict(lab_status(lab)), replace=True)
         return lab

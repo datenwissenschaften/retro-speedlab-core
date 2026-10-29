@@ -2,9 +2,18 @@ import hashlib
 import json
 from typing import Any
 
+import cv2
+import numpy as np
+
 MEDIA_KEY_BYTES = 16
+JPEG_QUALITY = 80
 VIDEO_SUFFIX = ".mp4"
 STATUSES_SUFFIX = ".json"
+
+
+def jpeg(frame: np.ndarray) -> bytes:
+    bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+    return cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])[1].tobytes()
 
 
 def media_key(body: bytes) -> str:

@@ -269,51 +269,60 @@ same relay. The engine itself serves nothing. With `twitch.enabled: true`, free
 models on OpenRouter (`OPENROUTER_API_KEY`) write the short version of the
 latest lab report for the stream.
 
-## Tool-assisted speedrun search
+## Speedrun search
 
-`datenwissenschaften.tas.run` writes a movie of the buttons to press on every
-frame from power-on, searched for the fewest frames, independent of Laya:
+The app's default workflow is `speedrun`: it writes the fastest movie of the
+buttons to press on every frame from power-on, for any game package, and
+improves it forever. It needs no learner:
 
 ```bash
-python -m datenwissenschaften.tas.run search <wrapper> <config> <until-state> <workers> <segment-seconds>
-python -m datenwissenschaften.tas.run improve <wrapper> <config> <workers> <segment-seconds>
+python -m datenwissenschaften.tas.run search <wrapper> <config> <until-state>
+python -m datenwissenschaften.tas.run improve <wrapper> <config>
+python -m datenwissenschaften.tas.run verify <wrapper> <config> <progress>
 ```
 
 The run is split at the state machine's transitions. Each segment is searched
-Go-Explore style on `<workers>` emulator processes: an archive keeps the fastest
-savestate per cell (state, 8 px position, height, airborne and
+Go-Explore style on `speedrun.workers` emulator processes: an archive keeps the
+fastest savestate per cell (state, 8 px position, height, airborne and
 `RamInfo.dynamics()`, the game's coarse view of what the player has collected
-and whatever moves nearby) and
-branches from rarely visited cells with short random input bursts, favouring
-cells the route memory knows to be few decisions from the exit. Workers step
-the emulator core without rendering. A crossing into a later state ends a
-branch; deaths and backward transitions drop it. Of the three fastest distinct
-crossings, the one whose next segment is also fastest is kept, and frames it
-does not need are shaved off. Random numbers live in the savestates, so the
-search plans against the real RNG and can wait frames to change it.
+and whatever moves nearby) and branches from rarely visited cells with short
+random input bursts. Half the time it branches from the tenth of cells that
+earned the most of the segment's reward, and it favours cells the route memory
+knows to be few decisions from the exit; a full archive drops its least
+promising cell. Workers step the emulator core without rendering. A crossing
+into a later state ends a branch; deaths and backward transitions drop it. Of
+the three fastest distinct crossings, the one whose next segment is also fastest
+is kept, and frames it does not need are shaved off. A segment gets
+`speedrun.segment_seconds` per round and twice as long with each retry. Random
+numbers live in the savestates, so the search plans against the real RNG and can
+wait frames to change it.
 
 After every segment the whole movie is replayed from power-on; segments that do
 not reproduce are searched again. `cache/tas/progress.msgpack` lets a run
-resume, `cache/tas/tas.bk2` is the verified movie and `tas.mp4` its video.
-Training loads the movie with the demonstrations, so Laya imitates it and
-practises from its backplay points. When an attempt in a learning state fails,
-a teacher process searches a way out from a savestate taken shortly before the
-failure and adds it to Laya's own wins. `improve` searches every segment again, bounded by its
-current frames; a faster crossing replaces it and the rest is searched anew.
+resume, `cache/tas/tas.bk2` is the verified movie, `tas.mp4` its video and
+`search.log` the search's log. `metadata.speedrun` tells the stream the run's
+time, its segments, the level splits (from `GameWrapper.levels`), the reference
+times in `speedrun.records` and the segment being searched; the newest verified
+segment plays as the stream's latest episode. `improve` searches every segment
+again, bounded by its current frames; a faster crossing replaces it and the rest
+is searched anew. `verify` fails unless a progress file still replays with a
+game package. Laya's training (`training` workflow) remains available and loads
+the movie with its demonstrations.
 
-## Workflows, tracking and the lab duel
+## Workflows, tracking and the lab
 
-[Flyte](https://flyte.org) runs the training as tasks (`datenwissenschaften.workflow`):
-`training` trains one two-hour `train_session` after another. `lab` starts a
-lab run (`agent/daily.sh` of the game package) once no curriculum win and no
-passed level drill happened for `agent.stall_minutes` minutes: Claude Code and Codex each work on their own git
-worktree of the game package for `agent.minutes` minutes, and the duel decides which one ships.
-Training keeps running while the agents work and pauses only while the duel judges and the
-winner deploys; the agents' processes are the first the kernel kills when memory runs out.
-While they work, the stream shows each agent's latest actions (only the kind of action and the
-source files it touches), its commit subjects with URLs and secret-like words hidden, and the
-lines it changed; after the duel it shows the scores and the winner. Every task runs locally with
-`flyte run --local` and declares its GPU, so it can move to a Flyte cluster.
+[Flyte](https://flyte.org) runs the work as tasks (`datenwissenschaften.workflow`):
+`speedrun` searches and improves the movie forever, `training` trains Laya one
+two-hour `train_session` after another. `lab` starts a lab run (`agent/daily.sh`
+of the game package) once neither the movie nor the curriculum progressed for
+`agent.stall_minutes` minutes: Claude Code works for `agent.minutes` minutes on
+its own git worktree of the game package, and its branch ships only when it has
+commits, its tests pass and the current movie still replays with it
+(`tas.run verify`). Its processes are the first the kernel kills when memory
+runs out. While it works, the stream shows its latest actions (only the kind of
+action and the source files it touches), its commit subjects with URLs and
+secret-like words hidden, and the lines it changed; afterwards it shows whether
+the change shipped. Every task runs locally with `flyte run --local`.
 
 With `tracking.token` set, every session is an [MLflow](https://mlflow.org) run
 at `tracking.url`. Every attempt counts toward the part it practised, as
@@ -325,16 +334,6 @@ Three lines cover the whole session: `decisions_per_second` and
 `resident_memory_mb` (the trainer's memory) after every attempt and, after every
 learning update, `confidence` (one minus the entropy share of the state that
 learned).
-
-The duel (`python -m datenwissenschaften.evaluation.duel <wrapper> <config>
-<project>`) plays the trained models greedily with each agent's
-branch (`<project>-claude`, `<project>-codex`), starting at the latest curriculum
-checkpoint toward the frontier, or at power-on once every state is mastered. Each
-branch uses its own integrations and curriculum seeds. It ranks them by wins, then by
-how many states its attempts pass beyond the start, then by fewer decisions to get that far, so a branch that adds states is not ranked lower for it. It
-logs both agents, the winner and the probability that the winner's attempts
-get further (a Mann-Whitney U test with SciPy) to the `<game> A/B` experiment
-and prints the winner, or `draw`.
 
 ## Persistence
 

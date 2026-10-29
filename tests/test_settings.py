@@ -5,7 +5,7 @@ import pytest
 import yaml
 from box.exceptions import BoxKeyError
 
-from datenwissenschaften.settings import load_config
+from datenwissenschaften.settings import SpeedrunRecord, SpeedrunSettings, load_config
 
 
 def _document() -> dict[str, Any]:
@@ -36,6 +36,7 @@ def _document() -> dict[str, Any]:
         },
         "twitch": {"enabled": True, "summary_models": ["test/model:free"]},
         "agent": {"stall_minutes": 30},
+        "speedrun": {"workers": 4, "segment_seconds": 60, "records": {"Human Any%": 332.6}},
         "tracking": {"url": "https://training.test", "token": None},
         "log_level": "info",
     }
@@ -55,6 +56,7 @@ def test_complete_config_loads(tmp_path: Path):
     assert config.training.fingerprint is None
     assert config.laya.checkpoint == "convaiinnovations/laya"
     assert config.lab.stall_minutes == 30
+    assert config.speedrun == SpeedrunSettings(4, 60.0, (SpeedrunRecord("Human Any%", 332.6),))
     assert config.tracking.token is None
     assert config.log_level == "INFO"
 

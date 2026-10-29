@@ -1,18 +1,15 @@
 import json
 from collections import deque
 
-import cv2
-import numpy as np
-
 from datenwissenschaften.environment.observer import ADVISOR_FACT
 from datenwissenschaften.training.episode_record import EpisodeRecord
 from datenwissenschaften.training.hooks import Transition
 from datenwissenschaften.training.story_teller import StoryTeller
 from datenwissenschaften.ui.live import live_feed
+from datenwissenschaften.ui.media import jpeg
 from datenwissenschaften.ui.telemetry import best_fitness, episode_count, level_episode_count
 from datenwissenschaften.vision.overlay import draw_detections
 
-JPEG_QUALITY = 80
 RECENT_SCORES = 120
 
 
@@ -52,7 +49,7 @@ class LiveStreamHook:
         }
         detections = transition.info["detections"]
         for frame in transition.frames:
-            live_feed.record(self._jpeg(draw_detections(frame, detections)), status)
+            live_feed.record(jpeg(draw_detections(frame, detections)), status)
 
     def on_episode_end(self, episode: EpisodeRecord) -> None:
         self.recent_scores.append(episode.score)
@@ -76,8 +73,3 @@ class LiveStreamHook:
 
     def on_update(self) -> None:
         self.updates += 1
-
-    @staticmethod
-    def _jpeg(frame: np.ndarray) -> bytes:
-        bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        return cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])[1].tobytes()

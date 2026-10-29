@@ -16,6 +16,7 @@ StartPoints = dict[str, list[bytes]]
 POINT_STRIDE = 4
 TAS_DIR = "tas"
 TAS_MOVIE = "tas.bk2"
+TAS_PROGRESS = "progress.msgpack"
 
 
 def demonstration_movies(paths: RetroSpeedlabPaths) -> list[Path]:

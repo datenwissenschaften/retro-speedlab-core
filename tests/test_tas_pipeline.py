@@ -3,10 +3,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from fakes import FakeEmulator, FakeWrapper, curriculum_run, fake_routes, write_config
 
 from datenwissenschaften.laya.imitation import Example
-from datenwissenschaften.settings import load_config
+from datenwissenschaften.settings import SpeedrunRecord, load_config
 from datenwissenschaften.states.landmarks import Landmarks
 from datenwissenschaften.tas import movie, run, workers
 from datenwissenschaften.tas.movie import Segment
@@ -95,12 +96,12 @@ def test_search_and_improve_write_a_verified_movie_and_keep_only_faster_segments
     monkeypatch.setattr(run, "render_video", lambda paths, recording: recording.with_suffix(".mp4"))
     monkeypatch.setattr(run, "SegmentRunner", lambda wrapper: runner)
     config = write_config(tmp_path)
-    output = load_config(config).paths.cache_dir / run.TAS_DIR
+    output = run.tas_dir(load_config(config))
 
-    run.search("fakes:FakeWrapper", config, "Boss", 1, SECONDS)
+    run.search("fakes:FakeWrapper", config, "Boss")
     searched = run.load_progress(output / run.PROGRESS_FILE)
     run.save_progress(output / run.PROGRESS_FILE, [Segment("Boss", [[1, 0]] * 6, bytes([6]), False)])
-    run.improve("fakes:FakeWrapper", config, 1, SECONDS)
+    run.improve("fakes:FakeWrapper", config)
 
     assert [(segment.state, len(segment.pressed)) for segment in searched] == [("Boss", BOSS_FRAMES)]
     assert run.frames(run.load_progress(output / run.PROGRESS_FILE)) == BOSS_FRAMES
@@ -110,15 +111,43 @@ def test_search_and_improve_write_a_verified_movie_and_keep_only_faster_segments
 def test_a_movie_that_no_longer_reaches_its_segments_is_cut_back(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
     pool = SyncPool()
-    tas = run.Tas("fakes:FakeWrapper", tmp_path / "config.yaml", tmp_path / "tas", 1, SECONDS, runner, pool)
-    (tmp_path / "tas").mkdir()
+    config = write_config(tmp_path)
+    tas = run.Tas("fakes:FakeWrapper", config, load_config(config), runner, pool)
+    tas.output.mkdir(parents=True)
     local_workers(monkeypatch, runner)
 
-    kept = tas.verified([Segment("Boss", [[1, 0]], bytes([1]), False)])
+    kept = tas.verified([Segment("Boss", [[1, 0]], bytes([1]), False)], 0)
 
     assert kept == []
-    assert movie.verified_segments(runner, [], tmp_path / "tas" / "again.bk2") == 0
+    assert movie.verified_segments(runner, [], tas.output / "again.bk2", 0) == 0
     assert tas.best(runner.power_on(), 1, 1) is None
+
+
+def test_verify_accepts_a_movie_that_replays_and_rejects_one_that_does_not(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    monkeypatch.setattr(run, "make_environment", lambda wrapper_cls, settings, worker, main: runner.wrapper)
+    config = write_config(tmp_path)
+    good, bad = tmp_path / "good.msgpack", tmp_path / "bad.msgpack"
+    run.save_progress(good, [Segment("Boss", [[1, 0]] * BOSS_FRAMES, bytes([BOSS_FRAMES]), False)])
+    run.save_progress(bad, [Segment("Boss", [[1, 0]], bytes([1]), False)])
+    run.tas_dir(load_config(config)).mkdir(parents=True)
+
+    run.verify("fakes:FakeWrapper", config, good)
+
+    with pytest.raises(RuntimeError):
+        run.verify("fakes:FakeWrapper", config, bad)
+
+
+def test_the_speedrun_reports_level_splits_against_the_records():
+    segments = [Segment("Play", [[0]] * 60, b"", False), Segment("Level2", [[0]] * 120, b"", False)]
+    levels = {"Level 1": ("Menu", "Play"), "Level 2": ("Level2",)}
+
+    report = run.report(segments, levels, "Menu", 60.0, (SpeedrunRecord("TAS", 400.0),), "Level2")
+
+    assert report["seconds"] == 3.0
+    assert report["splits"] == [{"level": "Level 1", "seconds": 3.0}]
+    assert report["records"] == [{"name": "TAS", "seconds": 400.0}]
+    assert (report["reached"], report["won"], report["searching"]) == ("Level2", False, "Level2")
 
 
 def test_workers_search_shave_and_teach_from_a_savestate(tmp_path: Path, monkeypatch):

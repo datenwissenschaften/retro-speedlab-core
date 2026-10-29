@@ -5,10 +5,10 @@ from pathlib import Path
 from types import FrameType
 
 import flyte
+from flyte import TaskTemplate
 from loguru import logger
 
 from datenwissenschaften.tracking.run import kill_active_runs
-from datenwissenschaften.workflow.training import training
 
 TERMINATED = 128 + signal.SIGTERM
 CLOSE_SECONDS = 20.0
@@ -26,7 +26,7 @@ def terminate(signal_number: int, frame: FrameType | None) -> None:
     os._exit(TERMINATED)
 
 
-def run_training(wrapper: str, config: Path) -> None:
+def launch(task: TaskTemplate, wrapper: str, config: Path) -> None:
     signal.signal(signal.SIGTERM, terminate)
     flyte.init()
-    flyte.run(training, wrapper=wrapper, config=str(config))
+    flyte.run(task, wrapper=wrapper, config=str(config))

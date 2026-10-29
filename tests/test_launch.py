@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from datenwissenschaften.workflow import launch
+from datenwissenschaften.workflow.speedrun import speedrun
 
 
 class Exited(Exception):
@@ -27,18 +28,18 @@ def test_a_stopped_container_kills_the_open_runs_and_exits_at_once(monkeypatch):
     assert calls == ["killed", "exit 143"]
 
 
-def test_training_starts_after_the_stop_handler_is_installed(monkeypatch):
+def test_a_task_starts_after_the_stop_handler_is_installed(monkeypatch):
     calls: list[tuple] = []
     monkeypatch.setattr(launch.signal, "signal", lambda number, handler: calls.append(("signal", number, handler)))
     monkeypatch.setattr(launch.flyte, "init", lambda: calls.append(("init",)))
     monkeypatch.setattr(launch.flyte, "run", lambda task, **inputs: calls.append(("run", task, inputs)))
 
-    launch.run_training("src.game.wrapper:GameWrapper", Path("config.yaml"))
+    launch.launch(speedrun, "src.game.wrapper:GameWrapper", Path("config.yaml"))
 
     assert calls == [
         ("signal", signal.SIGTERM, launch.terminate),
         ("init",),
-        ("run", launch.training, {"wrapper": "src.game.wrapper:GameWrapper", "config": "config.yaml"}),
+        ("run", speedrun, {"wrapper": "src.game.wrapper:GameWrapper", "config": "config.yaml"}),
     ]
 
 

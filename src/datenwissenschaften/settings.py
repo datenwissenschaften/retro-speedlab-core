@@ -54,6 +54,19 @@ class LabSettings:
 
 
 @dataclass(frozen=True)
+class SpeedrunRecord:
+    name: str
+    seconds: float
+
+
+@dataclass(frozen=True)
+class SpeedrunSettings:
+    workers: int
+    segment_seconds: float
+    records: tuple[SpeedrunRecord, ...]
+
+
+@dataclass(frozen=True)
 class TrackingSettings:
     url: str
     token: str | None
@@ -67,6 +80,7 @@ class RetroSpeedlabConfig:
     upload: UploadSettings
     ui: UISettings
     lab: LabSettings
+    speedrun: SpeedrunSettings
     tracking: TrackingSettings
     log_level: str
 
@@ -113,6 +127,14 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             summary_models=_texts(document.twitch.summary_models, "twitch.summary_models"),
         ),
         lab=LabSettings(stall_minutes=_positive_int(document.agent.stall_minutes, "agent.stall_minutes")),
+        speedrun=SpeedrunSettings(
+            workers=_positive_int(document.speedrun.workers, "speedrun.workers"),
+            segment_seconds=_positive_number(document.speedrun.segment_seconds, "speedrun.segment_seconds"),
+            records=tuple(
+                SpeedrunRecord(_text(name, "speedrun.records"), _positive_number(seconds, f"speedrun.records.{name}"))
+                for name, seconds in document.speedrun.records.items()
+            ),
+        ),
         tracking=TrackingSettings(
             url=_text(document.tracking.url, "tracking.url"),
             token=_optional_text(document.tracking.token, "tracking.token"),
@@ -147,6 +169,12 @@ def _positive_int(value: Any, name: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 1:
         raise RuntimeError(f"Configuration value '{name}' must be a positive integer.")
     return value
+
+
+def _positive_number(value: Any, name: str) -> float:
+    if not isinstance(value, int | float) or isinstance(value, bool) or value <= 0:
+        raise RuntimeError(f"Configuration value '{name}' must be a positive number.")
+    return float(value)
 
 
 def _path(value: Any, base_dir: Path) -> Path:

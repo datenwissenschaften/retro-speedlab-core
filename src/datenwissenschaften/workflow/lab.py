@@ -4,6 +4,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from datenwissenschaften.environment.demonstration import TAS_DIR, TAS_PROGRESS
 from datenwissenschaften.environment.level_drill import DRILLED_SUFFIX
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
@@ -18,7 +19,8 @@ LAST_LAB_RUN = ".agent-last-run"
 def last_progress(config: RetroSpeedlabConfig) -> float:
     curricula = config.paths.cache_dir / "curriculum"
     wins = [*curricula.glob("*/*.successes"), *curricula.glob(f"*/*{DRILLED_SUFFIX}")]
-    marks = [*wins, config.paths.lab_run_marker.with_name(LAST_LAB_RUN)]
+    speedrun = config.paths.cache_dir / TAS_DIR / TAS_PROGRESS
+    marks = [*wins, speedrun, config.paths.lab_run_marker.with_name(LAST_LAB_RUN)]
     return max((mark.stat().st_mtime for mark in marks if mark.is_file()), default=0.0)
 
 

@@ -166,6 +166,7 @@ def write_config(tmp_path: Path) -> Path:
                 "ui: {enable: false, max_episodes: 10, release: local, persona: Retra}",
                 "twitch: {enabled: true, summary_models: [test/model:free]}",
                 "agent: {stall_minutes: 30}",
+                "speedrun: {workers: 1, segment_seconds: 0.05, records: {Fake TAS: 60.0}}",
                 "tracking: {url: 'https://training.test', token: null}",
                 "log_level: INFO",
             ]
