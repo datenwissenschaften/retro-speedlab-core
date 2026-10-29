@@ -11,6 +11,7 @@ from transformers import AutoModel
 from datenwissenschaften.accelerator import configure_accelerator
 from datenwissenschaften.laya.network import LayaNetwork
 from datenwissenschaften.logger import setup_logging
+from datenwissenschaften.probe.readability import READ_BATCH
 from datenwissenschaften.probe.samples import Sample, collect_samples
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.states.facts import Offset
@@ -93,6 +94,14 @@ def d1_reader(model: object) -> Reader:
     return read
 
 
+def batched(reader: Reader) -> Reader:
+    def read(texts: list[str], question: str, options: dict[str, str]) -> list[str]:
+        batches = (texts[first : first + READ_BATCH] for first in range(0, len(texts), READ_BATCH))
+        return [answer for batch in batches for answer in reader(batch, question, options)]
+
+    return read
+
+
 def compare(asked: list[Question], laya: Reader, d1: Reader) -> list[Score]:
     scores = []
     for question in asked:
@@ -109,8 +118,10 @@ def readers_compared(wrapper: str, config: Path, decisions: int, seed: int) -> N
     setup_logging(settings.log_level)
     device = configure_accelerator()
     samples = collect_samples(wrapper_class(wrapper), settings, decisions, seed)
-    d1 = AutoModel.from_pretrained(D1_CHECKPOINT, trust_remote_code=True).to(device).eval()
-    for score in compare(questions(samples), laya_reader(settings.laya.checkpoint, device), d1_reader(d1)):
+    dtype = torch.float32 if device == "cpu" else torch.float16
+    d1 = AutoModel.from_pretrained(D1_CHECKPOINT, trust_remote_code=True, dtype=dtype).to(device).eval()
+    laya = batched(laya_reader(settings.laya.checkpoint, device))
+    for score in compare(questions(samples), laya, batched(d1_reader(d1))):
         logger.info(
             f"{score.fact:>16}.{score.axis:<5} n={score.samples:<5} majority {score.majority:.2f} "
             f"laya {score.laya:.2f} d1-omni {score.d1:.2f}"

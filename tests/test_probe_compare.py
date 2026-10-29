@@ -61,7 +61,9 @@ class FakeD1:
 def test_both_readers_answer_from_their_own_model_and_the_command_logs_every_fact(tmp_path, monkeypatch):
     monkeypatch.setattr(compare, "LayaNetwork", FakeNetwork)
     monkeypatch.setattr(compare, "collect_samples", lambda wrapper_cls, settings, decisions, seed: SAMPLES)
-    monkeypatch.setattr(compare, "AutoModel", SimpleNamespace(from_pretrained=lambda name, trust_remote_code: FakeD1()))
+    monkeypatch.setattr(
+        compare, "AutoModel", SimpleNamespace(from_pretrained=lambda name, trust_remote_code, dtype: FakeD1())
+    )
     monkeypatch.setattr(compare, "configure_accelerator", lambda: "cpu")
     logged: list[str] = []
     monkeypatch.setattr(compare.logger, "info", logged.append)
