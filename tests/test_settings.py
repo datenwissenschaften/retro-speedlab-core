@@ -5,7 +5,7 @@ import pytest
 import yaml
 from box.exceptions import BoxKeyError
 
-from datenwissenschaften.settings import SpeedrunRecord, SpeedrunSettings, load_config
+from datenwissenschaften.settings import GameSettings, SpeedrunComSource, SpeedrunSettings, load_config
 
 
 def _document() -> dict[str, Any]:
@@ -22,7 +22,16 @@ def _document() -> dict[str, Any]:
         "ui": {"enable": True, "release": "local"},
         "twitch": {"enabled": True},
         "agent": {"stall_minutes": 30},
-        "speedrun": {"workers": 4, "segment_seconds": 60, "records": {"Human Any%": 332.6}},
+        "speedrun": {
+            "workers": 4,
+            "segment_seconds": 60,
+            "id": "testgame-v0",
+            "title": "Test Game",
+            "platform": "NES",
+            "category": "Warpless",
+            "speedrun_com": {"game": "m1z0mmd0", "category": "5dwpnllk", "variables": {"p85pg00l": "qyz5gr71"}},
+            "tasvideos": 1694,
+        },
         "log_level": "info",
     }
 
@@ -38,7 +47,9 @@ def test_complete_config_loads(tmp_path: Path):
 
     assert config.training.game == "TestGame"
     assert config.lab.stall_minutes == 30
-    assert config.speedrun == SpeedrunSettings(4, 60.0, (SpeedrunRecord("Human Any%", 332.6),))
+    source = SpeedrunComSource("m1z0mmd0", "5dwpnllk", {"p85pg00l": "qyz5gr71"})
+    game = GameSettings("testgame-v0", "Test Game", "NES", "Warpless", source, 1694)
+    assert config.speedrun == SpeedrunSettings(4, 60.0, game)
     assert config.upload.api_key is None
     assert config.log_level == "INFO"
 
@@ -71,4 +82,12 @@ def test_twitch_must_be_switched_on_or_off_explicitly(tmp_path: Path):
     document["twitch"]["enabled"] = "yes"
 
     with pytest.raises(RuntimeError, match="twitch.enabled"):
+        load_config(_write(tmp_path, document))
+
+
+def test_the_record_sources_are_named_explicitly(tmp_path: Path):
+    document = _document()
+    document["speedrun"]["tasvideos"] = "1694"
+
+    with pytest.raises(RuntimeError, match="speedrun.tasvideos"):
         load_config(_write(tmp_path, document))

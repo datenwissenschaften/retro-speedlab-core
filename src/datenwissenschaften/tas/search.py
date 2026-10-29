@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from datenwissenschaften.tas.live import WorkerLive
 from datenwissenschaften.tas.runner import CellKey, SegmentRunner, Start
 
 EXPLORE_DECISIONS = 24
@@ -97,7 +98,9 @@ def confirmed(runner: SegmentRunner, pressed: np.ndarray, won: bool) -> Crossing
     return crossing if won or holds(runner, state, np.zeros_like(pressed[-1])) else None
 
 
-def search_segment(runner: SegmentRunner, start: Start, bound: int, seed: int, seconds: float) -> list[Crossing]:
+def search_segment(
+    runner: SegmentRunner, start: Start, bound: int, seed: int, seconds: float, live: WorkerLive | None
+) -> list[Crossing]:
     rng, deadline = random.Random(seed), time.monotonic() + seconds
     actions = len(runner.wrapper.action_table)
     runner.restore(start)
@@ -113,6 +116,8 @@ def search_segment(runner: SegmentRunner, start: Start, bound: int, seed: int, s
                 action = rng.randrange(actions)
             outcome = runner.decide(action)
             trail, frames, score = Trail(trail, outcome.pressed), frames + len(outcome.pressed), score + outcome.reward
+            if live is not None:
+                live.step(runner, archive, crossings, len(outcome.pressed))
             if frames >= (bound if len(crossings) < BEAM else crossings[-1].frames):
                 break
             if leaves(runner, start, outcome.state, outcome.won):

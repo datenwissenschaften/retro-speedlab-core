@@ -74,9 +74,15 @@ After every segment the whole movie is replayed from power-on; segments that do
 not reproduce are searched again. `cache/tas/progress.msgpack` lets a run
 resume, `cache/tas/tas.bk2` is the verified movie, `tas.mp4` its video and
 `search.log` the search's log. `metadata.speedrun` tells the stream the run's
-time, its segments, the level splits (from `GameWrapper.levels`), the reference
-times in `speedrun.records` and the segment being searched; the newest verified
-segment plays as the stream's latest episode. `improve` searches every segment
+time from power-on and from Start, its segments, the level splits (from
+`GameWrapper.levels`), each state's `goal`, the game and its record sources,
+the engine's events, milestones and time history (`journal.json`) and the
+segment being searched. While a segment is searched every worker writes its
+cells, frames, map visits and RAM to `live/<seed>.msgpack` every 2 s, one
+worker its latest frame to `live/attempt.jpg` twice a second; the main process
+folds them into `search`, `map`, `ram` and `position` every 5 s and the relay
+puts the frame to `/live/attempt.jpg`. The newest verified segment plays as the
+stream's latest episode. `improve` searches every segment
 again, bounded by its current frames; a faster crossing replaces it and the rest
 is searched anew. `verify` fails unless a progress file still replays with a
 game package.
@@ -158,14 +164,16 @@ raise an error when the configuration is loaded.
 |-----|---------|
 | `paths.roms`, `paths.integrations` | ROMs and custom Stable Retro integrations |
 | `paths.models` | Route memory per state |
-| `paths.cache` | The search's movie, progress, stuck marker and log under `tas/` |
+| `paths.cache` | The search's movie, progress, stuck marker, journal, live reports and log under `tas/` |
 | `paths.lab_run` | Marker file of a running lab run |
 | `training.game` | Stable Retro game id |
 | `upload.url`, `upload.api_key` | Retro Speedlab API; `null` disables the relay |
 | `ui.enable`, `ui.release` | Live relay on or off and the release label shown on stream |
 | `twitch.enabled` | Whether the stream page goes live on Twitch |
 | `agent.stall_minutes` | Minutes without a faster movie before the `lab` task starts a lab run |
-| `speedrun.workers`, `speedrun.segment_seconds`, `speedrun.records` | Search processes, seconds per segment round and the reference times |
+| `speedrun.workers`, `speedrun.segment_seconds` | Search processes and seconds per segment round |
+| `speedrun.id`, `speedrun.title`, `speedrun.platform` | The game as the stream names it |
+| `speedrun.category`, `speedrun.speedrun_com`, `speedrun.tasvideos` | The category run and where its records are read: speedrun.com game, category and variables, TASVideos publication |
 | `log_level` | Loguru log level |
 
 ## Testing

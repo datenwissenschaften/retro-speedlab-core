@@ -53,7 +53,7 @@ class LineRunner:
 
 
 def test_the_search_finds_the_fastest_way_into_the_next_state():
-    crossings = search_segment(LineRunner(), START, UNBOUNDED, 7, 1.0)
+    crossings = search_segment(LineRunner(), START, UNBOUNDED, 7, 1.0, None)
 
     assert crossings[0].end.state == "Goal"
     assert crossings[0].frames == GOAL_X
@@ -61,8 +61,8 @@ def test_the_search_finds_the_fastest_way_into_the_next_state():
 
 
 def test_a_bound_only_accepts_crossings_faster_than_the_movie_has():
-    assert search_segment(LineRunner(), START, GOAL_X, 7, 0.2) == []
-    assert search_segment(LineRunner(), START, GOAL_X + 1, 7, 1.0) != []
+    assert search_segment(LineRunner(), START, GOAL_X, 7, 0.2, None) == []
+    assert search_segment(LineRunner(), START, GOAL_X + 1, 7, 1.0, None) != []
 
 
 def test_shaving_drops_every_frame_the_crossing_does_not_need():

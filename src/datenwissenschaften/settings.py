@@ -39,16 +39,27 @@ class LabSettings:
 
 
 @dataclass(frozen=True)
-class SpeedrunRecord:
-    name: str
-    seconds: float
+class SpeedrunComSource:
+    game: str
+    category: str
+    variables: dict[str, str]
+
+
+@dataclass(frozen=True)
+class GameSettings:
+    id: str
+    title: str
+    platform: str
+    category: str
+    speedrun_com: SpeedrunComSource
+    tasvideos: int
 
 
 @dataclass(frozen=True)
 class SpeedrunSettings:
     workers: int
     segment_seconds: float
-    records: tuple[SpeedrunRecord, ...]
+    game: GameSettings
 
 
 @dataclass(frozen=True)
@@ -91,12 +102,28 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
         speedrun=SpeedrunSettings(
             workers=_positive_int(document.speedrun.workers, "speedrun.workers"),
             segment_seconds=_positive_number(document.speedrun.segment_seconds, "speedrun.segment_seconds"),
-            records=tuple(
-                SpeedrunRecord(_text(name, "speedrun.records"), _positive_number(seconds, f"speedrun.records.{name}"))
-                for name, seconds in document.speedrun.records.items()
-            ),
+            game=_game(document.speedrun),
         ),
         log_level=_text(document.log_level, "log_level").upper(),
+    )
+
+
+def _game(speedrun: Box) -> GameSettings:
+    source = speedrun.speedrun_com
+    return GameSettings(
+        id=_text(speedrun.id, "speedrun.id"),
+        title=_text(speedrun.title, "speedrun.title"),
+        platform=_text(speedrun.platform, "speedrun.platform"),
+        category=_text(speedrun.category, "speedrun.category"),
+        speedrun_com=SpeedrunComSource(
+            game=_text(source.game, "speedrun.speedrun_com.game"),
+            category=_text(source.category, "speedrun.speedrun_com.category"),
+            variables={
+                _text(variable, "speedrun.speedrun_com.variables"): _text(value, f"speedrun.speedrun_com.{variable}")
+                for variable, value in source.variables.items()
+            },
+        ),
+        tasvideos=_positive_int(speedrun.tasvideos, "speedrun.tasvideos"),
     )
 
 

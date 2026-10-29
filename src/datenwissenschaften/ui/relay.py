@@ -3,6 +3,7 @@ import json
 import threading
 from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -14,6 +15,8 @@ from datenwissenschaften.ui.media import STATUSES_SUFFIX, VIDEO_SUFFIX
 from datenwissenschaften.ui.telemetry import metadata
 
 RELAY_SECONDS = 3.0
+ATTEMPT_SECONDS = 0.5
+ATTEMPT_BYTES = 256 * 1024
 PART_BYTES = 8 * 1024 * 1024
 TIMEOUT_SECONDS = 120.0
 
@@ -29,22 +32,30 @@ DATENWISSENSCHAFTEN_VERSION = _datenwissenschaften_version()
 
 
 class LiveRelay:
-    def __init__(self, url: str, api_key: str, ui: UISettings) -> None:
+    def __init__(self, url: str, api_key: str, ui: UISettings, attempt: Path) -> None:
         self.url = f"{url}/live"
         self.api_key = api_key
         self.ui = ui
+        self.attempt = attempt
+        self.attempt_shown: int | None = None
         self.held: set[str] | None = None
         self.kept: set[str] = set()
         self.stopped = threading.Event()
 
     def start(self) -> None:
-        for push in (self._push_snapshot, self._push_feed):
-            threading.Thread(target=self._repeat, args=(push,), name=f"relay{push.__name__}", daemon=True).start()
+        pushes = (
+            (self._push_snapshot, RELAY_SECONDS),
+            (self._push_feed, RELAY_SECONDS),
+            (self._push_attempt, ATTEMPT_SECONDS),
+        )
+        for push, seconds in pushes:
+            name = f"relay{push.__name__}"
+            threading.Thread(target=self._repeat, args=(push, seconds), name=name, daemon=True).start()
 
     def stop(self) -> None:
         self.stopped.set()
 
-    def _repeat(self, push: Callable[[httpx.Client], None]) -> None:
+    def _repeat(self, push: Callable[[httpx.Client], None], seconds: float) -> None:
         failing = False
         with httpx.Client(base_url=self.url, headers={"X-API-Key": self.api_key}, timeout=TIMEOUT_SECONDS) as client:
             while not self.stopped.is_set():
@@ -57,10 +68,23 @@ class LiveRelay:
                     if not failing:
                         logger.warning(f"The live relay cannot reach the backend: {error}")
                     failing = True
-                self.stopped.wait(RELAY_SECONDS)
+                self.stopped.wait(seconds)
 
     def _push_snapshot(self, client: httpx.Client) -> None:
         _put_document(client, "/snapshot", stream_snapshot(self.ui))
+
+    def _push_attempt(self, client: httpx.Client) -> None:
+        try:
+            changed = self.attempt.stat().st_mtime_ns
+            body = self.attempt.read_bytes()
+        except FileNotFoundError:
+            return
+        if changed == self.attempt_shown:
+            return
+        if len(body) > ATTEMPT_BYTES:
+            raise ValueError(f"The live attempt frame {self.attempt} has {len(body)} bytes, more than {ATTEMPT_BYTES}")
+        client.put("/attempt.jpg", content=body, headers={"Content-Type": "image/jpeg"}).raise_for_status()
+        self.attempt_shown = changed
 
     def _push_feed(self, client: httpx.Client) -> None:
         if self.held is None:
