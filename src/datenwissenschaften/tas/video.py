@@ -12,19 +12,38 @@ from datenwissenschaften.settings import RetroSpeedlabPaths
 CONSTANT_RATE_FACTOR = "26"
 PIXEL_SCALE = 2
 PLAYBACK_MODULE = "datenwissenschaften.tas.video"
+ENCODING = (
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    CONSTANT_RATE_FACTOR,
+    "-pix_fmt",
+    "yuv420p",
+    "-movflags",
+    "+faststart",
+)
 
 
-def render_video(paths: RetroSpeedlabPaths, recording: Path) -> Path:
+def render_video(paths: RetroSpeedlabPaths, recordings: list[Path]) -> list[Path]:
     playback = [
         sys.executable,
         "-m",
         PLAYBACK_MODULE,
         str(paths.roms_path),
         str(paths.integrations_dir),
-        str(recording),
+        *map(str, recordings),
     ]
     subprocess.run(playback, check=True, capture_output=True, text=True)
-    return recording.with_suffix(".mp4")
+    return [recording.with_suffix(".mp4") for recording in recordings]
+
+
+def stack_videos(left: Path, right: Path, stacked: Path) -> Path:
+    command = ["ffmpeg", "-loglevel", "error", "-y", "-i", str(left), "-i", str(right)]
+    command += ["-filter_complex", "hstack=inputs=2", *ENCODING, str(stacked)]
+    subprocess.run(command, check=True, capture_output=True, text=True)
+    return stacked
 
 
 def main(roms_dir: Path, integrations_dir: Path, movies: list[Path]) -> None:
@@ -74,16 +93,7 @@ def encoder_command(width: int, height: int, frame_rate: float, recording: Path)
         "pipe:",
         "-vf",
         f"scale=iw*{PIXEL_SCALE}:ih*{PIXEL_SCALE}:flags=neighbor",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        CONSTANT_RATE_FACTOR,
-        "-pix_fmt",
-        "yuv420p",
-        "-movflags",
-        "+faststart",
+        *ENCODING,
         str(recording.with_suffix(".mp4")),
     ]
 

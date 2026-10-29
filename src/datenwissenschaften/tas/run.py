@@ -1,8 +1,10 @@
 import multiprocessing
 import random
 import threading
+from collections.abc import Callable
 from concurrent.futures import Executor, ProcessPoolExecutor
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 
 import msgspec
@@ -12,8 +14,9 @@ from loguru import logger
 from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.environment.wrapper import phases
 from datenwissenschaften.logger import setup_logging
-from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
+from datenwissenschaften.settings import RetroSpeedlabConfig, RetroSpeedlabPaths, load_config
 from datenwissenschaften.tas.feed import SpeedrunFeed
+from datenwissenschaften.tas.footage import compare_cut, movie_cut, render_compare, render_movie
 from datenwissenschaften.tas.journal import JOURNAL_FILE, JournalStore
 from datenwissenschaften.tas.live import LIVE_DIR
 from datenwissenschaften.tas.live_search import search_round
@@ -21,12 +24,12 @@ from datenwissenschaften.tas.movie import Segment, frames, verified_segments
 from datenwissenschaften.tas.paths import PROGRESS_FILE, TAS_MOVIE, atomic_write, tas_dir
 from datenwissenschaften.tas.report import course_of
 from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.tas.screen import MovieScreen
+from datenwissenschaften.tas.screen import Screen
 from datenwissenschaften.tas.search import UNBOUNDED, Crossing, fastest_distinct
 from datenwissenschaften.tas.stuck import STUCK_FILE, mark_stuck
 from datenwissenschaften.tas.workers import explore, polish
-from datenwissenschaften.ui.movie_upload import MovieUpload
 from datenwissenschaften.ui.relay import relay_key
+from datenwissenschaften.ui.video_upload import VideoUpload
 from datenwissenschaften.workflow.wrapper import wrapper_class
 
 LOG_FILE = "search.log"
@@ -35,6 +38,8 @@ IMPROVE_ROUNDS = 1
 
 SEED_SPACE = 2**31
 MAIN_WORKER = 0
+
+Footage = Callable[[RetroSpeedlabPaths, Path, tuple[bytes, ...]], Path]
 
 app = typer.Typer()
 
@@ -63,7 +68,8 @@ class Tas:
     runner: SegmentRunner
     pool: Executor
     feed: SpeedrunFeed
-    screen: MovieScreen
+    movie: Screen
+    compare: Screen
 
     @property
     def output(self) -> Path:
@@ -78,9 +84,9 @@ class Tas:
         for round_index in range(rounds):
             seconds = self.settings.speedrun.segment_seconds * 2**round_index
             first = random.randrange(SEED_SPACE)
-            self.feed.begin(search_round(start.state, round_index, rounds, seconds, self.runner.position_at(start)))
+            self.feed.begin(search_round(start.state, round_index, rounds, seconds))
             searches = [
-                self.pool.submit(explore, *self._job(start, bound, first + index, seconds), self.feed.watch(index))
+                self.pool.submit(explore, *self._job(start, bound, first + index, seconds), self.feed.live)
                 for index in range(self.settings.speedrun.workers)
             ]
             found = fastest_distinct([crossing for search in searches for crossing in search.result()])
@@ -114,9 +120,9 @@ class Tas:
     def verified(self, segments: list[Segment]) -> list[Segment]:
         movie = self.output / TAS_MOVIE
         replay = verified_segments(self.runner, segments, movie)
-        self.feed.follow(replay.route)
         if replay.verified == len(segments):
-            self.screen.screen(segments, movie)
+            if frames(segments):
+                self.movie.queue(movie_cut(self.feed.course, segments, movie, replay.memory))
             return segments
         logger.warning(f"Only {replay.verified} of {len(segments)} segments replay from power-on; searching again")
         return segments[: replay.verified]
@@ -151,6 +157,7 @@ class Tas:
                 saved = len(segments[index].pressed) - crossing.frames
                 logger.info(f"Segment {index} into {crossing.end.state} is {saved} frames faster; the rest is rebuilt")
                 self.feed.event("improved", crossing.end.state, crossing.frames)
+                self.compare.queue(compare_cut(self.runner, self.output, start, segments[index], crossing))
                 segments = self.extend(self.keep([*segments[:index], segment_of(crossing)], start.state), until)
             index += 1
         return segments
@@ -160,12 +167,20 @@ class Tas:
 
 
 def publish(tas: Tas, segments: list[Segment]) -> None:
-    video = tas.screen.settle()
-    logger.info(f"Verified movie reaches {segments[-1].state} in {frames(segments)} frames; video {video}")
+    tas.movie.settle()
+    tas.compare.settle()
+    logger.info(f"Verified movie reaches {segments[-1].state} in {frames(segments)} frames")
 
 
-def movie_upload(settings: RetroSpeedlabConfig) -> MovieUpload | None:
-    return MovieUpload(settings.upload.url, relay_key(settings.upload)) if settings.ui.enabled else None
+def video_upload(settings: RetroSpeedlabConfig, name: str) -> VideoUpload | None:
+    return VideoUpload(settings.upload.url, relay_key(settings.upload), name) if settings.ui.enabled else None
+
+
+def screen(settings: RetroSpeedlabConfig, feed: SpeedrunFeed, name: str, render: Footage) -> Screen:
+    rendered = partial(render, settings.paths, tas_dir(settings))
+    shown = Screen(name, rendered, video_upload(settings, f"{name}.mp4"), partial(feed.shown, name))
+    shown.start()
+    return shown
 
 
 def worker_pool(workers: int) -> ProcessPoolExecutor:
@@ -183,9 +198,8 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
     journal = JournalStore(output / JOURNAL_FILE)
     feed = SpeedrunFeed(course, journal, output / LIVE_DIR, output / STUCK_FILE, settings.paths.lab_run_marker)
     threading.Thread(target=feed.publish_every, args=(threading.Event(),), name="speedrun-feed", daemon=True).start()
-    screen = MovieScreen(settings.paths, output, course, movie_upload(settings), feed.screen)
-    screen.start()
-    return Tas(wrapper, config, settings, runner, pool, feed, screen)
+    movie, compare = screen(settings, feed, "movie", render_movie), screen(settings, feed, "compare", render_compare)
+    return Tas(wrapper, config, settings, runner, pool, feed, movie, compare)
 
 
 def speedrun_forever(wrapper: str, config: Path) -> None:

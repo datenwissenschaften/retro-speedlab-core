@@ -4,11 +4,10 @@ from pathlib import Path
 from typing import Any
 
 from datenwissenschaften.tas.journal import JournalStore
-from datenwissenschaften.tas.live import Watch, clear_reports, read_reports
-from datenwissenschaften.tas.live_search import SearchRound, live_fields
+from datenwissenschaften.tas.live import clear_reports, read_reports
+from datenwissenschaften.tas.live_search import SearchRound, search_field
 from datenwissenschaften.tas.movie import Segment, frames
 from datenwissenschaften.tas.report import SECTION, Course, report, splits
-from datenwissenschaften.tas.runner import Spot
 from datenwissenschaften.tas.stuck import load_stuck
 from datenwissenschaften.ui.telemetry import publish_metadata
 
@@ -26,8 +25,7 @@ class SpeedrunFeed:
         self.summary: dict[str, Any] = {}
         self.searching: str | None = None
         self.search: SearchRound | None = None
-        self.route: list[Spot] = []
-        self.screened: dict[str, Any] | None = None
+        self.screened: dict[str, dict[str, Any] | None] = {"movie": None, "compare": None}
         self.lab_running = lab_marker.exists()
         live.mkdir(parents=True, exist_ok=True)
 
@@ -39,17 +37,10 @@ class SpeedrunFeed:
             self.summary, self.searching = summary, searching
         self.publish()
 
-    def follow(self, route: list[Spot]) -> None:
+    def shown(self, name: str, field: dict[str, Any]) -> None:
         with self.lock:
-            self.route = route
-
-    def screen(self, movie: dict[str, Any]) -> None:
-        with self.lock:
-            self.screened = movie
+            self.screened = {**self.screened, name: field}
         self.publish()
-
-    def watch(self, worker: int) -> Watch:
-        return Watch(self.live, worker == 0)
 
     def event(self, kind: str, state: str | None, frames: int | None) -> None:
         self.journal.event(kind, state, frames)
@@ -68,12 +59,11 @@ class SpeedrunFeed:
 
     def publish(self) -> None:
         with self.lock:
-            summary, search, route, screened = self.summary, self.search, self.route, self.screened
+            summary, search, screened = self.summary, self.search, self.screened
         reports = [] if search is None else read_reports(self.live)
         now = datetime.now(UTC)
-        live = live_fields(search, reports, route, now)
-        updated = {"updated_at": now.isoformat(timespec="seconds")}
-        publish_metadata(SECTION, {**summary, "movie": screened, **self.journal.fields(), **live, **updated})
+        live = {"search": search_field(search, reports, now), "updated_at": now.isoformat(timespec="seconds")}
+        publish_metadata(SECTION, {**summary, **screened, **self.journal.fields(), **live})
 
     def notice_lab(self) -> None:
         running = self.lab_marker.exists()

@@ -3,7 +3,7 @@ from pathlib import Path
 
 from datenwissenschaften.lab.run import publish_lab_run
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
-from datenwissenschaften.tas.live import ATTEMPT_FILE, LIVE_DIR
+from datenwissenschaften.tas.live import LIVE_DIR
 from datenwissenschaften.tas.paths import tas_dir
 from datenwissenschaften.tas.run import speedrun_forever
 from datenwissenschaften.ui.relay import LiveRelay, relay_key
@@ -15,8 +15,8 @@ LAB_POLL_SECONDS = 10.0
 def start_relay(settings: RetroSpeedlabConfig) -> None:
     if not settings.ui.enabled:
         return
-    attempt = tas_dir(settings) / LIVE_DIR / ATTEMPT_FILE
-    LiveRelay(settings.upload.url, relay_key(settings.upload), settings.ui, attempt).start()
+    live = tas_dir(settings) / LIVE_DIR
+    LiveRelay(settings.upload.url, relay_key(settings.upload), settings.ui, live).start()
 
 
 def watch_lab(marker: Path, stopped: threading.Event) -> None:

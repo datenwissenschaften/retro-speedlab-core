@@ -6,7 +6,7 @@ import pytest
 from fakes import FakeEmulator, FakeWrapper, fake_routes, write_config
 
 from datenwissenschaften.settings import load_config
-from datenwissenschaften.tas import movie, run, screen, workers
+from datenwissenschaften.tas import footage, movie, run, workers
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.paths import PROGRESS_FILE, TAS_MOVIE, tas_dir
 from datenwissenschaften.tas.runner import SegmentRunner, Start
@@ -61,14 +61,20 @@ def saving_environment(tmp_path: Path) -> FakeWrapper:
     return FakeWrapper(emulator, fake_routes(tmp_path))
 
 
-def fake_render(paths: object, recording: Path) -> Path:
-    video = recording.with_suffix(".mp4")
-    video.write_bytes(recording.read_bytes())
-    return video
+def fake_render(paths: object, recordings: list[Path]) -> list[Path]:
+    for recording in recordings:
+        recording.with_suffix(".mp4").write_bytes(recording.read_bytes())
+    return [recording.with_suffix(".mp4") for recording in recordings]
+
+
+def fake_stack(left: Path, right: Path, stacked: Path) -> Path:
+    stacked.write_bytes(left.read_bytes() + right.read_bytes())
+    return stacked
 
 
 def local_workers(monkeypatch, runner: SegmentRunner) -> None:
-    monkeypatch.setattr(screen, "render_video", fake_render)
+    monkeypatch.setattr(footage, "render_video", fake_render)
+    monkeypatch.setattr(footage, "stack_videos", fake_stack)
     monkeypatch.setattr(workers, "worker_runner", lambda wrapper, config: runner)
     monkeypatch.setattr(run, "explore", workers.explore)
     monkeypatch.setattr(run, "polish", workers.polish)
@@ -113,6 +119,7 @@ def test_search_and_improve_write_a_verified_movie_and_keep_only_faster_segments
     assert run.frames(run.load_progress(output / PROGRESS_FILE)) == BOSS_FRAMES
     assert (output / TAS_MOVIE).read_bytes() == b"movie"
     assert (output / "screen.mp4").read_bytes() == b"movie"
+    assert (output / "compare.mp4").read_bytes() == b"moviemovie"
 
 
 def test_a_movie_that_no_longer_reaches_its_segments_is_cut_back(tmp_path: Path, monkeypatch):

@@ -12,9 +12,9 @@ def test_a_movie_is_rendered_by_the_playback_module_next_to_it(tmp_path: Path, m
     monkeypatch.setattr(video.subprocess, "run", lambda command, check, capture_output, text: commands.append(command))
     paths = load_config(write_config(tmp_path)).paths
 
-    rendered = video.render_video(paths, tmp_path / "tas.bk2")
+    rendered = video.render_video(paths, [tmp_path / "tas.bk2"])
 
-    assert rendered == tmp_path / "tas.mp4"
+    assert rendered == [tmp_path / "tas.mp4"]
     assert commands[0][1:] == [
         "-m",
         video.PLAYBACK_MODULE,
@@ -42,3 +42,13 @@ def test_the_encoder_writes_an_mp4_beside_the_movie():
 
     assert command[command.index("-s") + 1] == "240x224"
     assert command[-1] == "run.mp4"
+
+
+def test_two_videos_are_stacked_side_by_side(tmp_path: Path, monkeypatch):
+    commands: list[list[str]] = []
+    monkeypatch.setattr(video.subprocess, "run", lambda command, check, capture_output, text: commands.append(command))
+
+    stacked = video.stack_videos(tmp_path / "a.mp4", tmp_path / "b.mp4", tmp_path / "ab.mp4")
+
+    assert stacked == tmp_path / "ab.mp4"
+    assert commands[0][commands[0].index("-filter_complex") + 1] == "hstack=inputs=2"

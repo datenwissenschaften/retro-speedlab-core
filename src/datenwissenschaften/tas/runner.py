@@ -4,32 +4,17 @@ import numpy as np
 
 from datenwissenschaften.environment.recording import restore_emulator_state
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper, lost_life, phases, state_class
-from datenwissenschaften.route.position import Position
 
 CELL_PIXELS = 8
-MAP_PIXELS = 16
 TIME_BUCKET_FRAMES = 30
-TIME_KEY_LENGTH = 2
 
 CellKey = tuple[object, ...]
-Spot = tuple[int, int, int]
 
 
 @dataclass(slots=True, frozen=True)
 class Start:
     state: str
     emulator_state: bytes
-
-
-def spot(position: Position) -> Spot:
-    return position.area, position.x // MAP_PIXELS, position.y // MAP_PIXELS
-
-
-def key_spot(key: CellKey) -> Spot | None:
-    if len(key) == TIME_KEY_LENGTH:
-        return None
-    _, area, x, y, *_ = key
-    return int(area), int(x) * CELL_PIXELS // MAP_PIXELS, int(y) * CELL_PIXELS // MAP_PIXELS
 
 
 @dataclass(slots=True, frozen=True)
@@ -61,10 +46,6 @@ class SegmentRunner:
         self.ram = self.wrapper.read_ram()
         state_type = None if start.state == self.order[0] else state_class(self.classes, start.state)
         self.wrapper.state_machine.reset(self.ram, state_type)
-
-    def position_at(self, start: Start) -> Position | None:
-        self.restore(start)
-        return self.ram.position()
 
     def press(self, buttons: np.ndarray) -> tuple[bool, bool, float]:
         for player, mask in enumerate(self.emulator.action_to_array(buttons)):

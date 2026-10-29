@@ -37,12 +37,13 @@ def course_of(runner: SegmentRunner, game: GameSettings) -> Course:
 
 def splits(course: Course, segments: list[Segment]) -> list[Split]:
     leaving = {states[-1]: level for level, states in course.levels.items()}
+    opened = next((states[0] for states in course.levels.values()), None)
     found, played, origin, previous = [], 0, course.first, 0.0
     for segment in segments:
         played += len(segment.pressed)
-        if origin in leaving:
-            seconds = played / course.frame_rate
-            found.append(Split(leaving[origin], seconds, seconds - previous))
+        seconds = played / course.frame_rate
+        if origin in leaving or (segment.state == opened and not found):
+            found.append(Split(leaving[origin] if origin in leaving else course.first, seconds, seconds - previous))
             previous = seconds
         origin = segment.state
     return found
@@ -105,6 +106,7 @@ def report(
         "splits": [{**msgspec.to_builtins(split), "first_seconds": firsts[split.level]} for split in found],
         "levels": [{"name": level, "states": list(states)} for level, states in course.levels.items()],
         "goals": course.goals,
+        "opening": course.first,
         "reached": segments[-1].state if segments else course.first,
         "won": bool(segments) and segments[-1].won,
         "searching": searching,

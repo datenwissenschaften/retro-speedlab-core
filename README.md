@@ -75,18 +75,24 @@ not reproduce are searched again. `cache/tas/progress.msgpack` lets a run
 resume, `cache/tas/tas.bk2` is the verified movie, `screen.mp4` its video and
 `search.log` the search's log. `metadata.speedrun` tells the stream the run's
 time from power-on and from Start, its segments, the level splits (from
-`GameWrapper.levels`), each state's `goal`, the game and its record sources,
-the engine's events, milestones and time history (`journal.json`) and the
-segment being searched. While a segment is searched every worker writes its
-cells, frames, map visits and RAM to `live/<seed>.msgpack` every 2 s, one
-worker its latest frame to `live/attempt.jpg` twice a second; the main process
-folds them into `search`, `map`, `ram` and `position` every 5 s and the relay
-puts the frame to `/live/attempt.jpg`. Whenever the verified movie changes a
-background thread renders it from power-on to an H.264 MP4 at twice the NES
-resolution, puts it to `/live/movie.mp4` in parts and publishes
-`speedrun.movie`: its version (the first 12 hex digits of its SHA-256), frames,
-seconds, frame rate and each segment's state and start frame, so the stream
-plays the whole run in sync with its splits. `improve` searches every segment
+`GameWrapper.levels`, with the part before the first level split under the
+first state's name, `opening`), each state's `goal`, the game and its record
+sources, the engine's events, milestones and time history (`journal.json`) and
+the segment being searched. While a segment is searched every worker writes its
+cells and frames to `live/<seed>.msgpack` every 2 s and its latest frame at half
+size to `live/<seed>.jpg` once a second; the main process folds the reports into
+`search` every 5 s and the relay puts a mosaic of the first nine workers' frames
+(seed order, row by row, seeds in `X-Seeds`) to `/live/attempts.jpg` once a
+second. Whenever the verified movie changes a background thread renders it from
+power-on to an H.264 MP4 at twice the NES resolution, puts it to
+`/live/movie.mp4` in parts, puts the game memory sampled every 6 frames of the
+power-on replay to `/live/movie-ram.json` and publishes `speedrun.movie`: its
+version (the first 12 hex digits of its SHA-256), frames, seconds, frame rate
+and each segment's state, the state it reaches and its start frame, so the
+stream plays the whole run in sync with its splits. When `improve` finds a
+faster segment, the old and the new piece are rendered side by side from the
+same savestate, put to `/live/compare.mp4` and published as `speedrun.compare`
+with the state, both frame counts and the time. `improve` searches every segment
 again, bounded by its current frames; a faster crossing replaces it and the rest
 is searched anew. `verify` fails unless a progress file still replays with a
 game package.
