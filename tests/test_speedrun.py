@@ -6,24 +6,7 @@ import pytest
 from fakes import write_config
 
 from datenwissenschaften.settings import load_config
-from datenwissenschaften.tas import run
-from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.workflow import speedrun as speedrun_module
-
-SLOW = [Segment("Boss", [[1, 0]] * 6, b"", False)]
-FAST = [Segment("Boss", [[1, 0]] * 3, b"", False)]
-
-
-class OnePass(Exception):
-    pass
-
-
-class NoPool:
-    def __enter__(self) -> "NoPool":
-        return self
-
-    def __exit__(self, *exception: object) -> None:
-        pass
 
 
 def test_the_stream_relay_runs_only_with_the_ui_and_needs_a_key(tmp_path: Path, monkeypatch):
@@ -50,29 +33,6 @@ def test_the_lab_status_is_published_until_stopped(tmp_path: Path, monkeypatch):
     speedrun_module.watch_lab(tmp_path / ".lab-run", SimpleNamespace(wait=lambda seconds: bool(published)))
 
     assert published == [tmp_path / ".lab-run"]
-
-
-def test_the_speedrun_extends_the_movie_then_keeps_improving_it(tmp_path: Path, monkeypatch):
-    improved: list[int] = []
-
-    def extend(segments: list[Segment], until: str) -> list[Segment]:
-        return SLOW
-
-    def improve(segments: list[Segment]) -> list[Segment]:
-        improved.append(run.frames(segments))
-        if len(improved) == 2:
-            raise OnePass
-        return FAST
-
-    tas = SimpleNamespace(output=tmp_path, extend=extend, improve=improve)
-    monkeypatch.setattr(run, "tas_run", lambda wrapper, config, pool: tas)
-    monkeypatch.setattr(run, "worker_pool", lambda workers: NoPool())
-
-    with pytest.raises(OnePass):
-        run.speedrun_forever("fakes:FakeWrapper", write_config(tmp_path))
-
-    assert improved == [6, 3]
-    assert run.load_progress(tmp_path / run.PROGRESS_FILE) == []
 
 
 def test_the_speedrun_task_relays_watches_the_lab_and_runs(tmp_path: Path, monkeypatch):

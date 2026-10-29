@@ -49,12 +49,12 @@ def memory_field(samples: list[dict[str, int | None]]) -> dict[str, Any]:
 
 
 @contextmanager
-def recording(runner: SegmentRunner, movie: Path) -> Iterator[None]:
+def recording(runner: SegmentRunner, movie: Path, start: Start) -> Iterator[None]:
     emulator = runner.emulator
     movie.parent.mkdir(parents=True, exist_ok=True)
     emulator.auto_record(str(movie.parent))
     runner.power_on()
-    emulator.movie.set_state(runner.snapshot())
+    runner.restore(start)
     recorded = Path(active_movie_path(emulator))
     yield
     emulator.stop_record()
@@ -62,17 +62,16 @@ def recording(runner: SegmentRunner, movie: Path) -> Iterator[None]:
 
 
 def record_piece(runner: SegmentRunner, start: Start, pressed: np.ndarray, movie: Path) -> bytes:
-    with recording(runner, movie):
-        runner.restore(start)
+    with recording(runner, movie, start):
         for buttons in pressed:
             runner.emulator.step(buttons)
     return movie.read_bytes()
 
 
-def verified_segments(runner: SegmentRunner, segments: list[Segment], movie: Path) -> Replay:
+def verified_segments(runner: SegmentRunner, start: Start, segments: list[Segment], movie: Path) -> Replay:
     machine = runner.wrapper.state_machine
     verified, played, samples, ends = 0, 0, [], []
-    with recording(runner, movie):
+    with recording(runner, movie, start):
         for segment in segments:
             for buttons in np.asarray(segment.pressed, dtype=np.int8):
                 runner.emulator.step(buttons)

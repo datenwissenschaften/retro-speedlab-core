@@ -9,6 +9,7 @@ from datenwissenschaften.tas.journal import now
 from datenwissenschaften.tas.movie import Segment, record_piece
 from datenwissenschaften.tas.paths import atomic_write
 from datenwissenschaften.tas.report import Course
+from datenwissenschaften.tas.routes import Leg
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.screen import Cut
 from datenwissenschaften.tas.search import Crossing
@@ -30,9 +31,9 @@ def movie_field(first: str, frame_rate: float, segments: list[Segment]) -> dict[
     return {"frames": played, "seconds": played / frame_rate, "frame_rate": frame_rate, "segments": cuts}
 
 
-def movie_cut(course: Course, segments: list[Segment], recording: Path, memory: dict[str, Any]) -> Cut:
-    key = msgspec.msgpack.encode([segment.pressed for segment in segments])
-    field = movie_field(course.first, course.frame_rate, segments)
+def movie_cut(course: Course, leg: Leg, segments: list[Segment], recording: Path, memory: dict[str, Any]) -> Cut:
+    key = msgspec.msgpack.encode([leg.name, *(segment.pressed for segment in segments)])
+    field = {**movie_field(leg.entry.state, course.frame_rate, segments), "part": leg.name}
     return Cut(key, (recording.read_bytes(),), field, {MOVIE_MEMORY: memory})
 
 

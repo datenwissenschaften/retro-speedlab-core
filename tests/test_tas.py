@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from datenwissenschaften.tas.movie import Segment
-from datenwissenschaften.tas.run import finished, load_progress, save_progress
+from datenwissenschaften.tas.routes import finished, load_progress, save_progress
 from datenwissenschaften.tas.runner import Outcome, Start
 from datenwissenschaften.tas.search import UNBOUNDED, Cell, Crossing, Trail, holds, search_segment, shave
 

@@ -11,10 +11,13 @@ from datenwissenschaften.route.position import Position
 from datenwissenschaften.tas import footage
 from datenwissenschaften.tas.footage import compare_cut, movie_cut, movie_field, render_compare, render_movie
 from datenwissenschaften.tas.movie import Segment, memory_field, memory_sample
+from datenwissenschaften.tas.routes import Leg
+from datenwissenschaften.tas.runner import Start
 from datenwissenschaften.tas.screen import Cut, Screen
 from datenwissenschaften.tas.search import Crossing
 
 COURSE = SimpleNamespace(first="PowerOn", frame_rate=60.0)
+LEG = Leg("Level 1", Start("PowerOn", b""), None)
 SEGMENTS = [Segment("Play", [[0, 1]] * 2, b"", False), Segment("Boss", [[1, 0]] * 3, b"", False)]
 MEMORY = {"every": 6, "keys": ["lives"], "samples": [[3]]}
 
@@ -57,13 +60,13 @@ def test_a_changed_movie_is_rendered_uploaded_with_its_memory_and_shown_once(tmp
     movies = Screen("movie", render, flaky_upload([True], uploads), shown.append)
     movies.start()
 
-    movies.queue(movie_cut(COURSE, SEGMENTS, recording, MEMORY))
-    movies.queue(movie_cut(COURSE, SEGMENTS, recording, MEMORY))
+    movies.queue(movie_cut(COURSE, LEG, SEGMENTS, recording, MEMORY))
+    movies.queue(movie_cut(COURSE, LEG, SEGMENTS, recording, MEMORY))
     movies.settle()
 
     version = hashlib.sha256(b"mp4:bk2").hexdigest()[:12]
     assert uploads == [(b"mp4:bk2", version, {"movie-ram.json": MEMORY})]
-    assert shown == [{"version": version, **movie_field("PowerOn", 60.0, SEGMENTS)}]
+    assert shown == [{"version": version, **movie_field("PowerOn", 60.0, SEGMENTS), "part": "Level 1"}]
 
 
 def test_an_upload_is_retried_until_the_backend_takes_it(tmp_path: Path, monkeypatch):
