@@ -72,6 +72,7 @@ def test_the_speedrun_extends_the_movie_then_keeps_improving_it(tmp_path: Path, 
         run.speedrun_forever("fakes:FakeWrapper", write_config(tmp_path))
 
     assert improved == [6, 3]
+    assert run.load_progress(tmp_path / run.PROGRESS_FILE) == []
 
 
 def test_the_speedrun_task_relays_watches_the_lab_and_runs(tmp_path: Path, monkeypatch):

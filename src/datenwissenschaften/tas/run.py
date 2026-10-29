@@ -191,7 +191,10 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
 def speedrun_forever(wrapper: str, config: Path) -> None:
     with worker_pool(load_config(config).speedrun.workers) as pool:
         tas = tas_run(wrapper, config, pool)
-        segments = tas.extend(load_progress(tas.output / PROGRESS_FILE), phases(wrapper_class(wrapper))[-1])
+        progress = tas.output / PROGRESS_FILE
+        if not progress.is_file():
+            save_progress(progress, [])
+        segments = tas.extend(load_progress(progress), phases(wrapper_class(wrapper))[-1])
         while True:
             segments = tas.improve(segments)
 
