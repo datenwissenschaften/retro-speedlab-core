@@ -13,6 +13,7 @@ LOG_FORMAT = (
 DSN_VARIABLE = "BUGSINK_DSN"
 PACKAGE = "datenwissenschaften"
 RELEASE_NAME = "retro-speedlab-core"
+EVENT_FORMAT = "{name}:{function} - {message}"
 
 
 def setup_logging(level: str) -> None:
@@ -22,6 +23,6 @@ def setup_logging(level: str) -> None:
         sentry_sdk.init(
             dsn=os.environ[DSN_VARIABLE],
             release=f"{RELEASE_NAME}@{version(PACKAGE)}",
-            integrations=[LoguruIntegration()],
+            integrations=[LoguruIntegration(event_format=EVENT_FORMAT, breadcrumb_format=EVENT_FORMAT)],
             traces_sample_rate=0,
         )
