@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
+from datenwissenschaften.tas import search
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.routes import finished, load_progress, save_progress
 from datenwissenschaften.tas.runner import Outcome, Start
@@ -75,7 +76,8 @@ def test_a_bound_only_accepts_crossings_faster_than_the_movie_has():
     assert search_segment(LineRunner(), START, GOAL_X + 1, 7, 1.0, None).crossings != []
 
 
-def test_a_search_that_cannot_leave_returns_the_point_with_the_most_reward_as_a_checkpoint():
+def test_a_search_that_cannot_leave_returns_the_point_with_the_most_reward_as_a_checkpoint(monkeypatch):
+    monkeypatch.setattr(search, "CHECKPOINT_GAIN", GOAL_X - 2)
     searched = search_segment(LineRunner(), START, GOAL_X, 7, 0.2, None)
 
     assert searched.crossings == []

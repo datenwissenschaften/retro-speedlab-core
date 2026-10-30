@@ -69,6 +69,7 @@ class Tas:
     movie: Screen
     compare: Screen
     turn: int
+    barred: str | None
 
     @property
     def output(self) -> Path:
@@ -103,7 +104,9 @@ class Tas:
             start = self.start(leg, segments, len(segments))
             self.feed.show(self.routes.view(leg.name, segments), start.state)
             found = self.searcher.best(start, UNBOUNDED, SEARCH_ROUNDS)
-            if isinstance(found, Checkpoint) and checkpoints_in_a_row(leg, segments) >= MAX_CHECKPOINTS:
+            if isinstance(found, Checkpoint) and (
+                start.state == self.barred or checkpoints_in_a_row(leg, segments) >= MAX_CHECKPOINTS
+            ):
                 found = None
             if isinstance(found, Checkpoint):
                 self.feed.event("checkpoint", start.state, found.frames)
@@ -113,6 +116,7 @@ class Tas:
             if found is None:
                 segments = self.stuck(segments, start)
                 continue
+            self.barred = None
             self.feed.event("found", found.end.state, found.frames)
             segments = self.keep(leg, [*segments, segment_of(found)], found.end.state)
             logger.info(
@@ -130,6 +134,8 @@ class Tas:
             logger.warning(f"No way out of {start.state} after {searches} searches; searching again")
             return segments
         logger.warning(f"No way out of {start.state} after {searches} searches; searching the way into it again")
+        if segments and segments[-1].state == start.state:
+            self.barred = start.state
         return segments[:-1]
 
     def improve(self, leg: Leg, segments: list[Segment]) -> list[Segment]:
@@ -188,7 +194,7 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
     movie, compare = screen(settings, feed, "movie", render_movie), screen(settings, feed, "compare", render_compare)
     searcher = Searcher(wrapper, config, settings, pool, feed)
     routes = Routes(output / ROUTES_FILE, output / PROGRESS_FILE, parts_of(course))
-    return Tas(settings, runner, searcher, routes, feed, movie, compare, 0)
+    return Tas(settings, runner, searcher, routes, feed, movie, compare, 0, None)
 
 
 @app.command()

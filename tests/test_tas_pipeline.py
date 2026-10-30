@@ -236,6 +236,7 @@ def test_the_search_goes_back_a_piece_only_after_three_failed_searches(tmp_path:
     kept = [tas.stuck(piece, Start("Survive", bytes([1]))) for _ in range(BACKTRACK_SEARCHES)]
 
     assert kept == [piece, piece, []]
+    assert tas.barred == "Survive"
 
 
 def test_checkpoints_in_a_row_count_the_pieces_that_stay_in_one_state():
@@ -245,3 +246,23 @@ def test_checkpoints_in_a_row_count_the_pieces_that_stay_in_one_state():
     assert run.checkpoints_in_a_row(leg, []) == 0
     assert run.checkpoints_in_a_row(leg, [survive, survive]) == 2
     assert run.checkpoints_in_a_row(leg, [survive, Segment("Boss", [[0, 0]], b"", False)]) == 0
+
+
+def test_no_checkpoint_comes_back_in_a_state_the_search_just_left_one_behind(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    found = searcher.Searcher.best
+    useless = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 20.0)
+    calls: list[int] = []
+
+    def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Crossing | Checkpoint | None:
+        calls.append(bound)
+        return useless if len(calls) == 1 else found(self, start, bound, rounds)
+
+    monkeypatch.setattr(searcher.Searcher, "best", best)
+    tas.barred = "Survive"
+
+    segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [])
+
+    assert [segment.state for segment in segments] == ["Boss"]
+    assert tas.barred is None

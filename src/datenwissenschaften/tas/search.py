@@ -20,7 +20,7 @@ SHAVE_WINDOWS = (8, 4, 2, 1)
 EXPLOIT = 0.5
 LEADING_SHARE = 10
 UNBOUNDED = sys.maxsize
-CHECKPOINT_GAIN = 1.0
+CHECKPOINT_GAIN = 10.0
 
 
 @dataclass(slots=True, frozen=True)

@@ -42,7 +42,7 @@ def splits(course: Course, segments: list[Segment]) -> list[Split]:
     for segment in segments:
         played += len(segment.pressed)
         seconds = played / course.frame_rate
-        if origin in leaving or (segment.state == opened and not found):
+        if segment.state != origin and (origin in leaving or (segment.state == opened and not found)):
             found.append(Split(leaving[origin] if origin in leaving else course.first, seconds, seconds - previous))
             previous = seconds
         origin = segment.state

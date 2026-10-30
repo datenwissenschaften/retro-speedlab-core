@@ -209,3 +209,16 @@ def test_the_part_before_the_first_level_is_split_like_a_level(tmp_path: Path):
 
     assert splits(played, segments) == [Split("Menu", 1.0, 1.0), Split("Level 1", 2.0, 1.0)]
     assert report(played, segments, [], {}, "Level2", None)["opening"] == "Menu"
+
+
+def test_checkpoint_pieces_never_end_a_level(tmp_path: Path):
+    game = load_config(write_config(tmp_path)).speedrun.game
+    played = Course({"Level 1": ("Play", "Door"), "Level 2": ("Level2",)}, "Menu", 60.0, {}, 1, game)
+    segments = [
+        Segment("Play", [[0, 1]] * 60, b"", False),
+        Segment("Door", [[0, 0]] * 30, b"", False),
+        Segment("Door", [[0, 0]] * 30, b"", False),
+        Segment("Door", [[0, 0]] * 30, b"", False),
+    ]
+
+    assert [split.level for split in splits(played, segments)] == ["Menu"]
