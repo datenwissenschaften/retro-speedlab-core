@@ -6,6 +6,7 @@ from pathlib import Path
 from loguru import logger
 
 from datenwissenschaften.lab.critic import CRITIC_FILE, read_critic
+from datenwissenschaften.lab.reports import publish_reports
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
 from datenwissenschaften.tas.paths import PROGRESS_FILE, tas_dir
@@ -63,6 +64,7 @@ def critic_run(project: str) -> None:
 
 @speedlab.task
 def lab(config: str, project: str) -> None:
+    publish_reports(load_config(Path(config)), Path(project))
     reports = reports_since_critic(config, project)
     if reports >= CRITIC_RUNS:
         logger.info(f"Critic: {reports} lab reports since the last one")
