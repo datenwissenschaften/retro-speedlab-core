@@ -22,6 +22,10 @@ def progress(tmp_path: Path, seconds_ago: float) -> None:
     os.utime(movie, (moment, moment))
 
 
+def searching(tmp_path: Path) -> None:
+    (tmp_path / "cache" / "tas" / "live").mkdir(parents=True, exist_ok=True)
+
+
 def test_a_wrapper_is_named_by_its_module_and_class():
     assert wrapper_class("fakes:FakeWrapper") is FakeWrapper
     with pytest.raises(ValueError):
@@ -30,6 +34,7 @@ def test_a_wrapper_is_named_by_its_module_and_class():
 
 def test_a_lab_run_is_due_once_the_search_made_no_progress_for_the_stall_minutes(tmp_path: Path):
     config = str(write_config(tmp_path))
+    searching(tmp_path)
 
     assert lab_run_due(config)
     progress(tmp_path, STALLED_SECONDS_AGO)
@@ -47,8 +52,16 @@ def test_a_stuck_search_lets_the_lab_in_at_once(tmp_path: Path):
     config = str(write_config(tmp_path))
     progress(tmp_path, 60)
     mark_stuck(tmp_path / "cache" / "tas" / STUCK_FILE, "Boss")
+    searching(tmp_path)
 
     assert lab_run_due(config)
+
+
+def test_no_lab_run_while_the_search_is_not_running(tmp_path: Path):
+    config = str(write_config(tmp_path))
+    mark_stuck(tmp_path / "cache" / "tas" / STUCK_FILE, "Boss")
+
+    assert not lab_run_due(config)
 
 
 def test_the_end_of_the_last_lab_run_counts_as_progress(tmp_path: Path):
@@ -69,6 +82,7 @@ def test_the_lab_runs_the_projects_daily_agent_only_when_due(tmp_path: Path, mon
     commands = []
     monkeypatch.setattr(lab_module.subprocess, "run", lambda command, check: commands.append(command))
     config = str(write_config(tmp_path))
+    searching(tmp_path)
 
     lab(config, str(tmp_path))
     progress(tmp_path, 60)

@@ -9,6 +9,7 @@ from datenwissenschaften.lab.critic import CRITIC_FILE, read_critic
 from datenwissenschaften.lab.reports import publish_reports
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
+from datenwissenschaften.tas.live import LIVE_DIR
 from datenwissenschaften.tas.paths import PROGRESS_FILE, tas_dir
 from datenwissenschaften.tas.stuck import STUCK_FILE, load_stuck
 from datenwissenschaften.workflow.environment import speedlab
@@ -17,6 +18,13 @@ SECONDS_PER_MINUTE = 60
 LAST_LAB_RUN = ".agent-last-run"
 CRITIC_RUNS = 5
 REPORT_STAMP = "%Y-%m-%dT%H%M"
+
+
+def search_running(config: RetroSpeedlabConfig) -> bool:
+    live = tas_dir(config) / LIVE_DIR
+    if not live.is_dir():
+        return False
+    return (time.time() - live.stat().st_mtime) / SECONDS_PER_MINUTE < config.lab.stall_minutes
 
 
 def last_progress(config: RetroSpeedlabConfig) -> float:
@@ -30,6 +38,9 @@ def lab_run_due(config: str) -> bool:
     setup_logging(settings.log_level)
     if settings.paths.lab_run_marker.exists():
         logger.info("No lab run: one is running")
+        return False
+    if not search_running(settings):
+        logger.info("No lab run: the search is not running")
         return False
     stuck = load_stuck(tas_dir(settings) / STUCK_FILE)
     if stuck is not None:
