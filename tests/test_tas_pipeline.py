@@ -171,6 +171,37 @@ def test_a_segment_without_a_way_out_is_marked_stuck_and_the_way_into_it_searche
     ]
 
 
+class SearchOver(Exception):
+    pass
+
+
+def test_a_state_the_search_finds_its_way_back_into_stays_stuck_since_its_first_failed_search(
+    tmp_path: Path, monkeypatch
+):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    found = searcher.Searcher.best
+    stuck: list[Stuck | None] = []
+
+    def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Crossing | None:
+        if start.state == "Survive":
+            return found(self, start, bound, rounds)
+        stuck.append(load_stuck(tas.output / STUCK_FILE))
+        if len(stuck) > 2 * BACKTRACK_SEARCHES:
+            raise SearchOver
+        return None
+
+    monkeypatch.setattr(searcher.Searcher, "best", best)
+
+    with pytest.raises(SearchOver):
+        tas.extend(Leg(FULL_RUN, runner.power_on(), "Exit"), [])
+
+    first, *marked = stuck
+    assert first is None
+    assert [record and record.searches for record in marked] == list(range(1, 2 * BACKTRACK_SEARCHES + 1))
+    assert {record and (record.state, record.since) for record in marked} == {("Boss", marked[0].since)}
+
+
 def test_workers_search_and_shave_from_a_savestate(tmp_path: Path, monkeypatch):
     env = saving_environment(tmp_path)
     monkeypatch.setattr(workers, "make_environment", lambda wrapper_cls, settings, worker: env)
