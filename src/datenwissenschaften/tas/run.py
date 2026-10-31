@@ -24,7 +24,7 @@ from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.screen import Screen
 from datenwissenschaften.tas.search import UNBOUNDED, Checkpoint, Crossing
 from datenwissenschaften.tas.searcher import Searcher
-from datenwissenschaften.tas.stuck import STUCK_FILE, mark_stuck
+from datenwissenschaften.tas.stuck import STUCK_FILE, load_stuck, mark_stuck
 from datenwissenschaften.ui.relay import relay_key
 from datenwissenschaften.ui.video_upload import VideoUpload
 from datenwissenschaften.workflow.wrapper import wrapper_class
@@ -80,9 +80,17 @@ class Tas:
             return leg.entry
         return Start(segments[index - 1].state, segments[index - 1].emulator_state)
 
+    @property
+    def stuck_file(self) -> Path:
+        return self.output / STUCK_FILE
+
+    def leave(self, state: str) -> None:
+        stuck = load_stuck(self.stuck_file)
+        if stuck is not None and stuck.state != state:
+            self.stuck_file.unlink()
+
     def keep(self, leg: Leg, segments: list[Segment], searching: str) -> list[Segment]:
         self.routes.save(leg, segments)
-        (self.output / STUCK_FILE).unlink(missing_ok=True)
         self.feed.show(self.routes.view(leg.name, segments), searching)
         return segments
 
@@ -110,6 +118,7 @@ class Tas:
                 found = None
             if isinstance(found, Checkpoint):
                 self.feed.event("checkpoint", start.state, found.frames)
+                self.stuck_file.unlink(missing_ok=True)
                 segments = self.keep(leg, [*segments, checkpoint_segment(found)], start.state)
                 logger.info(f"Checkpoint in {start.state} after {found.frames} frames, {found.gain:.1f} reward on")
                 continue
@@ -117,6 +126,7 @@ class Tas:
                 segments = self.stuck(segments, start)
                 continue
             self.barred = None
+            self.leave(found.end.state)
             self.feed.event("found", found.end.state, found.frames)
             segments = self.keep(leg, [*segments, segment_of(found)], found.end.state)
             logger.info(
@@ -128,9 +138,9 @@ class Tas:
         return segments
 
     def stuck(self, segments: list[Segment], start: Start) -> list[Segment]:
-        searches = mark_stuck(self.output / STUCK_FILE, start.state).searches
+        searches = mark_stuck(self.stuck_file, start.state).searches
         self.feed.event("stuck", start.state, None)
-        if searches < BACKTRACK_SEARCHES:
+        if searches % BACKTRACK_SEARCHES:
             logger.warning(f"No way out of {start.state} after {searches} searches; searching again")
             return segments
         logger.warning(f"No way out of {start.state} after {searches} searches; searching the way into it again")
