@@ -3,22 +3,21 @@ from pathlib import Path
 
 from datenwissenschaften.route.position import Position
 
-CELL_SIZE = 8
+CELL_SIZE = 16
 
-Cell = tuple[int, int, int, int, bool]
+Cell = tuple[int, int, int]
 Remaining = dict[Cell, int]
 
 
 def cell_of(position: Position) -> Cell:
-    size = CELL_SIZE
-    return position.area, position.x // size, position.y // size, position.height // size, position.airborne
+    return position.area, position.x // CELL_SIZE, position.y // CELL_SIZE
 
 
 def load_route(path: Path) -> Remaining:
     if not path.is_file():
         return {}
     rows = json.loads(path.read_text(encoding="utf-8"))
-    return {(area, x, y, height, bool(air)): left for area, x, y, height, air, _, left in rows}
+    return {(area, x, y): left for area, x, y, _, left in rows}
 
 
 class RouteMap:

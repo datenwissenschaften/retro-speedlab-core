@@ -7,13 +7,13 @@ import numpy as np
 
 from datenwissenschaften.reference.samples import SIDE_CROP, small_screen
 from datenwissenschaften.route.position import Position
-from datenwissenschaften.route.route_map import cell_of
+from datenwissenschaften.route.route_map import Cell, cell_of
 from datenwissenschaften.tas.paths import atomic_write
 
 CHUNK_FRAMES = 2048
 LEVEL_GAP_FRAMES = 60
 
-Step = tuple[int, int, int, int, int]
+Step = tuple[int, int, int, int]
 
 
 def video_chunks(video: Path) -> Iterator[np.ndarray]:
@@ -32,6 +32,20 @@ def video_chunks(video: Path) -> Iterator[np.ndarray]:
         yield np.stack(chunk)
 
 
+def rising_levels(log_probs: np.ndarray) -> np.ndarray:
+    levels = np.arange(log_probs.shape[1])
+    best, back = log_probs[0].copy(), np.zeros(log_probs.shape, dtype=int)
+    for frame in range(1, len(log_probs)):
+        prefix = np.maximum.accumulate(best)
+        back[frame] = np.maximum.accumulate(np.where(best >= prefix, levels, 0))
+        best = prefix + log_probs[frame]
+    path = np.empty(len(log_probs), dtype=int)
+    path[-1] = int(np.argmax(best))
+    for frame in range(len(log_probs) - 1, 0, -1):
+        path[frame - 1] = back[frame, path[frame]]
+    return path
+
+
 def stretches(steps: list[Step]) -> list[list[Step]]:
     found: list[list[Step]] = []
     for step in steps:
@@ -42,12 +56,12 @@ def stretches(steps: list[Step]) -> list[list[Step]]:
     return found
 
 
-def route_rows(steps: list[Step]) -> list[list[object]]:
-    remaining: dict[tuple[int, int, int, int, bool], tuple[int, int]] = {}
+def route_rows(steps: list[Step]) -> list[list[int]]:
+    remaining: dict[Cell, tuple[int, int]] = {}
     for stretch in stretches(steps):
         end = stretch[-1][0]
-        for frame, area, x, y, height in stretch:
-            cell = cell_of(Position(area, x, y, height, False))
+        for frame, area, x, y in stretch:
+            cell = cell_of(Position(area, x, y, 0, False))
             if cell not in remaining or end - frame < remaining[cell][1]:
                 remaining[cell] = (frame, end - frame)
     return [[*cell, frame, left] for cell, (frame, left) in sorted(remaining.items())]
