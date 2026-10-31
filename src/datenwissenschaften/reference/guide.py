@@ -21,6 +21,8 @@ def tas_steps(trained: "Trained", settings: RetroSpeedlabConfig) -> tuple[list[S
 
     readings = [read_positions(trained.net, chunk) for chunk in video_chunks(video_path(settings))]
     playing = np.concatenate([reading.playing for reading in readings])
+    if not playing.any():
+        raise RuntimeError("The guide sees no frame of the TAS video in play")
     frames = np.flatnonzero(playing)
     levels = rising_levels(np.concatenate([reading.levels for reading in readings])[playing])
     allowed = trained.allowed[levels]
