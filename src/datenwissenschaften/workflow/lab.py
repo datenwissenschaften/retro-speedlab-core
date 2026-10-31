@@ -9,6 +9,7 @@ from loguru import logger
 from datenwissenschaften.lab.critic import CRITIC_FILE, read_critic
 from datenwissenschaften.lab.reports import publish_reports
 from datenwissenschaften.logger import setup_logging
+from datenwissenschaften.reference.fetch import ensure_reference
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
 from datenwissenschaften.tas.live import LIVE_DIR
 from datenwissenschaften.tas.paths import PROGRESS_FILE, atomic_write, tas_dir
@@ -107,5 +108,7 @@ def lab(config: str, project: str) -> None:
         logger.info(f"Critic: {reports} lab reports since the last one")
         critic_run(project)
     if lab_run_due(config):
-        remember_baseline(load_config(Path(config)))
+        settings = load_config(Path(config))
+        remember_baseline(settings)
+        ensure_reference(settings)
         lab_run(project)
