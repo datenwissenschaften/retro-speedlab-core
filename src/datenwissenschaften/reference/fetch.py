@@ -3,18 +3,11 @@ from pathlib import Path
 
 from loguru import logger
 
+from datenwissenschaften.reference.paths import FRAMES_DIR, MOVIE_DIR, VIDEO_FILE, reference_dir
 from datenwissenschaften.reference.tasvideos import download, save_movie, video_url
 from datenwissenschaften.settings import RetroSpeedlabConfig
 
-REFERENCE_DIR = "reference"
-FRAMES_DIR = "frames"
-MOVIE_DIR = "movie"
-VIDEO_FILE = "video"
 FRAMES_PER_SECOND = 4
-
-
-def reference_dir(settings: RetroSpeedlabConfig) -> Path:
-    return settings.paths.cache_dir / REFERENCE_DIR
 
 
 def extract_frames(video: Path, frames: Path) -> None:

@@ -78,7 +78,7 @@ class SegmentRunner:
         return bytes(self.emulator.em.get_state())
 
     def remaining(self) -> int | None:
-        return self.wrapper.routes.remaining(self.wrapper.state_machine.state_name, self.ram.position())
+        return self.wrapper.routes.remaining(self.ram.position())
 
     def key(self, frames: int) -> CellKey:
         state, position = self.wrapper.state_machine.state_name, self.ram.position()

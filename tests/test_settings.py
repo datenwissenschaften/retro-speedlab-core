@@ -25,6 +25,7 @@ def _document() -> dict[str, Any]:
         "speedrun": {
             "workers": 4,
             "segment_seconds": 60,
+            "guide": False,
             "id": "testgame-v0",
             "title": "Test Game",
             "platform": "NES",
@@ -49,7 +50,7 @@ def test_complete_config_loads(tmp_path: Path):
     assert config.lab.stall_minutes == 30
     source = SpeedrunComSource("m1z0mmd0", "5dwpnllk", {"p85pg00l": "qyz5gr71"})
     game = GameSettings("testgame-v0", "Test Game", "NES", "Warpless", source, 1694)
-    assert config.speedrun == SpeedrunSettings(4, 60.0, game)
+    assert config.speedrun == SpeedrunSettings(4, 60.0, False, game)
     assert config.upload.api_key is None
     assert config.log_level == "INFO"
 

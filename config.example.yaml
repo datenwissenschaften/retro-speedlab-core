@@ -27,6 +27,7 @@ twitch:
 speedrun:
   workers: 4
   segment_seconds: 120
+  guide: false
   id: airstriker-genesis-v0
   title: Airstriker
   platform: Genesis

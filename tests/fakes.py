@@ -92,6 +92,8 @@ class FakeWrapper(StateMachineGymWrapper[FakeRam]):
     ram_info_cls = FakeRam
     action_table = np.array([[[1, 0]], [[0, 1]]], dtype=np.int8)
     levels = ()
+    level_address = None
+    level_count = 1
 
 
 def fake_environment(tmp_path: Path, script: list[tuple[int, int]]) -> FakeWrapper:
@@ -100,7 +102,7 @@ def fake_environment(tmp_path: Path, script: list[tuple[int, int]]) -> FakeWrapp
 
 
 def fake_routes(tmp_path: Path) -> RouteMap:
-    return RouteMap(lambda state: tmp_path / "models" / state / "route.json")
+    return RouteMap(tmp_path / "reference" / "route.json")
 
 
 def write_config(tmp_path: Path) -> Path:
@@ -117,6 +119,7 @@ def write_config(tmp_path: Path) -> Path:
                 "speedrun:",
                 "  workers: 1",
                 "  segment_seconds: 0.05",
+                "  guide: false",
                 "  id: fakegame-v0",
                 "  title: Fake Game",
                 "  platform: NES",

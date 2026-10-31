@@ -100,9 +100,8 @@ def test_no_second_lab_run_while_one_is_running(tmp_path: Path):
 
 
 def test_the_lab_runs_the_projects_daily_agent_only_when_due(tmp_path: Path, monkeypatch):
-    commands, references = [], []
+    commands = []
     monkeypatch.setattr(lab_module.subprocess, "run", lambda command, check: commands.append(command))
-    monkeypatch.setattr(lab_module, "ensure_reference", references.append)
     config = str(write_config(tmp_path))
     searching(tmp_path)
 
@@ -111,7 +110,6 @@ def test_the_lab_runs_the_projects_daily_agent_only_when_due(tmp_path: Path, mon
     lab(config, str(tmp_path))
 
     assert commands == [[tmp_path / "agent" / "daily.sh"]]
-    assert len(references) == 1
 
 
 def reports(project: Path, *stamps: str) -> None:

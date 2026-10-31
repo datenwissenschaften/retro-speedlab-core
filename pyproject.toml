@@ -40,6 +40,9 @@ Homepage = "https://speedlab.datenwissenschaften.com"
 Repository = "https://github.com/datenwissenschaften/retro-speedlab-core"
 Documentation = "https://speedlab.datenwissenschaften.com/getting-started"
 
+[project.optional-dependencies]
+vision = ["torch==2.9.1"]
+
 [dependency-groups]
 dev = [
     "ruff==0.15.20",
