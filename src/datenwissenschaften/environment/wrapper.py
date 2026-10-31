@@ -37,6 +37,8 @@ class StateMachineGymWrapper(Generic[T]):
     ram_info_cls: type[T]
     action_table: np.ndarray
     levels: Levels
+    level_address: int | None
+    level_count: int
 
     def __init__(self, env: RetroEnv, routes: RouteMap) -> None:
         if self.action_table.ndim != ACTION_TABLE_DIMENSIONS:

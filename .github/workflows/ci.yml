@@ -31,6 +31,11 @@ jobs:
       - name: Install dependencies
         run: poetry install
 
+      - name: Install the vision extra for CPU
+        run: |
+          vision=$(python3 -c "import tomllib; print(*tomllib.load(open('pyproject.toml', 'rb'))['project']['optional-dependencies']['vision'])")
+          poetry run pip install --index-url https://download.pytorch.org/whl/cpu $vision
+
       - name: Lint (ruff check)
         run: poetry run ruff check .
 

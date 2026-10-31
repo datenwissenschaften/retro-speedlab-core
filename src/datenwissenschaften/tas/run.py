@@ -24,6 +24,7 @@ from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.screen import Screen
 from datenwissenschaften.tas.search import UNBOUNDED, Checkpoint, Crossing
 from datenwissenschaften.tas.searcher import Searcher
+from datenwissenschaften.tas.shown import SHOWN_FILE, worth_showing
 from datenwissenschaften.tas.stuck import STUCK_FILE, load_stuck, mark_stuck
 from datenwissenschaften.ui.relay import relay_key
 from datenwissenschaften.ui.video_upload import VideoUpload
@@ -103,7 +104,7 @@ class Tas:
         ]
         if replay.verified < len(segments):
             logger.warning(f"Only {replay.verified} of {len(segments)} segments of {leg.name} replay; searching again")
-        elif frames(replayed):
+        elif frames(replayed) and worth_showing(self.output / SHOWN_FILE, self.runner.order, leg.entry.state, replayed):
             self.movie.queue(movie_cut(self.feed.course, leg, replayed, movie, replay.memory))
         return replayed
 

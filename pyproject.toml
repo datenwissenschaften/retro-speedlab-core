@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "datenwissenschaften"
-version = "3.0.65"
+version = "3.0.71"
 description = "Core library for Retro Speedlab: AI speedruns of retro games, found on save states and proven from power-on."
 readme = "README.md"
 authors = [
@@ -39,6 +39,9 @@ keywords = ["speedrun", "tool-assisted-speedrun", "retro-gaming", "stable-retro"
 Homepage = "https://speedlab.datenwissenschaften.com"
 Repository = "https://github.com/datenwissenschaften/retro-speedlab-core"
 Documentation = "https://speedlab.datenwissenschaften.com/getting-started"
+
+[project.optional-dependencies]
+vision = ["torch==2.9.1"]
 
 [dependency-groups]
 dev = [

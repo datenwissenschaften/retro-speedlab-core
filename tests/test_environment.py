@@ -90,8 +90,7 @@ def test_factory_starts_the_game_at_power_on_with_every_button(tmp_path: Path, m
     assert calls["actions"] == factory.retro.Actions.ALL
     assert env.env.initial_state == env.env.em.get_state()
     assert re.fullmatch(r"PowerOn-\d{8}T\d{6}-0", env.env.statename)
-    route = factory.route_path(config, "Boss")
-    assert route == config.paths.models_dir / "FakeGame-v0" / "Boss" / "route.json"
+    assert env.routes.path == config.paths.cache_dir / "reference" / "route.json"
 
 
 class RecordedMovie:

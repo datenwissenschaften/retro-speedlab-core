@@ -198,6 +198,18 @@ def test_the_feed_publishes_the_movie_with_the_live_search_and_notices_a_lab_run
     assert published[-1]["compare"] == {"version": "def"} and searching["compare"] is None
 
 
+def test_the_feed_publishes_nothing_before_it_has_a_run_to_show(tmp_path: Path, monkeypatch):
+    published: list[dict] = []
+    monkeypatch.setattr(feed_module, "publish_metadata", lambda section, values: published.append(values))
+    journal = JournalStore(tmp_path / "journal.json")
+    feed = SpeedrunFeed(course(tmp_path), journal, tmp_path / "live", tmp_path / "stuck.json", tmp_path / ".lab-run")
+
+    feed.publish()
+    feed.shown("movie", {"version": "abc", "frames": 120})
+
+    assert published == []
+
+
 def test_the_part_before_the_first_level_is_split_like_a_level(tmp_path: Path):
     game = load_config(write_config(tmp_path)).speedrun.game
     played = Course({"Level 1": ("Play", "Door"), "Level 2": ("Level2",)}, "Menu", 60.0, {}, 1, game)

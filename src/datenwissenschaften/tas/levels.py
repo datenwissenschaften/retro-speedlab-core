@@ -2,6 +2,8 @@ from pathlib import Path
 
 from loguru import logger
 
+from datenwissenschaften.reference.fetch import ensure_reference
+from datenwissenschaften.reference.guide import ensure_guide
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.tas.routes import FULL_RUN, Leg, Part, Routes, load_progress, save_progress
 from datenwissenschaften.tas.run import Tas, tas_run, worker_pool
@@ -45,6 +47,9 @@ class LevelTrainer:
 
 
 def speedrun_forever(wrapper: str, config: Path) -> None:
-    with worker_pool(load_config(config).speedrun.workers) as pool:
+    settings = load_config(config)
+    ensure_reference(settings)
+    with worker_pool(settings.speedrun.workers) as pool:
         tas = tas_run(wrapper, config, pool)
+        ensure_guide(settings, tas.runner, tas.routes.stitched())
         LevelTrainer(tas, tas.routes, tas.runner.power_on()).forever()

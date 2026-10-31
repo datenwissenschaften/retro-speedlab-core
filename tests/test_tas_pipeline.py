@@ -1,10 +1,11 @@
 from concurrent.futures import Future
 from pathlib import Path
+from types import SimpleNamespace
 
 import msgspec
 import numpy as np
 import pytest
-from fakes import FakeEmulator, FakeWrapper, fake_routes, write_config
+from fakes import saving_environment, write_config
 
 from datenwissenschaften.tas import footage, movie, run, searcher, workers
 from datenwissenschaften.tas.movie import Segment
@@ -15,34 +16,8 @@ from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import Checkpoint, Crossing, search_segment, shave
 from datenwissenschaften.tas.stuck import STUCK_FILE, Stuck, load_stuck
 
-SCRIPT = [(3, 0), (3, 1), (3, 2), (3, 5), (3, 6), (3, 6), (3, 6), (3, 6)]
 BOSS_FRAMES = 3
 SECONDS = 0.05
-
-
-class SavingEmulator(FakeEmulator):
-    def __init__(self, movie_path: Path, script: list[tuple[int, int]]) -> None:
-        super().__init__(movie_path, script)
-        self.em.get_state = lambda: bytes([self.position])
-        self.em.set_state = self._load
-        self.em.step = self._advance
-        self.em.set_button_mask = lambda mask, player: None
-
-    def _load(self, state: bytes) -> None:
-        self.position = state[0]
-
-    def _advance(self) -> None:
-        self.position = min(self.position + 1, len(self.script) - 1)
-
-    def action_to_array(self, action: np.ndarray) -> list[np.ndarray]:
-        return [np.asarray(action, dtype=np.uint8)]
-
-    def reset(self) -> tuple[np.ndarray, dict]:
-        observation = super().reset()
-        if self.movie_path:
-            Path(self.movie_path).mkdir(parents=True, exist_ok=True)
-            (Path(self.movie_path) / f"{self.gamename}-Level1-{self.movie_id - 1:06d}.bk2").write_bytes(b"movie")
-        return observation
 
 
 class SyncPool:
@@ -56,11 +31,6 @@ class SyncPool:
 
     def __exit__(self, *exception: object) -> None:
         pass
-
-
-def saving_environment(tmp_path: Path) -> FakeWrapper:
-    emulator = SavingEmulator(tmp_path / "recordings", SCRIPT)
-    return FakeWrapper(emulator, fake_routes(tmp_path))
 
 
 def fake_render(paths: object, recordings: list[Path]) -> list[Path]:
@@ -101,6 +71,14 @@ def test_the_runner_restores_savestates_and_tells_when_a_segment_is_left(tmp_pat
     assert runner.snapshot() == start.emulator_state == bytes([0])
     assert runner.key(31) == ("Survive", 1)
     assert runner.remaining() is None
+
+
+def test_without_a_position_the_cell_is_the_games_dynamics_not_the_time(tmp_path: Path):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    runner.power_on()
+    runner.ram = SimpleNamespace(position=lambda: None, dynamics=lambda: (3, 4))
+
+    assert runner.key(31) == runner.key(900) == ("Survive", 3, 4)
 
 
 def test_search_and_improve_write_a_verified_movie_and_keep_only_faster_segments(tmp_path: Path, monkeypatch):

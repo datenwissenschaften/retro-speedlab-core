@@ -10,6 +10,7 @@ from datenwissenschaften.route.route_map import RouteMap
 from datenwissenschaften.states.state import State
 
 FRAME_RATE = 60.0
+SAVING_SCRIPT = [(3, 0), (3, 1), (3, 2), (3, 5), (3, 6), (3, 6), (3, 6), (3, 6)]
 
 
 @dataclass
@@ -86,12 +87,39 @@ class FakeEmulator:
         return np.zeros((4, 4, 3), np.uint8)
 
 
+class SavingEmulator(FakeEmulator):
+    def __init__(self, movie_path: Path, script: list[tuple[int, int]]) -> None:
+        super().__init__(movie_path, script)
+        self.em.get_state = lambda: bytes([self.position])
+        self.em.set_state = self._load
+        self.em.step = self._advance
+        self.em.set_button_mask = lambda mask, player: None
+
+    def _load(self, state: bytes) -> None:
+        self.position = state[0]
+
+    def _advance(self) -> None:
+        self.position = min(self.position + 1, len(self.script) - 1)
+
+    def action_to_array(self, action: np.ndarray) -> list[np.ndarray]:
+        return [np.asarray(action, dtype=np.uint8)]
+
+    def reset(self) -> tuple[np.ndarray, dict]:
+        observation = super().reset()
+        if self.movie_path:
+            Path(self.movie_path).mkdir(parents=True, exist_ok=True)
+            (Path(self.movie_path) / f"{self.gamename}-Level1-{self.movie_id - 1:06d}.bk2").write_bytes(b"movie")
+        return observation
+
+
 class FakeWrapper(StateMachineGymWrapper[FakeRam]):
     start_state_cls = Survive
     state_classes = (Survive, Boss)
     ram_info_cls = FakeRam
     action_table = np.array([[[1, 0]], [[0, 1]]], dtype=np.int8)
     levels = ()
+    level_address = None
+    level_count = 1
 
 
 def fake_environment(tmp_path: Path, script: list[tuple[int, int]]) -> FakeWrapper:
@@ -99,8 +127,13 @@ def fake_environment(tmp_path: Path, script: list[tuple[int, int]]) -> FakeWrapp
     return FakeWrapper(emulator, fake_routes(tmp_path))
 
 
+def saving_environment(tmp_path: Path) -> FakeWrapper:
+    emulator = SavingEmulator(tmp_path / "recordings", SAVING_SCRIPT)
+    return FakeWrapper(emulator, fake_routes(tmp_path))
+
+
 def fake_routes(tmp_path: Path) -> RouteMap:
-    return RouteMap(lambda state: tmp_path / "models" / state / "route.json")
+    return RouteMap(tmp_path / "reference" / "route.json")
 
 
 def write_config(tmp_path: Path) -> Path:
@@ -117,6 +150,7 @@ def write_config(tmp_path: Path) -> Path:
                 "speedrun:",
                 "  workers: 1",
                 "  segment_seconds: 0.05",
+                "  guide: false",
                 "  id: fakegame-v0",
                 "  title: Fake Game",
                 "  platform: NES",

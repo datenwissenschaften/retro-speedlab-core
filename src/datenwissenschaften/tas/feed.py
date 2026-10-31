@@ -60,6 +60,8 @@ class SpeedrunFeed:
     def publish(self) -> None:
         with self.lock:
             summary, search, screened = self.summary, self.search, self.screened
+        if not summary:
+            return
         reports = [] if search is None else read_reports(self.live)
         now = datetime.now(UTC)
         live = {"search": search_field(search, reports, now), "updated_at": now.isoformat(timespec="seconds")}
