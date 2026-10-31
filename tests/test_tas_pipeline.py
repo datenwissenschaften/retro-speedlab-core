@@ -1,5 +1,6 @@
 from concurrent.futures import Future
 from pathlib import Path
+from types import SimpleNamespace
 
 import msgspec
 import numpy as np
@@ -101,6 +102,14 @@ def test_the_runner_restores_savestates_and_tells_when_a_segment_is_left(tmp_pat
     assert runner.snapshot() == start.emulator_state == bytes([0])
     assert runner.key(31) == ("Survive", 1)
     assert runner.remaining() is None
+
+
+def test_without_a_position_the_cell_is_the_games_dynamics_not_the_time(tmp_path: Path):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    runner.power_on()
+    runner.ram = SimpleNamespace(position=lambda: None, dynamics=lambda: (3, 4))
+
+    assert runner.key(31) == runner.key(900) == ("Survive", 3, 4)
 
 
 def test_search_and_improve_write_a_verified_movie_and_keep_only_faster_segments(tmp_path: Path, monkeypatch):

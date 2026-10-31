@@ -83,6 +83,6 @@ class SegmentRunner:
     def key(self, frames: int) -> CellKey:
         state, position = self.wrapper.state_machine.state_name, self.ram.position()
         if position is None:
-            return (state, frames // TIME_BUCKET_FRAMES)
+            return (state, *self.ram.dynamics()) if self.ram.dynamics() else (state, frames // TIME_BUCKET_FRAMES)
         cell = (position.x // CELL_PIXELS, position.y // CELL_PIXELS, position.height // CELL_PIXELS)
         return (state, position.area, *cell, position.airborne, self.ram.dynamics())
