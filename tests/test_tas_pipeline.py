@@ -15,6 +15,7 @@ from datenwissenschaften.tas.run import BACKTRACK_SEARCHES
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import Checkpoint, Crossing, search_segment, shave
 from datenwissenschaften.tas.stuck import STUCK_FILE, Stuck, load_stuck
+from datenwissenschaften.tas.turns import Turn, load_turn, save_turn
 
 BOSS_FRAMES = 3
 SECONDS = 0.05
@@ -285,6 +286,22 @@ def test_a_level_with_patience_rests_after_that_many_searches(tmp_path: Path, mo
 
     assert tas.extend(Leg(FULL_RUN, runner.power_on(), "Exit"), [], 2) == []
     assert searched == ["Survive", "Survive"]
+
+
+@pytest.mark.parametrize(("taken", "searches"), [(Turn(FULL_RUN, 2), 1), (Turn(FULL_RUN, 3), 3), (Turn("Other", 2), 3)])
+def test_a_turn_cut_by_a_restart_goes_on_with_the_searches_it_has_left(
+    tmp_path: Path, monkeypatch, taken: Turn, searches: int
+):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    save_turn(tas.turn_file, taken)
+    searched: list[str] = []
+    monkeypatch.setattr(searcher.Searcher, "best", lambda self, start, bound, rounds: searched.append(start.state))
+
+    tas.extend(Leg(FULL_RUN, runner.power_on(), "Exit"), [], 3)
+
+    assert len(searched) == searches
+    assert load_turn(tas.turn_file) == Turn(FULL_RUN, 3)
 
 
 def test_a_level_rests_after_its_searches_even_when_they_find_something(tmp_path: Path, monkeypatch):
