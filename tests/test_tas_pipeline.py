@@ -86,7 +86,7 @@ def test_search_and_improve_write_a_verified_movie_and_keep_only_faster_segments
     tas = local_tas(tmp_path, monkeypatch, runner)
     leg = Leg(FULL_RUN, runner.power_on(), "Boss")
 
-    searched = tas.extend(leg, [])
+    searched = tas.extend(leg, [], None)
     improved = tas.improve(leg, [Segment("Boss", [[1, 0]] * 6, bytes([6]), False)])
     run.publish(tas, improved)
 
@@ -138,7 +138,7 @@ def test_a_segment_without_a_way_out_is_marked_stuck_and_the_way_into_it_searche
 
     monkeypatch.setattr(searcher.Searcher, "best", best)
 
-    segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [])
+    segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [], None)
 
     assert run.frames(segments) == BOSS_FRAMES
     assert [marked and (marked.state, marked.searches) for marked in stuck] == [None, ("Survive", 1), None]
@@ -172,7 +172,7 @@ def test_a_state_the_search_finds_its_way_back_into_stays_stuck_since_its_first_
     monkeypatch.setattr(searcher.Searcher, "best", best)
 
     with pytest.raises(SearchOver):
-        tas.extend(Leg(FULL_RUN, runner.power_on(), "Exit"), [])
+        tas.extend(Leg(FULL_RUN, runner.power_on(), "Exit"), [], None)
 
     first, *marked = stuck
     assert first is None
@@ -200,7 +200,7 @@ def test_every_new_piece_is_followed_by_one_try_to_shorten_an_earlier_one(tmp_pa
     shortened: list[int] = []
     monkeypatch.setattr(run.Tas, "shorten", lambda self, leg, segments, index: shortened.append(index) or segments)
 
-    tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [])
+    tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [], None)
 
     assert shortened == [0]
     assert tas.turn == 1
@@ -231,7 +231,7 @@ def test_a_checkpoint_is_kept_as_a_piece_and_the_search_goes_on_from_it(tmp_path
 
     monkeypatch.setattr(searcher.Searcher, "best", best)
 
-    segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [])
+    segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [], None)
 
     assert [(segment.state, len(segment.pressed)) for segment in segments] == [("Survive", 1), ("Boss", 2)]
     assert [event.kind for event in tas.feed.journal.journal.events][:2] == ["checkpoint", "found"]
@@ -271,7 +271,17 @@ def test_no_checkpoint_comes_back_in_a_state_the_search_just_left_one_behind(tmp
     monkeypatch.setattr(searcher.Searcher, "best", best)
     tas.barred = "Survive"
 
-    segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [])
+    segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [], None)
 
     assert [segment.state for segment in segments] == ["Boss"]
     assert tas.barred is None
+
+
+def test_a_level_with_patience_rests_after_that_many_failed_searches(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    searched: list[str] = []
+    monkeypatch.setattr(searcher.Searcher, "best", lambda self, start, bound, rounds: searched.append(start.state))
+
+    assert tas.extend(Leg(FULL_RUN, runner.power_on(), "Exit"), [], 2) == []
+    assert searched == ["Survive", "Survive"]

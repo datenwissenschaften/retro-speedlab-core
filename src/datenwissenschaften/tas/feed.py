@@ -26,6 +26,7 @@ class SpeedrunFeed:
         self.searching: str | None = None
         self.search: SearchRound | None = None
         self.screened: dict[str, dict[str, Any] | None] = {"movie": None, "compare": None}
+        self.practice: dict[str, float] = {}
         self.lab_running = lab_marker.exists()
         live.mkdir(parents=True, exist_ok=True)
 
@@ -40,6 +41,11 @@ class SpeedrunFeed:
     def shown(self, name: str, field: dict[str, Any]) -> None:
         with self.lock:
             self.screened = {**self.screened, name: field}
+        self.publish()
+
+    def practised(self, frames: dict[str, int]) -> None:
+        with self.lock:
+            self.practice = {level: played / self.course.frame_rate for level, played in frames.items()}
         self.publish()
 
     def event(self, kind: str, state: str | None, frames: int | None) -> None:
@@ -59,13 +65,13 @@ class SpeedrunFeed:
 
     def publish(self) -> None:
         with self.lock:
-            summary, search, screened = self.summary, self.search, self.screened
+            summary, search, screened, practice = self.summary, self.search, self.screened, self.practice
         if not summary:
             return
         reports = [] if search is None else read_reports(self.live)
         now = datetime.now(UTC)
         live = {"search": search_field(search, reports, now), "updated_at": now.isoformat(timespec="seconds")}
-        publish_metadata(SECTION, {**summary, **screened, **self.journal.fields(), **live})
+        publish_metadata(SECTION, {**summary, **screened, "practice": practice, **self.journal.fields(), **live})
 
     def notice_lab(self) -> None:
         running = self.lab_marker.exists()

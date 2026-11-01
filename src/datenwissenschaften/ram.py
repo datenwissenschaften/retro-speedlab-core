@@ -42,3 +42,9 @@ class RamInfo:
 
     def dynamics(self) -> tuple[int, ...]:
         return ()
+
+    def level(self) -> int | None:
+        return None
+
+    def progress(self) -> int:
+        return 0

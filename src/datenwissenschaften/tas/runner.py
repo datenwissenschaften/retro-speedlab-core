@@ -74,6 +74,11 @@ class SegmentRunner:
     def forward(self, origin: str, reached: str) -> bool:
         return self.order.index(reached) > self.order.index(origin)
 
+    def set_level(self, level: int) -> None:
+        if self.wrapper.level_address is None:
+            raise RuntimeError(f"{type(self.wrapper).__name__} names no level_address to load a level with")
+        self.emulator.data.memory.assign(self.wrapper.level_address, "|u1", level % 256)
+
     def snapshot(self) -> bytes:
         return bytes(self.emulator.em.get_state())
 

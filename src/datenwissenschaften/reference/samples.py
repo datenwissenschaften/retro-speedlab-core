@@ -52,7 +52,7 @@ def press(runner: SegmentRunner, buttons: np.ndarray, samples: Samples) -> bool:
 
 def hold_level(runner: SegmentRunner, level: int) -> None:
     if runner.wrapper.level_address is not None:
-        runner.emulator.data.memory.assign(runner.wrapper.level_address, "|u1", level)
+        runner.set_level(level)
 
 
 def press_held(runner: SegmentRunner, frames: np.ndarray, level: int, samples: Samples) -> bool:

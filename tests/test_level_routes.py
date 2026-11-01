@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from datenwissenschaften.tas import levels
 from datenwissenschaften.tas.levels import LevelTrainer
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Part, Routes, load_progress, parts_of
@@ -68,12 +69,21 @@ def test_the_full_run_is_its_own_movie(tmp_path: Path):
     assert not (tmp_path / ROUTES_FILE).exists()
 
 
-def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_the_full_run(tmp_path: Path):
+def trainer_tas(calls: list, extend, improve) -> SimpleNamespace:
+    feed = SimpleNamespace(practised=lambda frames: calls.append(("practised", frames)))
+    return SimpleNamespace(extend=extend, improve=improve, feed=feed, runner=None, settings=None)
+
+
+def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_the_full_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
+    monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path: None)
     kept = routes(tmp_path)
     kept.save(Leg(FULL_RUN, POWER_ON, None), [*RUN[:3], Segment("Boss2", [[1]], b"won", True)])
     calls: list[tuple[str, str, int]] = []
 
-    def extend(leg: Leg, segments: list[Segment]) -> list[Segment]:
+    def extend(leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
         calls.append(("extend", leg.name, len(segments)))
         return segments
 
@@ -83,18 +93,52 @@ def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_th
             raise OneRound
         return segments
 
-    trainer = LevelTrainer(SimpleNamespace(extend=extend, improve=improve), kept, POWER_ON)
+    trainer = LevelTrainer(trainer_tas(calls, extend, improve), kept, POWER_ON, None)
     with pytest.raises(OneRound):
         trainer.forever()
 
+    practice = ("practised", {"Menu": 3, "Level 1": 9, "Level 2": 1})
     assert calls == [
-        ("extend", "Menu", 1),
-        ("extend", "Level 1", 2),
-        ("extend", "Level 2", 1),
+        practice,
         ("improve", "Menu", 1),
         ("improve", "Level 1", 2),
         ("improve", "Level 2", 1),
+        practice,
         ("extend", FULL_RUN, 4),
         ("improve", FULL_RUN, 4),
     ]
     assert load_progress(tmp_path / "progress.msgpack") == []
+
+
+def test_unbeaten_levels_take_turns_and_a_level_without_its_part_before_starts_from_the_level_loader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
+    monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path: None)
+    monkeypatch.setattr(
+        levels, "level_start", lambda runner, loader, level, state: Start(state, f"cheat {level}".encode())
+    )
+    kept = routes(tmp_path)
+    kept.split(RUN[:1], POWER_ON)
+    calls: list = []
+    beats = {"Level 1": [RUN[1], RUN[2]], "Level 2": [Segment("Boss2", [[1]], b"won", True)]}
+
+    def extend(leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
+        calls.append((leg.name, leg.entry, patience))
+        if leg.name == "Level 2" or len(calls) > 2:
+            kept.save(leg, beats[leg.name])
+        return segments
+
+    def improve(leg: Leg, segments: list[Segment]) -> list[Segment]:
+        raise OneRound
+
+    trainer = LevelTrainer(trainer_tas([], extend, improve), kept, POWER_ON, levels.LevelLoader(b"loader", 2))
+    with pytest.raises(OneRound):
+        trainer.forever()
+
+    patience = levels.PRACTICE_SEARCHES
+    assert calls == [
+        ("Level 1", Start("Play", b"play"), patience),
+        ("Level 2", Start("Level2", b"cheat 1"), patience),
+        ("Level 1", Start("Play", b"play"), patience),
+    ]

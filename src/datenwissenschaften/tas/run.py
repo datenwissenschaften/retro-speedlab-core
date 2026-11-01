@@ -108,8 +108,12 @@ class Tas:
             self.movie.queue(movie_cut(self.feed.course, leg, replayed, movie, replay.memory))
         return replayed
 
-    def extend(self, leg: Leg, segments: list[Segment]) -> list[Segment]:
+    def extend(self, leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
+        failures = 0
         while not finished(segments := self.verified(leg, segments), leg.exit):
+            if patience is not None and failures >= patience:
+                logger.info(f"{leg.name} rests after {failures} failed searches; the next level takes its turn")
+                return segments
             start = self.start(leg, segments, len(segments))
             self.feed.show(self.routes.view(leg.name, segments), start.state)
             found = self.searcher.best(start, UNBOUNDED, SEARCH_ROUNDS)
@@ -124,6 +128,7 @@ class Tas:
                 logger.info(f"Checkpoint in {start.state} after {found.frames} frames, {found.gain:.1f} reward on")
                 continue
             if found is None:
+                failures += 1
                 segments = self.stuck(segments, start)
                 continue
             self.barred = None
@@ -214,7 +219,7 @@ def search(wrapper: str, config: Path, until: str) -> None:
     with worker_pool(settings.speedrun.workers) as pool:
         tas = tas_run(wrapper, config, pool)
         leg = Leg(FULL_RUN, tas.runner.power_on(), until)
-        publish(tas, tas.extend(leg, load_progress(tas.routes.progress)))
+        publish(tas, tas.extend(leg, load_progress(tas.routes.progress), None))
 
 
 @app.command()
