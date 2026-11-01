@@ -114,16 +114,24 @@ def test_verify_replays_every_part_from_its_own_start_and_rejects_one_that_break
     runner = SegmentRunner(saving_environment(tmp_path))
     monkeypatch.setattr(run, "make_environment", lambda wrapper_cls, settings, worker: runner.wrapper)
     config = write_config(tmp_path)
-    good, bad = tmp_path / "good" / ROUTES_FILE, tmp_path / "bad" / ROUTES_FILE
     entry = runner.power_on().emulator_state
-    for path, frames in ((good, BOSS_FRAMES), (bad, 1)):
-        route = Route(entry, [Segment("Boss", [[1, 0]] * frames, bytes([frames]), False)])
-        atomic_write(path, msgspec.msgpack.encode({"Survive": route}))
 
-    run.verify("fakes:FakeWrapper", config, good)
+    def routes(name: str, *segments: tuple[str, int, bool]) -> Path:
+        path = tmp_path / name / ROUTES_FILE
+        route = Route(
+            entry,
+            [Segment(state, [[1, 0]] * frames, bytes([frames]), won) for state, frames, won in segments],
+        )
+        atomic_write(path, msgspec.msgpack.encode({"Survive": route}))
+        return path
+
+    run.verify("fakes:FakeWrapper", config, routes("good", ("Boss", BOSS_FRAMES, False)))
+    run.verify("fakes:FakeWrapper", config, routes("newest_refused", ("Survive", 1, False), ("Boss", 1, False)))
 
     with pytest.raises(RuntimeError):
-        run.verify("fakes:FakeWrapper", config, bad)
+        run.verify("fakes:FakeWrapper", config, routes("older_broken", ("Boss", 1, False), ("Boss", 2, False)))
+    with pytest.raises(RuntimeError):
+        run.verify("fakes:FakeWrapper", config, routes("beaten_broken", ("Survive", 1, False), ("Boss", 1, True)))
 
 
 def test_a_segment_without_a_way_out_is_marked_stuck_and_the_way_into_it_searched_again(tmp_path: Path, monkeypatch):
