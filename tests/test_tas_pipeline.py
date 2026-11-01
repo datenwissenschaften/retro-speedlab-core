@@ -277,7 +277,7 @@ def test_no_checkpoint_comes_back_in_a_state_the_search_just_left_one_behind(tmp
     assert tas.barred is None
 
 
-def test_a_level_with_patience_rests_after_that_many_failed_searches(tmp_path: Path, monkeypatch):
+def test_a_level_with_patience_rests_after_that_many_searches(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
     searched: list[str] = []
@@ -285,3 +285,20 @@ def test_a_level_with_patience_rests_after_that_many_failed_searches(tmp_path: P
 
     assert tas.extend(Leg(FULL_RUN, runner.power_on(), "Exit"), [], 2) == []
     assert searched == ["Survive", "Survive"]
+
+
+def test_a_level_rests_after_its_searches_even_when_they_find_something(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    found = searcher.Searcher.best
+    searched: list[str] = []
+
+    def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Crossing | None:
+        searched.append(start.state)
+        return found(self, start, bound, rounds)
+
+    monkeypatch.setattr(searcher.Searcher, "best", best)
+
+    segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Exit"), [], 1)
+
+    assert [segment.state for segment in segments] == ["Boss"] and searched[0] == "Survive"

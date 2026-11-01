@@ -109,11 +109,12 @@ class Tas:
         return replayed
 
     def extend(self, leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
-        failures = 0
+        searches = 0
         while not finished(segments := self.verified(leg, segments), leg.exit):
-            if patience is not None and failures >= patience:
-                logger.info(f"{leg.name} rests after {failures} failed searches; the next level takes its turn")
+            if patience is not None and searches >= patience:
+                logger.info(f"{leg.name} rests after {searches} searches; the next level takes its turn")
                 return segments
+            searches += 1
             start = self.start(leg, segments, len(segments))
             self.feed.show(self.routes.view(leg.name, segments), start.state)
             found = self.searcher.best(start, UNBOUNDED, SEARCH_ROUNDS)
@@ -128,7 +129,6 @@ class Tas:
                 logger.info(f"Checkpoint in {start.state} after {found.frames} frames, {found.gain:.1f} reward on")
                 continue
             if found is None:
-                failures += 1
                 segments = self.stuck(segments, start)
                 continue
             self.barred = None
