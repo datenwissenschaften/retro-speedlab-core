@@ -129,7 +129,7 @@ class Tas:
                 logger.info(f"Checkpoint in {start.state} after {found.frames} frames, {found.gain:.1f} reward on")
                 continue
             if found is None:
-                segments = self.stuck(segments, start)
+                segments = self.stuck(leg, segments, start)
                 continue
             self.barred = None
             self.leave(found.end.state)
@@ -143,7 +143,7 @@ class Tas:
         self.feed.show(self.routes.view(leg.name, segments), segments[-1].state)
         return segments
 
-    def stuck(self, segments: list[Segment], start: Start) -> list[Segment]:
+    def stuck(self, leg: Leg, segments: list[Segment], start: Start) -> list[Segment]:
         searches = mark_stuck(self.stuck_file, start.state).searches
         self.feed.event("stuck", start.state, None)
         if searches % BACKTRACK_SEARCHES:
@@ -152,7 +152,8 @@ class Tas:
         logger.warning(f"No way out of {start.state} after {searches} searches; searching the way into it again")
         if segments and segments[-1].state == start.state:
             self.barred = start.state
-        return segments[:-1]
+        kept = segments[:-1]
+        return self.keep(leg, kept, self.start(leg, kept, len(kept)).state)
 
     def improve(self, leg: Leg, segments: list[Segment]) -> list[Segment]:
         for index in range(len(segments)):
