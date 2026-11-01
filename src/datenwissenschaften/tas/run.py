@@ -26,6 +26,7 @@ from datenwissenschaften.tas.search import UNBOUNDED, Checkpoint, Crossing
 from datenwissenschaften.tas.searcher import Searcher
 from datenwissenschaften.tas.shown import SHOWN_FILE, worth_showing
 from datenwissenschaften.tas.stuck import STUCK_FILE, load_stuck, mark_stuck
+from datenwissenschaften.tas.turns import TURN_FILE, Turn, save_turn, searches_taken
 from datenwissenschaften.ui.relay import relay_key
 from datenwissenschaften.ui.video_upload import VideoUpload
 from datenwissenschaften.workflow.wrapper import wrapper_class
@@ -85,6 +86,10 @@ class Tas:
     def stuck_file(self) -> Path:
         return self.output / STUCK_FILE
 
+    @property
+    def turn_file(self) -> Path:
+        return self.output / TURN_FILE
+
     def leave(self, state: str) -> None:
         stuck = load_stuck(self.stuck_file)
         if stuck is not None and stuck.state != state:
@@ -109,12 +114,14 @@ class Tas:
         return replayed
 
     def extend(self, leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
-        searches = 0
+        searches = 0 if patience is None else searches_taken(self.turn_file, leg.name, patience)
         while not finished(segments := self.verified(leg, segments), leg.exit):
             if patience is not None and searches >= patience:
                 logger.info(f"{leg.name} rests after {searches} searches; the next level takes its turn")
                 return segments
             searches += 1
+            if patience is not None:
+                save_turn(self.turn_file, Turn(leg.name, searches))
             start = self.start(leg, segments, len(segments))
             self.feed.show(self.routes.view(leg.name, segments), start.state)
             found = self.searcher.best(start, UNBOUNDED, SEARCH_ROUNDS)
