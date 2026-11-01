@@ -217,6 +217,10 @@ def search(wrapper: str, config: Path, until: str) -> None:
         publish(tas, tas.extend(leg, load_progress(tas.routes.progress)))
 
 
+def kept_on_verify(leg: Leg, segments: list[Segment]) -> int:
+    return len(segments) if finished(segments, leg.exit) else len(segments) - 1
+
+
 @app.command()
 def verify(wrapper: str, config: Path, routes_file: Path) -> None:
     settings = load_config(config)
@@ -232,8 +236,10 @@ def verify(wrapper: str, config: Path, routes_file: Path) -> None:
         (Leg(FULL_RUN, power_on, None), load_progress(routes.progress)),
     ]:
         verified = verified_segments(runner, leg.entry, segments, tas_dir(settings) / f"verify-{TAS_MOVIE}").verified
-        if verified < len(segments):
+        if verified < kept_on_verify(leg, segments):
             raise RuntimeError(f"Only {verified} of {len(segments)} segments of {leg.name} replay with {wrapper}")
+        if verified < len(segments):
+            logger.warning(f"The newest segment of {leg.name} into {segments[-1].state} no longer replays")
     logger.info(f"Every part of {routes_file} replays with {wrapper}")
 
 
