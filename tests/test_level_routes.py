@@ -6,7 +6,15 @@ import pytest
 from datenwissenschaften.tas import levels
 from datenwissenschaften.tas.levels import LevelTrainer
 from datenwissenschaften.tas.movie import Segment
-from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Part, Routes, load_progress, parts_of
+from datenwissenschaften.tas.routes import (
+    FULL_RUN,
+    ROUTES_FILE,
+    Leg,
+    Part,
+    Routes,
+    load_progress,
+    parts_of,
+)
 from datenwissenschaften.tas.runner import Start
 
 COURSE = SimpleNamespace(first="Menu", levels={"Level 1": ("Play", "Heavy"), "Level 2": ("Level2", "Boss2")})
@@ -69,6 +77,10 @@ def test_the_full_run_is_its_own_movie(tmp_path: Path):
     assert not (tmp_path / ROUTES_FILE).exists()
 
 
+def pieces(runner: object, kept: Routes) -> dict[str, int]:
+    return {part.name: len(kept.segments(part.name)) for part in kept.parts if kept.segments(part.name)}
+
+
 def trainer_tas(calls: list, extend, improve) -> SimpleNamespace:
     feed = SimpleNamespace(practised=lambda frames: calls.append(("practised", frames)))
     return SimpleNamespace(extend=extend, improve=improve, feed=feed, runner=None, settings=None)
@@ -78,7 +90,8 @@ def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_th
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
-    monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path: None)
+    monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path, done: None)
+    monkeypatch.setattr(levels, "practised", pieces)
     kept = routes(tmp_path)
     kept.save(Leg(FULL_RUN, POWER_ON, None), [*RUN[:3], Segment("Boss2", [[1]], b"won", True)])
     calls: list[tuple[str, str, int]] = []
@@ -97,7 +110,10 @@ def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_th
     with pytest.raises(OneRound):
         trainer.forever()
 
-    practice = ("practised", {"Menu": 3, "Level 1": 9, "Level 2": 1})
+    practice = (
+        "practised",
+        {"Menu": 1, "Level 1": 2, "Level 2": 1},
+    )
     assert calls == [
         practice,
         ("improve", "Menu", 1),
@@ -114,7 +130,8 @@ def test_unbeaten_levels_take_turns_and_a_level_without_its_part_before_starts_f
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
-    monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path: None)
+    monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path, done: None)
+    monkeypatch.setattr(levels, "practised", pieces)
     monkeypatch.setattr(
         levels, "level_start", lambda runner, loader, level, state: Start(state, f"cheat {level}".encode())
     )

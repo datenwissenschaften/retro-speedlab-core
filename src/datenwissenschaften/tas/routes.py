@@ -33,6 +33,15 @@ def parts_of(course: Course) -> list[Part]:
     return [opening, *(Part(level, entries[index], exits[index + 1]) for index, level in enumerate(course.levels))]
 
 
+class PartProgress(msgspec.Struct, frozen=True):
+    reached: str
+    pieces: int
+    frames: int
+    beaten: bool
+    loaded: bool
+    details: dict[str, int]
+
+
 class Route(msgspec.Struct, frozen=True):
     entry: bytes
     segments: list[Segment]

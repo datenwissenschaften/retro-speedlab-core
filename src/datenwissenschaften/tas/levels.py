@@ -47,8 +47,8 @@ class LevelTrainer:
         return [part for part in self.routes.parts if not finished(self.routes.segments(part.name), part.exit)]
 
     def share_practice(self) -> None:
-        done = practised(self.routes)
-        write_practice_route(self.tas.runner, self.routes, route_path(self.tas.settings))
+        done = practised(self.tas.runner, self.routes)
+        write_practice_route(self.tas.runner, self.routes, route_path(self.tas.settings), done)
         self.tas.feed.practised(done)
 
     def practise(self, part: Part) -> None:

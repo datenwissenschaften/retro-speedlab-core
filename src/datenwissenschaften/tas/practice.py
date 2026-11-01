@@ -9,7 +9,7 @@ from datenwissenschaften.ram import RamInfo
 from datenwissenschaften.reference.trace import LEVEL_GAP_FRAMES, Step, route_rows
 from datenwissenschaften.route.position import Position
 from datenwissenschaften.tas.paths import atomic_write
-from datenwissenschaften.tas.routes import Route, Routes, finished
+from datenwissenschaften.tas.routes import Part, PartProgress, Route, Routes, finished
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 
 LOADER_FILE = "loader.msgpack"
@@ -80,20 +80,35 @@ def part_steps(runner: SegmentRunner, entry: Start, route: Route, first: int) ->
     return steps
 
 
-def practised(routes: Routes) -> dict[str, int]:
-    done = {part.name: routes.segments(part.name) for part in routes.parts}
-    return {
-        part.name: sum(len(segment.pressed) for segment in done[part.name])
-        for part in routes.parts
-        if finished(done[part.name], part.exit)
-    }
+def loaded(routes: Routes, part: Part) -> bool:
+    index = routes.parts.index(part)
+    if index == 0:
+        return False
+    before = routes.segments(routes.parts[index - 1].name)
+    return not before or before[-1].emulator_state != routes.routes[part.name].entry
 
 
-def write_practice_route(runner: SegmentRunner, routes: Routes, path: Path) -> None:
+def progress_of(runner: SegmentRunner, routes: Routes, part: Part) -> PartProgress:
+    played = routes.segments(part.name)
+    runner.restore(Start(played[-1].state, played[-1].emulator_state))
+    return PartProgress(
+        played[-1].state,
+        len(played),
+        sum(len(segment.pressed) for segment in played),
+        finished(played, part.exit),
+        loaded(routes, part),
+        runner.ram.describe(),
+    )
+
+
+def practised(runner: SegmentRunner, routes: Routes) -> dict[str, PartProgress]:
+    return {part.name: progress_of(runner, routes, part) for part in routes.parts if routes.segments(part.name)}
+
+
+def write_practice_route(runner: SegmentRunner, routes: Routes, path: Path, done: dict[str, PartProgress]) -> None:
     steps: list[Step] = []
-    done = practised(routes)
     for part in routes.parts:
-        if part.name in done:
+        if part.name in done and done[part.name].beaten:
             route = routes.routes[part.name]
             first = steps[-1][0] + LEVEL_GAP_FRAMES + 1 if steps else 0
             steps += part_steps(runner, Start(part.entry_state, route.entry), route, first)

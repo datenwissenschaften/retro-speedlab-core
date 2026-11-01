@@ -17,7 +17,7 @@ from datenwissenschaften.tas.practice import (
     practised,
     write_practice_route,
 )
-from datenwissenschaften.tas.routes import Leg, Part, Route, Routes
+from datenwissenschaften.tas.routes import Leg, Part, PartProgress, Route, Routes
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 
 SCRIPT = [(3, 0), (3, 1), (3, 5), (3, 6), (3, 6)]
@@ -98,10 +98,40 @@ def test_the_loader_is_found_once_and_kept(tmp_path: Path):
 def test_a_beaten_part_tells_the_route_map_how_many_frames_each_place_is_from_its_end(tmp_path: Path):
     runner, _ = level_runner(tmp_path)
     routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Survive", "Survive", "Boss")])
-    routes.save(Leg("Survive", Start("Survive", bytes([0])), "Boss"), [Segment("Boss", [[1, 0]] * 3, b"", False)])
+    routes.save(
+        Leg("Survive", Start("Survive", bytes([0])), "Boss"), [Segment("Boss", [[1, 0]] * 3, bytes([3]), False)]
+    )
     path = tmp_path / "reference" / "route.json"
 
-    write_practice_route(runner, routes, path)
+    write_practice_route(runner, routes, path, practised(runner, routes))
 
-    assert practised(routes) == {"Survive": 3}
+    assert practised(runner, routes) == {"Survive": PartProgress("Boss", 1, 3, True, False, {"lives": 3, "score": 6})}
     assert json.loads(path.read_text(encoding="utf-8")) == [[0, 0, 0, 2, 0]]
+
+
+def test_an_unbeaten_part_reports_how_far_it_got_but_stays_out_of_the_route_map(tmp_path: Path):
+    runner, _ = level_runner(tmp_path)
+    routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Survive", "Survive", "Boss")])
+    routes.save(
+        Leg("Survive", Start("Survive", bytes([0])), "Boss"), [Segment("Survive", [[1, 0]] * 2, bytes([2]), False)]
+    )
+    path = tmp_path / "route.json"
+
+    write_practice_route(runner, routes, path, practised(runner, routes))
+
+    assert practised(runner, routes) == {
+        "Survive": PartProgress("Survive", 1, 2, False, False, {"lives": 3, "score": 5})
+    }
+    assert json.loads(path.read_text(encoding="utf-8")) == []
+
+
+def test_a_part_whose_start_is_not_where_the_part_before_ends_was_loaded(tmp_path: Path):
+    runner, _ = level_runner(tmp_path)
+    parts = [Part("Menu", "Survive", "Boss"), Part("Level 2", "Boss", None)]
+    routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", parts)
+    routes.save(Leg("Menu", Start("Survive", bytes([0])), "Boss"), [Segment("Boss", [[1, 0]], bytes([3]), False)])
+    routes.save(Leg("Level 2", Start("Boss", bytes([1])), None), [Segment("Boss", [[1, 0]], bytes([4]), False)])
+
+    assert [progress.loaded for progress in practised(runner, routes).values()] == [False, True]
+    routes.save(Leg("Level 2", Start("Boss", bytes([3])), None), [Segment("Boss", [[1, 0]], bytes([4]), False)])
+    assert practised(runner, routes)["Level 2"].loaded is False

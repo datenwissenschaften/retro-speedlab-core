@@ -16,6 +16,7 @@ from datenwissenschaften.tas.live_search import SearchRound, search_field
 from datenwissenschaften.tas.mosaic import compose, shown_tiles, tile
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.report import Course, course_of, report, splits, start_frame
+from datenwissenschaften.tas.routes import PartProgress
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import Cell, Crossing
 
@@ -234,3 +235,25 @@ def test_checkpoint_pieces_never_end_a_level(tmp_path: Path):
     ]
 
     assert [split.level for split in splits(played, segments)] == ["Menu"]
+
+
+def test_the_feed_publishes_how_far_every_level_got_in_seconds(tmp_path: Path, monkeypatch):
+    published: list[dict] = []
+    monkeypatch.setattr(feed_module, "publish_metadata", lambda section, values: published.append(values))
+    journal = JournalStore(tmp_path / "journal.json")
+    feed = SpeedrunFeed(course(tmp_path), journal, tmp_path / "live", tmp_path / "stuck.json", tmp_path / ".lab-run")
+    feed.show([Segment("Play", [[0, 1]] * 60, b"", False)], "Play")
+
+    feed.practised({"Level 2": PartProgress("Level2", 3, 90, False, True, {"weight": 12})})
+
+    assert published[-1]["practice"] == {
+        "Level 2": {
+            "reached": "Level2",
+            "pieces": 3,
+            "frames": 90,
+            "beaten": False,
+            "loaded": True,
+            "details": {"weight": 12},
+            "seconds": 1.5,
+        }
+    }

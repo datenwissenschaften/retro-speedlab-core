@@ -3,11 +3,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import msgspec
+
 from datenwissenschaften.tas.journal import JournalStore
 from datenwissenschaften.tas.live import clear_reports, read_reports
 from datenwissenschaften.tas.live_search import SearchRound, search_field
 from datenwissenschaften.tas.movie import Segment, frames
 from datenwissenschaften.tas.report import SECTION, Course, report, splits
+from datenwissenschaften.tas.routes import PartProgress
 from datenwissenschaften.tas.stuck import load_stuck
 from datenwissenschaften.ui.telemetry import publish_metadata
 
@@ -26,7 +29,7 @@ class SpeedrunFeed:
         self.searching: str | None = None
         self.search: SearchRound | None = None
         self.screened: dict[str, dict[str, Any] | None] = {"movie": None, "compare": None}
-        self.practice: dict[str, float] = {}
+        self.practice: dict[str, dict[str, Any]] = {}
         self.lab_running = lab_marker.exists()
         live.mkdir(parents=True, exist_ok=True)
 
@@ -43,10 +46,14 @@ class SpeedrunFeed:
             self.screened = {**self.screened, name: field}
         self.publish()
 
-    def practised(self, frames: dict[str, int]) -> None:
+    def practised(self, progress: dict[str, PartProgress]) -> None:
+        practice = {level: self.level_progress(part) for level, part in progress.items()}
         with self.lock:
-            self.practice = {level: played / self.course.frame_rate for level, played in frames.items()}
+            self.practice = practice
         self.publish()
+
+    def level_progress(self, part: PartProgress) -> dict[str, Any]:
+        return {**msgspec.to_builtins(part), "seconds": part.frames / self.course.frame_rate}
 
     def event(self, kind: str, state: str | None, frames: int | None) -> None:
         self.journal.event(kind, state, frames)
