@@ -69,15 +69,21 @@ class Routes:
     def segments(self, name: str) -> list[Segment]:
         return list(self.routes[name].segments) if name in self.routes else []
 
+    def reached(self, part: Part) -> Start | None:
+        index = self.parts.index(part)
+        if index == 0:
+            return None
+        before = self.parts[index - 1]
+        if not finished(self.segments(before.name), before.exit):
+            return None
+        return Start(part.entry_state, self.routes[before.name].segments[-1].emulator_state)
+
     def entry(self, part: Part, power_on: Start) -> Start | None:
         if part.name in self.routes:
             return Start(part.entry_state, self.routes[part.name].entry)
         if part is self.parts[0]:
             return power_on
-        before = self.parts[self.parts.index(part) - 1]
-        if not finished(self.segments(before.name), before.exit):
-            return None
-        return Start(part.entry_state, self.routes[before.name].segments[-1].emulator_state)
+        return self.reached(part)
 
     def save(self, leg: Leg, segments: list[Segment]) -> None:
         if leg.name == FULL_RUN:
