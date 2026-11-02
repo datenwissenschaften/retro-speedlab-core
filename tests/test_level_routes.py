@@ -16,6 +16,7 @@ from datenwissenschaften.tas.routes import (
     parts_of,
 )
 from datenwissenschaften.tas.runner import Start
+from datenwissenschaften.tas.turns import Turn, save_turn
 
 COURSE = SimpleNamespace(first="Menu", levels={"Level 1": ("Play", "Heavy"), "Level 2": ("Level2", "Boss2")})
 POWER_ON = Start("Menu", b"on")
@@ -69,6 +70,18 @@ def test_a_level_starts_only_once_the_one_before_it_is_beaten_and_shows_after_th
     assert kept.view(FULL_RUN, RUN[:1]) == RUN[:1]
 
 
+def test_a_level_loaded_away_from_where_the_beaten_level_before_it_ends_is_not_shown_as_part_of_the_run(
+    tmp_path: Path,
+):
+    kept = routes(tmp_path)
+    kept.split(RUN[:3], POWER_ON)
+    level_2 = kept.parts[2]
+    kept.save(Leg(level_2.name, Start("Level2", b"cheat 1"), None), RUN[3:])
+
+    assert kept.view(level_2.name, RUN[3:]) == RUN[:3]
+    assert kept.stitched() == RUN[:3]
+
+
 def test_the_full_run_is_its_own_movie(tmp_path: Path):
     kept = routes(tmp_path)
     kept.save(Leg(FULL_RUN, POWER_ON, None), RUN)
@@ -81,9 +94,10 @@ def pieces(runner: object, kept: Routes) -> dict[str, int]:
     return {part.name: len(kept.segments(part.name)) for part in kept.parts if kept.segments(part.name)}
 
 
-def trainer_tas(calls: list, extend, improve) -> SimpleNamespace:
+def trainer_tas(tmp_path: Path, calls: list, extend, improve) -> SimpleNamespace:
     feed = SimpleNamespace(practised=lambda frames: calls.append(("practised", frames)))
-    return SimpleNamespace(extend=extend, improve=improve, feed=feed, runner=None, settings=None)
+    turn_file = tmp_path / "turn.json"
+    return SimpleNamespace(extend=extend, improve=improve, feed=feed, runner=None, settings=None, turn_file=turn_file)
 
 
 def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_the_full_run(
@@ -106,7 +120,7 @@ def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_th
             raise OneRound
         return segments
 
-    trainer = LevelTrainer(trainer_tas(calls, extend, improve), kept, POWER_ON, None)
+    trainer = LevelTrainer(trainer_tas(tmp_path, calls, extend, improve), kept, POWER_ON, None)
     with pytest.raises(OneRound):
         trainer.forever()
 
@@ -149,7 +163,7 @@ def test_unbeaten_levels_take_turns_and_a_level_without_its_part_before_starts_f
     def improve(leg: Leg, segments: list[Segment]) -> list[Segment]:
         raise OneRound
 
-    trainer = LevelTrainer(trainer_tas([], extend, improve), kept, POWER_ON, levels.LevelLoader(b"loader", 2))
+    trainer = LevelTrainer(trainer_tas(tmp_path, [], extend, improve), kept, POWER_ON, levels.LevelLoader(b"loader", 2))
     with pytest.raises(OneRound):
         trainer.forever()
 
@@ -176,8 +190,36 @@ def test_an_unbeaten_level_loaded_before_the_level_before_it_was_beaten_starts_w
         calls.append((leg.name, leg.entry))
         raise OneRound
 
-    trainer = LevelTrainer(trainer_tas([], extend, None), kept, POWER_ON, levels.LevelLoader(b"loader", 2))
+    trainer = LevelTrainer(trainer_tas(tmp_path, [], extend, None), kept, POWER_ON, levels.LevelLoader(b"loader", 2))
     with pytest.raises(OneRound):
         trainer.forever()
 
     assert calls == [("Level 2", Start("Level2", b"level2"))]
+
+
+@pytest.mark.parametrize(
+    ("turn", "first"),
+    [(Turn("Level 2", 1), "Level 2"), (Turn("Level 1", levels.PRACTICE_SEARCHES), "Level 2"), (None, "Level 1")],
+)
+def test_after_a_restart_the_levels_take_turns_from_the_turn_that_was_running(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, turn: Turn | None, first: str
+):
+    monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
+    monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path, done: None)
+    monkeypatch.setattr(levels, "practised", pieces)
+    monkeypatch.setattr(levels, "level_start", lambda runner, loader, level, state: Start(state, b"cheat"))
+    kept = routes(tmp_path)
+    kept.split(RUN[:1], POWER_ON)
+    if turn is not None:
+        save_turn(tmp_path / "turn.json", turn)
+    practised: list[str] = []
+
+    def extend(leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
+        practised.append(leg.name)
+        raise OneRound
+
+    trainer = LevelTrainer(trainer_tas(tmp_path, [], extend, None), kept, POWER_ON, levels.LevelLoader(b"loader", 2))
+    with pytest.raises(OneRound):
+        trainer.beat_levels()
+
+    assert practised == [first]

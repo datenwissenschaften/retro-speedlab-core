@@ -26,6 +26,7 @@ from datenwissenschaften.tas.search import UNBOUNDED, Checkpoint, Crossing
 from datenwissenschaften.tas.searcher import Searcher
 from datenwissenschaften.tas.shown import SHOWN_FILE, worth_showing
 from datenwissenschaften.tas.stuck import STUCK_FILE, load_stuck, mark_stuck
+from datenwissenschaften.tas.turns import TURN_FILE, Turn, save_turn, searches_taken
 from datenwissenschaften.ui.relay import relay_key
 from datenwissenschaften.ui.video_upload import VideoUpload
 from datenwissenschaften.workflow.wrapper import wrapper_class
@@ -85,6 +86,10 @@ class Tas:
     def stuck_file(self) -> Path:
         return self.output / STUCK_FILE
 
+    @property
+    def turn_file(self) -> Path:
+        return self.output / TURN_FILE
+
     def leave(self, state: str) -> None:
         stuck = load_stuck(self.stuck_file)
         if stuck is not None and stuck.state != state:
@@ -109,12 +114,14 @@ class Tas:
         return replayed
 
     def extend(self, leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
-        searches = 0
+        searches = 0 if patience is None else searches_taken(self.turn_file, leg.name, patience)
         while not finished(segments := self.verified(leg, segments), leg.exit):
             if patience is not None and searches >= patience:
                 logger.info(f"{leg.name} rests after {searches} searches; the next level takes its turn")
                 return segments
             searches += 1
+            if patience is not None:
+                save_turn(self.turn_file, Turn(leg.name, searches))
             start = self.start(leg, segments, len(segments))
             self.feed.show(self.routes.view(leg.name, segments), start.state)
             found = self.searcher.best(start, UNBOUNDED, SEARCH_ROUNDS)
@@ -129,7 +136,7 @@ class Tas:
                 logger.info(f"Checkpoint in {start.state} after {found.frames} frames, {found.gain:.1f} reward on")
                 continue
             if found is None:
-                segments = self.stuck(segments, start)
+                segments = self.stuck(leg, segments, start)
                 continue
             self.barred = None
             self.leave(found.end.state)
@@ -143,7 +150,7 @@ class Tas:
         self.feed.show(self.routes.view(leg.name, segments), segments[-1].state)
         return segments
 
-    def stuck(self, segments: list[Segment], start: Start) -> list[Segment]:
+    def stuck(self, leg: Leg, segments: list[Segment], start: Start) -> list[Segment]:
         searches = mark_stuck(self.stuck_file, start.state).searches
         self.feed.event("stuck", start.state, None)
         if searches % BACKTRACK_SEARCHES:
@@ -152,7 +159,8 @@ class Tas:
         logger.warning(f"No way out of {start.state} after {searches} searches; searching the way into it again")
         if segments and segments[-1].state == start.state:
             self.barred = start.state
-        return segments[:-1]
+        kept = segments[:-1]
+        return self.keep(leg, kept, self.start(leg, kept, len(kept)).state)
 
     def improve(self, leg: Leg, segments: list[Segment]) -> list[Segment]:
         for index in range(len(segments)):
@@ -222,6 +230,10 @@ def search(wrapper: str, config: Path, until: str) -> None:
         publish(tas, tas.extend(leg, load_progress(tas.routes.progress), None))
 
 
+def kept_on_verify(leg: Leg, segments: list[Segment]) -> int:
+    return len(segments) if finished(segments, leg.exit) else len(segments) - 1
+
+
 @app.command()
 def verify(wrapper: str, config: Path, routes_file: Path) -> None:
     settings = load_config(config)
@@ -237,8 +249,10 @@ def verify(wrapper: str, config: Path, routes_file: Path) -> None:
         (Leg(FULL_RUN, power_on, None), load_progress(routes.progress)),
     ]:
         verified = verified_segments(runner, leg.entry, segments, tas_dir(settings) / f"verify-{TAS_MOVIE}").verified
-        if verified < len(segments):
+        if verified < kept_on_verify(leg, segments):
             raise RuntimeError(f"Only {verified} of {len(segments)} segments of {leg.name} replay with {wrapper}")
+        if verified < len(segments):
+            logger.warning(f"The newest segment of {leg.name} into {segments[-1].state} no longer replays")
     logger.info(f"Every part of {routes_file} replays with {wrapper}")
 
 

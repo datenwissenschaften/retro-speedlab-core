@@ -15,6 +15,7 @@ from datenwissenschaften.tas.run import BACKTRACK_SEARCHES
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import Checkpoint, Crossing, search_segment, shave
 from datenwissenschaften.tas.stuck import STUCK_FILE, Stuck, load_stuck
+from datenwissenschaften.tas.turns import Turn, load_turn, save_turn
 
 BOSS_FRAMES = 3
 SECONDS = 0.05
@@ -114,16 +115,24 @@ def test_verify_replays_every_part_from_its_own_start_and_rejects_one_that_break
     runner = SegmentRunner(saving_environment(tmp_path))
     monkeypatch.setattr(run, "make_environment", lambda wrapper_cls, settings, worker: runner.wrapper)
     config = write_config(tmp_path)
-    good, bad = tmp_path / "good" / ROUTES_FILE, tmp_path / "bad" / ROUTES_FILE
     entry = runner.power_on().emulator_state
-    for path, frames in ((good, BOSS_FRAMES), (bad, 1)):
-        route = Route(entry, [Segment("Boss", [[1, 0]] * frames, bytes([frames]), False)])
-        atomic_write(path, msgspec.msgpack.encode({"Survive": route}))
 
-    run.verify("fakes:FakeWrapper", config, good)
+    def routes(name: str, *segments: tuple[str, int, bool]) -> Path:
+        path = tmp_path / name / ROUTES_FILE
+        route = Route(
+            entry,
+            [Segment(state, [[1, 0]] * frames, bytes([frames]), won) for state, frames, won in segments],
+        )
+        atomic_write(path, msgspec.msgpack.encode({"Survive": route}))
+        return path
+
+    run.verify("fakes:FakeWrapper", config, routes("good", ("Boss", BOSS_FRAMES, False)))
+    run.verify("fakes:FakeWrapper", config, routes("newest_refused", ("Survive", 1, False), ("Boss", 1, False)))
 
     with pytest.raises(RuntimeError):
-        run.verify("fakes:FakeWrapper", config, bad)
+        run.verify("fakes:FakeWrapper", config, routes("older_broken", ("Boss", 1, False), ("Boss", 2, False)))
+    with pytest.raises(RuntimeError):
+        run.verify("fakes:FakeWrapper", config, routes("beaten_broken", ("Survive", 1, False), ("Boss", 1, True)))
 
 
 def test_a_segment_without_a_way_out_is_marked_stuck_and_the_way_into_it_searched_again(tmp_path: Path, monkeypatch):
@@ -242,7 +251,9 @@ def test_the_search_goes_back_a_piece_only_after_three_failed_searches(tmp_path:
     tas = local_tas(tmp_path, monkeypatch, runner)
     piece = [Segment("Survive", [[0, 0]], bytes([1]), False)]
 
-    kept = [tas.stuck(piece, Start("Survive", bytes([1]))) for _ in range(BACKTRACK_SEARCHES)]
+    leg = Leg(FULL_RUN, runner.power_on(), "Boss")
+
+    kept = [tas.stuck(leg, piece, Start("Survive", bytes([1]))) for _ in range(BACKTRACK_SEARCHES)]
 
     assert kept == [piece, piece, []]
     assert tas.barred == "Survive"
@@ -287,6 +298,22 @@ def test_a_level_with_patience_rests_after_that_many_searches(tmp_path: Path, mo
     assert searched == ["Survive", "Survive"]
 
 
+@pytest.mark.parametrize(("taken", "searches"), [(Turn(FULL_RUN, 2), 1), (Turn(FULL_RUN, 3), 3), (Turn("Other", 2), 3)])
+def test_a_turn_cut_by_a_restart_goes_on_with_the_searches_it_has_left(
+    tmp_path: Path, monkeypatch, taken: Turn, searches: int
+):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    save_turn(tas.turn_file, taken)
+    searched: list[str] = []
+    monkeypatch.setattr(searcher.Searcher, "best", lambda self, start, bound, rounds: searched.append(start.state))
+
+    tas.extend(Leg(FULL_RUN, runner.power_on(), "Exit"), [], 3)
+
+    assert len(searched) == searches
+    assert load_turn(tas.turn_file) == Turn(FULL_RUN, 3)
+
+
 def test_a_level_rests_after_its_searches_even_when_they_find_something(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
@@ -302,3 +329,21 @@ def test_a_level_rests_after_its_searches_even_when_they_find_something(tmp_path
     segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Exit"), [], 1)
 
     assert [segment.state for segment in segments] == ["Boss"] and searched[0] == "Survive"
+
+
+def test_a_level_that_rests_right_after_going_back_a_piece_keeps_that_piece_dropped(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    checkpoint = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 1.0)
+    calls: list[int] = []
+
+    def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Checkpoint | None:
+        calls.append(bound)
+        return checkpoint if len(calls) == 1 else None
+
+    monkeypatch.setattr(searcher.Searcher, "best", best)
+    leg = Leg("Level 1", runner.power_on(), "Exit")
+
+    segments = tas.extend(leg, [], 1 + BACKTRACK_SEARCHES)
+
+    assert segments == [] and tas.routes.segments(leg.name) == []

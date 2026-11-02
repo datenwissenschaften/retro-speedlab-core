@@ -17,6 +17,7 @@ from datenwissenschaften.tas.practice import (
 from datenwissenschaften.tas.routes import FULL_RUN, Leg, Part, Routes, finished, load_progress, save_progress
 from datenwissenschaften.tas.run import Tas, tas_run, worker_pool
 from datenwissenschaften.tas.runner import Start
+from datenwissenschaften.tas.turns import load_turn
 
 PRACTICE_SEARCHES = 3
 
@@ -46,6 +47,15 @@ class LevelTrainer:
     def unbeaten(self) -> list[Part]:
         return [part for part in self.routes.parts if not finished(self.routes.segments(part.name), part.exit)]
 
+    def in_turn(self, unbeaten: list[Part]) -> list[Part]:
+        turn = load_turn(self.tas.turn_file)
+        names = [part.name for part in self.routes.parts]
+        if turn is None or turn.part not in names:
+            return unbeaten
+        first = names.index(turn.part) + (turn.searches >= PRACTICE_SEARCHES)
+        later = [part for part in unbeaten if names.index(part.name) >= first]
+        return [*later, *(part for part in unbeaten if part not in later)]
+
     def share_practice(self) -> None:
         done = practised(self.tas.runner, self.routes)
         write_practice_route(self.tas.runner, self.routes, route_path(self.tas.settings), done)
@@ -61,7 +71,7 @@ class LevelTrainer:
     def beat_levels(self) -> None:
         self.share_practice()
         while unbeaten := self.unbeaten():
-            for part in unbeaten:
+            for part in self.in_turn(unbeaten):
                 self.practise(part)
         logger.info(f"All {len(self.routes.parts)} parts are beaten on their own")
 

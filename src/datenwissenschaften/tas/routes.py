@@ -85,6 +85,13 @@ class Routes:
             return power_on
         return self.reached(part)
 
+    def loaded(self, part: Part) -> bool:
+        index = self.parts.index(part)
+        if index == 0:
+            return False
+        before = self.segments(self.parts[index - 1].name)
+        return not before or before[-1].emulator_state != self.routes[part.name].entry
+
     def save(self, leg: Leg, segments: list[Segment]) -> None:
         if leg.name == FULL_RUN:
             save_progress(self.progress, segments)
@@ -97,6 +104,8 @@ class Routes:
             return segments
         stitched = []
         for part in self.parts:
+            if part.name in self.routes and self.loaded(part):
+                return stitched
             route = segments if part.name == name else self.segments(part.name)
             stitched += route
             if not finished(route, part.exit):
