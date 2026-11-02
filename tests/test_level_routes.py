@@ -69,6 +69,18 @@ def test_a_level_starts_only_once_the_one_before_it_is_beaten_and_shows_after_th
     assert kept.view(FULL_RUN, RUN[:1]) == RUN[:1]
 
 
+def test_a_level_loaded_away_from_where_the_beaten_level_before_it_ends_is_not_shown_as_part_of_the_run(
+    tmp_path: Path,
+):
+    kept = routes(tmp_path)
+    kept.split(RUN[:3], POWER_ON)
+    level_2 = kept.parts[2]
+    kept.save(Leg(level_2.name, Start("Level2", b"cheat 1"), None), RUN[3:])
+
+    assert kept.view(level_2.name, RUN[3:]) == RUN[:3]
+    assert kept.stitched() == RUN[:3]
+
+
 def test_the_full_run_is_its_own_movie(tmp_path: Path):
     kept = routes(tmp_path)
     kept.save(Leg(FULL_RUN, POWER_ON, None), RUN)

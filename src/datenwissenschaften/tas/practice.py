@@ -80,14 +80,6 @@ def part_steps(runner: SegmentRunner, entry: Start, route: Route, first: int) ->
     return steps
 
 
-def loaded(routes: Routes, part: Part) -> bool:
-    index = routes.parts.index(part)
-    if index == 0:
-        return False
-    before = routes.segments(routes.parts[index - 1].name)
-    return not before or before[-1].emulator_state != routes.routes[part.name].entry
-
-
 def progress_of(runner: SegmentRunner, routes: Routes, part: Part) -> PartProgress:
     played = routes.segments(part.name)
     runner.restore(Start(played[-1].state, played[-1].emulator_state))
@@ -96,7 +88,7 @@ def progress_of(runner: SegmentRunner, routes: Routes, part: Part) -> PartProgre
         len(played),
         sum(len(segment.pressed) for segment in played),
         finished(played, part.exit),
-        loaded(routes, part),
+        routes.loaded(part),
         runner.ram.describe(),
     )
 
