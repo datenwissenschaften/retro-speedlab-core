@@ -73,7 +73,7 @@ def remember(runner: SegmentRunner, archive: Archive, frames: int) -> None:
     key = runner.key(frames)
     if runner.ram.position() is not None and key not in archive:
         start = Start(runner.wrapper.state_machine.state_name, runner.snapshot())
-        archive[key] = Cell(start, None, frames, 0, None, float(frames))
+        archive[key] = Cell(start, None, frames, 0, None, float(frames), 0)
 
 
 def replay_route(runner: SegmentRunner, route: list[Segment], samples: Samples) -> dict[int, Archive]:

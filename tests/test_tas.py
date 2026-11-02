@@ -4,7 +4,9 @@ from types import SimpleNamespace
 import numpy as np
 
 from datenwissenschaften.tas import search
+from datenwissenschaften.tas.explore import search_segment
 from datenwissenschaften.tas.movie import Segment
+from datenwissenschaften.tas.prior import ActionPrior
 from datenwissenschaften.tas.routes import finished, load_progress, save_progress
 from datenwissenschaften.tas.runner import Outcome, Start
 from datenwissenschaften.tas.search import (
@@ -15,7 +17,6 @@ from datenwissenschaften.tas.search import (
     Trail,
     farthest,
     holds,
-    search_segment,
     shave,
 )
 
@@ -24,6 +25,7 @@ GOAL_X = 6
 PIT_X = -2
 MOVES = (0, 1, -1)
 START = Start("Walk", (0).to_bytes(2, "big", signed=True))
+NO_PRIOR = ActionPrior(Path("no-prior.msgpack"))
 
 
 class LineRunner:
@@ -56,6 +58,12 @@ class LineRunner:
     def snapshot(self) -> bytes:
         return self.x.to_bytes(2, "big", signed=True)
 
+    def memory(self) -> np.ndarray:
+        return np.asarray([self.x % 256], dtype=np.uint8)
+
+    def context(self) -> tuple[str, str]:
+        return (f"{self.state_name}|{self.x}", self.state_name)
+
     def remaining(self) -> int | None:
         return None
 
@@ -64,7 +72,7 @@ class LineRunner:
 
 
 def test_the_search_finds_the_fastest_way_into_the_next_state():
-    crossings = search_segment(LineRunner(), START, UNBOUNDED, 7, 1.0, None).crossings
+    crossings = search_segment(LineRunner(), START, UNBOUNDED, 7, 1.0, None, NO_PRIOR).crossings
 
     assert crossings[0].end.state == "Goal"
     assert crossings[0].frames == GOAL_X
@@ -72,13 +80,13 @@ def test_the_search_finds_the_fastest_way_into_the_next_state():
 
 
 def test_a_bound_only_accepts_crossings_faster_than_the_movie_has():
-    assert search_segment(LineRunner(), START, GOAL_X, 7, 0.2, None).crossings == []
-    assert search_segment(LineRunner(), START, GOAL_X + 1, 7, 1.0, None).crossings != []
+    assert search_segment(LineRunner(), START, GOAL_X, 7, 0.2, None, NO_PRIOR).crossings == []
+    assert search_segment(LineRunner(), START, GOAL_X + 1, 7, 1.0, None, NO_PRIOR).crossings != []
 
 
 def test_a_search_that_cannot_leave_returns_the_point_with_the_most_reward_as_a_checkpoint(monkeypatch):
     monkeypatch.setattr(search, "CHECKPOINT_GAIN", GOAL_X - 2)
-    searched = search_segment(LineRunner(), START, GOAL_X, 7, 0.2, None)
+    searched = search_segment(LineRunner(), START, GOAL_X, 7, 0.2, None, NO_PRIOR)
 
     assert searched.crossings == []
     assert searched.checkpoint.end.state == "Walk"
@@ -87,7 +95,7 @@ def test_a_search_that_cannot_leave_returns_the_point_with_the_most_reward_as_a_
 
 
 def test_without_enough_reward_there_is_no_checkpoint():
-    assert search_segment(LineRunner(), START, 2, 7, 0.2, None).checkpoint is None
+    assert search_segment(LineRunner(), START, 2, 7, 0.2, None, NO_PRIOR).checkpoint is None
     assert farthest([None, None]) is None
     near, far = (Checkpoint(START, np.zeros((frames, 1), np.int8), gain) for frames, gain in ((4, 3.0), (2, 1.0)))
     assert farthest([far, None, near]) is near
@@ -104,7 +112,7 @@ def test_shaving_drops_every_frame_the_crossing_does_not_need():
 
 
 def test_cells_near_the_remembered_route_exit_are_picked_more_often():
-    near, unknown = Cell(START, None, 0, 0, 0, 0.0), Cell(START, None, 0, 0, None, 0.0)
+    near, unknown = Cell(START, None, 0, 0, 0, 0.0, 0), Cell(START, None, 0, 0, None, 0.0, 0)
 
     assert near.weight > 10 * unknown.weight
 

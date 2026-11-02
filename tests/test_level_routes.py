@@ -97,7 +97,9 @@ def pieces(runner: object, kept: Routes) -> dict[str, int]:
 def trainer_tas(tmp_path: Path, calls: list, extend, improve) -> SimpleNamespace:
     feed = SimpleNamespace(practised=lambda frames: calls.append(("practised", frames)))
     turn_file = tmp_path / "turn.json"
-    return SimpleNamespace(extend=extend, improve=improve, feed=feed, runner=None, settings=None, turn_file=turn_file)
+    return SimpleNamespace(
+        extend=extend, improve=improve, feed=feed, runner=None, settings=None, turn_file=turn_file, output=tmp_path
+    )
 
 
 def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_the_full_run(
@@ -105,6 +107,7 @@ def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_th
 ):
     monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
     monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path, done: None)
+    monkeypatch.setattr(levels, "write_prior", lambda runner, kept, path: None)
     monkeypatch.setattr(levels, "practised", pieces)
     kept = routes(tmp_path)
     kept.save(Leg(FULL_RUN, POWER_ON, None), [*RUN[:3], Segment("Boss2", [[1]], b"won", True)])
@@ -145,6 +148,7 @@ def test_unbeaten_levels_take_turns_and_a_level_without_its_part_before_starts_f
 ):
     monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
     monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path, done: None)
+    monkeypatch.setattr(levels, "write_prior", lambda runner, kept, path: None)
     monkeypatch.setattr(levels, "practised", pieces)
     monkeypatch.setattr(
         levels, "level_start", lambda runner, loader, level, state: Start(state, f"cheat {level}".encode())
@@ -180,6 +184,7 @@ def test_an_unbeaten_level_loaded_before_the_level_before_it_was_beaten_starts_w
 ):
     monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
     monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path, done: None)
+    monkeypatch.setattr(levels, "write_prior", lambda runner, kept, path: None)
     monkeypatch.setattr(levels, "practised", pieces)
     kept = routes(tmp_path)
     kept.split(RUN[:3], POWER_ON)
@@ -206,6 +211,7 @@ def test_after_a_restart_the_levels_take_turns_from_the_turn_that_was_running(
 ):
     monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
     monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path, done: None)
+    monkeypatch.setattr(levels, "write_prior", lambda runner, kept, path: None)
     monkeypatch.setattr(levels, "practised", pieces)
     monkeypatch.setattr(levels, "level_start", lambda runner, loader, level, state: Start(state, b"cheat"))
     kept = routes(tmp_path)

@@ -7,6 +7,7 @@ from datenwissenschaften.environment.wrapper import StateMachineGymWrapper, lost
 
 CELL_PIXELS = 8
 TIME_BUCKET_FRAMES = 30
+CONTEXT_PIXELS = 16
 
 CellKey = tuple[object, ...]
 
@@ -78,6 +79,16 @@ class SegmentRunner:
         if self.wrapper.level_address is None:
             raise RuntimeError(f"{type(self.wrapper).__name__} names no level_address to load a level with")
         self.emulator.data.memory.assign(self.wrapper.level_address, "|u1", level % 256)
+
+    def memory(self) -> np.ndarray:
+        return self.emulator.get_ram()
+
+    def context(self) -> tuple[str, str]:
+        state, position = self.wrapper.state_machine.state_name, self.ram.position()
+        if position is None:
+            return (state, state)
+        place = (position.area, position.x // CONTEXT_PIXELS, position.y // CONTEXT_PIXELS)
+        return (f"{state}|{'|'.join(map(str, place))}", state)
 
     def snapshot(self) -> bytes:
         return bytes(self.emulator.em.get_state())

@@ -32,7 +32,10 @@ def course(tmp_path: Path) -> Course:
 
 def test_a_worker_writes_its_report_and_tile_and_the_main_process_reads_them_back(tmp_path: Path):
     runner = SegmentRunner(fake_environment(tmp_path, [(3, 4)]))
-    archive = {("Survive", 1): Cell(START, None, 0, 5, None, 0.0), ("Survive", 2): Cell(START, None, 0, 0, None, 0.0)}
+    archive = {
+        ("Survive", 1): Cell(START, None, 0, 5, None, 0.0, 0),
+        ("Survive", 2): Cell(START, None, 0, 0, None, 0.0, 0),
+    }
     crossings = [Crossing(START, runner.wrapper.action_table[0], False, ("Boss",))]
     busy, quiet = WorkerLive(tmp_path, 7), WorkerLive(tmp_path, 3)
 

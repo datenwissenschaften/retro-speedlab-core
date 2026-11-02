@@ -14,6 +14,7 @@ from datenwissenschaften.tas.practice import (
     practised,
     write_practice_route,
 )
+from datenwissenschaften.tas.prior import PRIOR_FILE, write_prior
 from datenwissenschaften.tas.routes import FULL_RUN, Leg, Part, Routes, finished, load_progress, save_progress
 from datenwissenschaften.tas.run import Tas, tas_run, worker_pool
 from datenwissenschaften.tas.runner import Start
@@ -59,6 +60,7 @@ class LevelTrainer:
     def share_practice(self) -> None:
         done = practised(self.tas.runner, self.routes)
         write_practice_route(self.tas.runner, self.routes, route_path(self.tas.settings), done)
+        write_prior(self.tas.runner, self.routes, self.tas.output / PRIOR_FILE)
         self.tas.feed.practised(done)
 
     def practise(self, part: Part) -> None:

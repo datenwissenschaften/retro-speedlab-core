@@ -8,12 +8,14 @@ import pytest
 from fakes import saving_environment, write_config
 
 from datenwissenschaften.tas import footage, movie, run, searcher, workers
+from datenwissenschaften.tas.explore import search_segment
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.paths import TAS_MOVIE, atomic_write
+from datenwissenschaften.tas.prior import ActionPrior
 from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Route
 from datenwissenschaften.tas.run import BACKTRACK_SEARCHES
 from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.tas.search import Checkpoint, Crossing, search_segment, shave
+from datenwissenschaften.tas.search import Checkpoint, Crossing, shave
 from datenwissenschaften.tas.stuck import STUCK_FILE, Stuck, load_stuck
 from datenwissenschaften.tas.turns import Turn, load_turn, save_turn
 
@@ -194,8 +196,10 @@ def test_workers_search_and_shave_from_a_savestate(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(workers, "make_environment", lambda wrapper_cls, settings, worker: env)
     runner = workers.worker_runner.__wrapped__("fakes:FakeWrapper", write_config(tmp_path))
     start = runner.power_on()
-    crossing = search_segment(runner, start, 100, 1, SECONDS, None).crossings[0]
+    prior = ActionPrior(tmp_path / "prior.msgpack")
+    crossing = search_segment(runner, start, 100, 1, SECONDS, None, prior).crossings[0]
     monkeypatch.setattr(workers, "worker_runner", lambda wrapper, config: runner)
+    monkeypatch.setattr(workers, "worker_prior", lambda config: prior)
 
     assert (
         workers.explore("fakes:FakeWrapper", tmp_path, start, 100, 1, SECONDS, None).crossings[0].frames == BOSS_FRAMES

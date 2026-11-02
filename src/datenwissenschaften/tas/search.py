@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from datenwissenschaften.tas.live import WorkerLive
 from datenwissenschaften.tas.runner import CellKey, SegmentRunner, Start
 
 EXPLORE_DECISIONS = 24
@@ -21,6 +20,8 @@ EXPLOIT = 0.5
 LEADING_SHARE = 10
 UNBOUNDED = sys.maxsize
 CHECKPOINT_GAIN = 10.0
+NOVELTY_GAIN = 2.0
+NOVELTY_HALF = 8
 
 
 @dataclass(slots=True, frozen=True)
@@ -44,11 +45,13 @@ class Cell:
     visits: int
     remaining: int | None
     score: float
+    novelty: int
 
     @property
     def weight(self) -> float:
         guide = 1.0 if self.remaining is None else 1.0 + ROUTE_GAIN / (1 + self.remaining)
-        return guide / math.sqrt(1 + self.visits)
+        fresh = 1.0 + NOVELTY_GAIN * self.novelty / (self.novelty + NOVELTY_HALF)
+        return guide * fresh / math.sqrt(1 + self.visits)
 
 
 @dataclass(slots=True, frozen=True)
@@ -127,47 +130,6 @@ def confirmed(runner: SegmentRunner, pressed: np.ndarray, won: bool) -> Crossing
     state = runner.wrapper.state_machine.state_name
     crossing = Crossing(Start(state, runner.snapshot()), pressed, won, runner.key(0))
     return crossing if won or holds(runner, state, np.zeros_like(pressed[-1])) else None
-
-
-def search_segment(
-    runner: SegmentRunner, start: Start, bound: int, seed: int, seconds: float, live: WorkerLive | None
-) -> Searched:
-    rng, deadline = random.Random(seed), time.monotonic() + seconds
-    actions = len(runner.wrapper.action_table)
-    runner.restore(start)
-    archive = {runner.key(0): Cell(start, None, 0, 0, runner.remaining(), 0.0)}
-    crossings: list[Crossing] = []
-    while time.monotonic() < deadline:
-        cell = choose(list(archive.values()), rng)
-        runner.restore(cell.start)
-        trail, frames, score, action = cell.trail, cell.frames, cell.score, rng.randrange(actions)
-        last, decisions, still = runner.key(frames), 0, 0
-        while decisions < EXPLORE_DECISIONS and still < STILL_FRAMES:
-            if rng.random() > KEEP_ACTION:
-                action = rng.randrange(actions)
-            outcome = runner.decide(action)
-            trail, frames, score = Trail(trail, outcome.pressed), frames + len(outcome.pressed), score + outcome.reward
-            if live is not None:
-                live.step(runner, archive, crossings, len(outcome.pressed))
-            if frames >= (bound if len(crossings) < BEAM else crossings[-1].frames):
-                break
-            if leaves(runner, start, outcome.state, outcome.won):
-                if (crossing := confirmed(runner, trail.frames(), outcome.won)) is not None:
-                    crossings = fastest_distinct([*crossings, crossing])
-                break
-            if not outcome.alive or outcome.state != start.state:
-                break
-            key = runner.key(frames)
-            if key == last:
-                still += len(outcome.pressed)
-                continue
-            last, decisions, still = key, decisions + 1, 0
-            if key in archive and archive[key].frames <= frames:
-                continue
-            if key not in archive and len(archive) >= MAX_CELLS:
-                del archive[min(archive, key=lambda kept: (archive[kept].score, -archive[kept].visits))]
-            archive[key] = Cell(Start(outcome.state, runner.snapshot()), trail, frames, 0, runner.remaining(), score)
-    return Searched(crossings, checkpoint_of(archive))
 
 
 def replay(runner: SegmentRunner, start: Start, pressed: np.ndarray) -> Crossing | None:
