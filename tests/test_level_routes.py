@@ -211,7 +211,12 @@ def test_an_unbeaten_level_loaded_before_the_level_before_it_was_beaten_starts_w
 
 @pytest.mark.parametrize(
     ("turn", "first"),
-    [(Turn("Level 2", 1), "Level 2"), (Turn("Level 1", levels.PRACTICE_SEARCHES), "Level 2"), (None, "Level 1")],
+    [
+        (Turn("Level 2", 1), "Level 2"),
+        (Turn("Level 1", levels.PRACTICE_SEARCHES), "Level 2"),
+        (Turn("Level 1", levels.PRACTICE_SEARCHES, 1), "Level 1"),
+        (None, "Level 1"),
+    ],
 )
 def test_after_a_restart_the_levels_take_turns_from_the_turn_that_was_running(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, turn: Turn | None, first: str
