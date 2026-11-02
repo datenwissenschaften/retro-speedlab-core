@@ -52,7 +52,7 @@ class LevelTrainer:
         self.tas.feed.practised(done)
 
     def practise(self, part: Part) -> None:
-        entry = self.entry(part)
+        entry = self.routes.reached(part) or self.entry(part)
         if entry is None:
             return
         self.tas.extend(Leg(part.name, entry, part.exit), self.routes.segments(part.name), PRACTICE_SEARCHES)

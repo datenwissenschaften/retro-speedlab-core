@@ -159,3 +159,25 @@ def test_unbeaten_levels_take_turns_and_a_level_without_its_part_before_starts_f
         ("Level 2", Start("Level2", b"cheat 1"), patience),
         ("Level 1", Start("Play", b"play"), patience),
     ]
+
+
+def test_an_unbeaten_level_loaded_before_the_level_before_it_was_beaten_starts_where_that_level_now_ends(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
+    monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path, done: None)
+    monkeypatch.setattr(levels, "practised", pieces)
+    kept = routes(tmp_path)
+    kept.split(RUN[:3], POWER_ON)
+    kept.save(Leg("Level 2", Start("Level2", b"cheat 1"), None), [Segment("Level2", [[1]], b"dead end", False)])
+    calls: list = []
+
+    def extend(leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
+        calls.append((leg.name, leg.entry))
+        raise OneRound
+
+    trainer = LevelTrainer(trainer_tas([], extend, None), kept, POWER_ON, levels.LevelLoader(b"loader", 2))
+    with pytest.raises(OneRound):
+        trainer.forever()
+
+    assert calls == [("Level 2", Start("Level2", b"level2"))]
