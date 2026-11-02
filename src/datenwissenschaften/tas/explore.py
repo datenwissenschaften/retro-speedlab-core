@@ -3,7 +3,7 @@ import time
 
 from datenwissenschaften.tas.exploration import Exploration
 from datenwissenschaften.tas.live import WorkerLive
-from datenwissenschaften.tas.prior import ActionPrior
+from datenwissenschaften.tas.preferences import Preferences
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import Searched
 from datenwissenschaften.tas.strategies import frontier, walk
@@ -20,10 +20,10 @@ def search_segment(
     seed: int,
     seconds: float,
     live: WorkerLive | None,
-    prior: ActionPrior,
+    preferences: Preferences,
 ) -> Searched:
     rng = random.Random(seed)
-    exploration = Exploration(runner, start, bound, time.monotonic() + seconds, live, prior)
+    exploration = Exploration(runner, start, bound, time.monotonic() + seconds, live, preferences)
     spent = [0.0] * len(STRATEGIES)
     while exploration.running():
         turn = min(range(len(STRATEGIES)), key=lambda index: spent[index] / SHARES[index])

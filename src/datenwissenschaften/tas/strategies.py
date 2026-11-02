@@ -7,7 +7,6 @@ from datenwissenschaften.tas.exploration import Exploration, Step, step_of
 from datenwissenschaften.tas.runner import Start
 from datenwissenschaften.tas.search import EXPLORE_DECISIONS, KEEP_ACTION, STILL_FRAMES, choose
 
-PRIOR_SHARE = 0.3
 FRONTIER_DEPTH = 3
 FRONTIER_HOLDS = (1, 3, 8)
 FRONTIER_SECONDS = 20.0
@@ -19,10 +18,9 @@ def actions_of(exploration: Exploration) -> int:
 
 def next_action(exploration: Exploration, rng: random.Random, action: int) -> int:
     actions = actions_of(exploration)
-    if rng.random() < PRIOR_SHARE:
-        preferred = exploration.prior.choose(exploration.runner.context(), actions, rng)
-        if preferred is not None:
-            return preferred
+    preferred = exploration.preferences.choose(exploration.runner, actions, rng)
+    if preferred is not None:
+        return preferred
     return action if rng.random() < KEEP_ACTION else rng.randrange(actions)
 
 

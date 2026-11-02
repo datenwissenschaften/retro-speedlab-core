@@ -3,7 +3,7 @@ from dataclasses import dataclass, replace
 
 from datenwissenschaften.tas.live import WorkerLive
 from datenwissenschaften.tas.novelty import RamNovelty
-from datenwissenschaften.tas.prior import ActionPrior
+from datenwissenschaften.tas.preferences import Preferences
 from datenwissenschaften.tas.runner import CellKey, SegmentRunner, Start
 from datenwissenschaften.tas.search import (
     BEAM,
@@ -39,14 +39,14 @@ class Exploration:
         bound: int,
         deadline: float,
         live: WorkerLive | None,
-        prior: ActionPrior,
+        preferences: Preferences,
     ) -> None:
         self.runner = runner
         self.start = start
         self.bound = bound
         self.deadline = deadline
         self.live = live
-        self.prior = prior
+        self.preferences = preferences
         runner.restore(start)
         self.novelty = RamNovelty(runner.memory())
         self.archive: dict[CellKey, Cell] = {runner.key(0): Cell(start, None, 0, 0, runner.remaining(), 0.0, 0)}

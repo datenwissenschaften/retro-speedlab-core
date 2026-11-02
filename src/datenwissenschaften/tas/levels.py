@@ -1,3 +1,4 @@
+import multiprocessing
 from pathlib import Path
 
 from loguru import logger
@@ -6,6 +7,7 @@ from datenwissenschaften.reference.fetch import ensure_reference
 from datenwissenschaften.reference.guide import ensure_guide
 from datenwissenschaften.reference.paths import route_path
 from datenwissenschaften.settings import load_config
+from datenwissenschaften.tas.policy_start import POLICY_START_FILE, save_policy_start
 from datenwissenschaften.tas.practice import (
     LOADER_FILE,
     LevelLoader,
@@ -67,6 +69,7 @@ class LevelTrainer:
         entry = self.routes.reached(part) or self.entry(part)
         if entry is None:
             return
+        save_policy_start(self.tas.output / POLICY_START_FILE, entry)
         self.tas.extend(Leg(part.name, entry, part.exit), self.routes.segments(part.name), PRACTICE_SEARCHES)
         self.share_practice()
 
@@ -94,9 +97,21 @@ class LevelTrainer:
             self.full_run()
 
 
+def start_policy(wrapper: str, config: Path) -> None:
+    from datenwissenschaften.policy.trainer import train_policy_forever
+
+    trainer = multiprocessing.get_context("spawn").Process(
+        target=train_policy_forever, args=(wrapper, config), name="policy", daemon=True
+    )
+    trainer.start()
+    logger.info(f"The policy trains with PPO in process {trainer.pid}")
+
+
 def speedrun_forever(wrapper: str, config: Path) -> None:
     settings = load_config(config)
     ensure_reference(settings)
+    if settings.speedrun.policy:
+        start_policy(wrapper, config)
     with worker_pool(settings.speedrun.workers) as pool:
         tas = tas_run(wrapper, config, pool)
         ensure_guide(settings, tas.runner, tas.routes.stitched())

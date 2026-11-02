@@ -5,6 +5,7 @@ import torch
 from loguru import logger
 from torch import nn
 
+from datenwissenschaften.gpu import gpu
 from datenwissenschaften.reference.samples import Samples
 
 EPOCHS = 12
@@ -48,9 +49,7 @@ class PositionNet(nn.Module):
 
 
 def device() -> torch.device:
-    if not torch.cuda.is_available():
-        raise RuntimeError("The guide trains on a GPU, and torch sees none: run the app with --gpus all")
-    return torch.device("cuda")
+    return gpu()
 
 
 def as_input(screens: np.ndarray, gpu: torch.device) -> torch.Tensor:

@@ -3,10 +3,12 @@ from functools import cache
 from pathlib import Path
 
 from datenwissenschaften.environment.factory import make_environment
+from datenwissenschaften.policy.prior import POLICY_FILE, PolicyPrior
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.tas.explore import search_segment
 from datenwissenschaften.tas.live import WorkerLive
 from datenwissenschaften.tas.paths import tas_dir
+from datenwissenschaften.tas.preferences import Preferences
 from datenwissenschaften.tas.prior import PRIOR_FILE, ActionPrior
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import Crossing, Searched, shave
@@ -19,15 +21,17 @@ def worker_runner(wrapper: str, config: Path) -> SegmentRunner:
 
 
 @cache
-def worker_prior(config: Path) -> ActionPrior:
-    return ActionPrior(tas_dir(load_config(config)) / PRIOR_FILE)
+def worker_preferences(config: Path) -> Preferences:
+    output = tas_dir(load_config(config))
+    return Preferences(ActionPrior(output / PRIOR_FILE), PolicyPrior(output / POLICY_FILE))
 
 
 def explore(
     wrapper: str, config: Path, start: Start, bound: int, seed: int, seconds: float, live: Path | None
 ) -> Searched:
     watched = None if live is None else WorkerLive(live, seed)
-    return search_segment(worker_runner(wrapper, config), start, bound, seed, seconds, watched, worker_prior(config))
+    runner, preferences = worker_runner(wrapper, config), worker_preferences(config)
+    return search_segment(runner, start, bound, seed, seconds, watched, preferences)
 
 
 def polish(wrapper: str, config: Path, start: Start, crossing: Crossing, seconds: float) -> Crossing:

@@ -151,6 +151,7 @@ def write_config(tmp_path: Path) -> Path:
                 "  workers: 1",
                 "  segment_seconds: 0.05",
                 "  guide: false",
+                "  policy: false",
                 "  id: fakegame-v0",
                 "  title: Fake Game",
                 "  platform: NES",

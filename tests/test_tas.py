@@ -3,9 +3,11 @@ from types import SimpleNamespace
 
 import numpy as np
 
+from datenwissenschaften.policy.prior import PolicyPrior
 from datenwissenschaften.tas import search
 from datenwissenschaften.tas.explore import search_segment
 from datenwissenschaften.tas.movie import Segment
+from datenwissenschaften.tas.preferences import Preferences
 from datenwissenschaften.tas.prior import ActionPrior
 from datenwissenschaften.tas.routes import finished, load_progress, save_progress
 from datenwissenschaften.tas.runner import Outcome, Start
@@ -25,7 +27,7 @@ GOAL_X = 6
 PIT_X = -2
 MOVES = (0, 1, -1)
 START = Start("Walk", (0).to_bytes(2, "big", signed=True))
-NO_PRIOR = ActionPrior(Path("no-prior.msgpack"))
+NO_PREFERENCES = Preferences(ActionPrior(Path("no-prior.msgpack")), PolicyPrior(Path("no-policy.npz")))
 
 
 class LineRunner:
@@ -72,7 +74,7 @@ class LineRunner:
 
 
 def test_the_search_finds_the_fastest_way_into_the_next_state():
-    crossings = search_segment(LineRunner(), START, UNBOUNDED, 7, 1.0, None, NO_PRIOR).crossings
+    crossings = search_segment(LineRunner(), START, UNBOUNDED, 7, 1.0, None, NO_PREFERENCES).crossings
 
     assert crossings[0].end.state == "Goal"
     assert crossings[0].frames == GOAL_X
@@ -80,13 +82,13 @@ def test_the_search_finds_the_fastest_way_into_the_next_state():
 
 
 def test_a_bound_only_accepts_crossings_faster_than_the_movie_has():
-    assert search_segment(LineRunner(), START, GOAL_X, 7, 0.2, None, NO_PRIOR).crossings == []
-    assert search_segment(LineRunner(), START, GOAL_X + 1, 7, 1.0, None, NO_PRIOR).crossings != []
+    assert search_segment(LineRunner(), START, GOAL_X, 7, 0.2, None, NO_PREFERENCES).crossings == []
+    assert search_segment(LineRunner(), START, GOAL_X + 1, 7, 1.0, None, NO_PREFERENCES).crossings != []
 
 
 def test_a_search_that_cannot_leave_returns_the_point_with_the_most_reward_as_a_checkpoint(monkeypatch):
     monkeypatch.setattr(search, "CHECKPOINT_GAIN", GOAL_X - 2)
-    searched = search_segment(LineRunner(), START, GOAL_X, 7, 0.2, None, NO_PRIOR)
+    searched = search_segment(LineRunner(), START, GOAL_X, 7, 0.2, None, NO_PREFERENCES)
 
     assert searched.crossings == []
     assert searched.checkpoint.end.state == "Walk"
@@ -95,7 +97,7 @@ def test_a_search_that_cannot_leave_returns_the_point_with_the_most_reward_as_a_
 
 
 def test_without_enough_reward_there_is_no_checkpoint():
-    assert search_segment(LineRunner(), START, 2, 7, 0.2, None, NO_PRIOR).checkpoint is None
+    assert search_segment(LineRunner(), START, 2, 7, 0.2, None, NO_PREFERENCES).checkpoint is None
     assert farthest([None, None]) is None
     near, far = (Checkpoint(START, np.zeros((frames, 1), np.int8), gain) for frames, gain in ((4, 3.0), (2, 1.0)))
     assert farthest([far, None, near]) is near

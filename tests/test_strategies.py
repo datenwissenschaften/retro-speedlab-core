@@ -5,7 +5,7 @@ from pathlib import Path
 import msgspec
 import numpy as np
 from fakes import saving_environment
-from test_tas import NO_PRIOR, START, LineRunner
+from test_tas import NO_PREFERENCES, START, LineRunner
 
 from datenwissenschaften.tas import explore
 from datenwissenschaften.tas.exploration import Exploration
@@ -49,7 +49,7 @@ def test_the_prior_learns_the_actions_of_the_stored_pieces(tmp_path: Path):
 
 
 def exploration() -> Exploration:
-    return Exploration(LineRunner(), START, UNBOUNDED, time.monotonic() + 5.0, None, NO_PRIOR)
+    return Exploration(LineRunner(), START, UNBOUNDED, time.monotonic() + 5.0, None, NO_PREFERENCES)
 
 
 def test_the_frontier_tries_every_short_input_from_a_place_and_finds_the_shortest_crossing():
@@ -82,6 +82,6 @@ def test_the_modes_take_turns_by_their_share_of_the_time(monkeypatch):
     monkeypatch.setattr(explore, "STRATEGIES", (mode("quick", 0.001), mode("slow", 0.02)))
     monkeypatch.setattr(explore, "SHARES", (0.5, 0.5))
 
-    explore.search_segment(LineRunner(), START, UNBOUNDED, 1, 0.4, None, NO_PRIOR)
+    explore.search_segment(LineRunner(), START, UNBOUNDED, 1, 0.4, None, NO_PREFERENCES)
 
     assert abs(spent["quick"] - spent["slow"]) < 0.05
