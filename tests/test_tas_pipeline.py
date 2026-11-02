@@ -242,7 +242,9 @@ def test_the_search_goes_back_a_piece_only_after_three_failed_searches(tmp_path:
     tas = local_tas(tmp_path, monkeypatch, runner)
     piece = [Segment("Survive", [[0, 0]], bytes([1]), False)]
 
-    kept = [tas.stuck(piece, Start("Survive", bytes([1]))) for _ in range(BACKTRACK_SEARCHES)]
+    leg = Leg(FULL_RUN, runner.power_on(), "Boss")
+
+    kept = [tas.stuck(leg, piece, Start("Survive", bytes([1]))) for _ in range(BACKTRACK_SEARCHES)]
 
     assert kept == [piece, piece, []]
     assert tas.barred == "Survive"
@@ -302,3 +304,21 @@ def test_a_level_rests_after_its_searches_even_when_they_find_something(tmp_path
     segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Exit"), [], 1)
 
     assert [segment.state for segment in segments] == ["Boss"] and searched[0] == "Survive"
+
+
+def test_a_level_that_rests_right_after_going_back_a_piece_keeps_that_piece_dropped(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    checkpoint = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 1.0)
+    calls: list[int] = []
+
+    def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Checkpoint | None:
+        calls.append(bound)
+        return checkpoint if len(calls) == 1 else None
+
+    monkeypatch.setattr(searcher.Searcher, "best", best)
+    leg = Leg("Level 1", runner.power_on(), "Exit")
+
+    segments = tas.extend(leg, [], 1 + BACKTRACK_SEARCHES)
+
+    assert segments == [] and tas.routes.segments(leg.name) == []
