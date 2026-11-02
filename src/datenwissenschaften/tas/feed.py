@@ -15,6 +15,7 @@ from datenwissenschaften.tas.stuck import load_stuck
 from datenwissenschaften.ui.telemetry import publish_metadata
 
 PUBLISH_SECONDS = 5.0
+REEL_ORDER = "number"
 
 
 class SpeedrunFeed:
@@ -30,6 +31,7 @@ class SpeedrunFeed:
         self.search: SearchRound | None = None
         self.screened: dict[str, dict[str, Any] | None] = {"movie": None, "compare": None}
         self.practice: dict[str, dict[str, Any]] = {}
+        self.reel: dict[str, dict[str, Any]] = {}
         self.lab_running = lab_marker.exists()
         live.mkdir(parents=True, exist_ok=True)
 
@@ -44,6 +46,11 @@ class SpeedrunFeed:
     def shown(self, name: str, field: dict[str, Any]) -> None:
         with self.lock:
             self.screened = {**self.screened, name: field}
+        self.publish()
+
+    def reeled(self, level: str, field: dict[str, Any]) -> None:
+        with self.lock:
+            self.reel = {**self.reel, level: field}
         self.publish()
 
     def practised(self, progress: dict[str, PartProgress]) -> None:
@@ -73,12 +80,14 @@ class SpeedrunFeed:
     def publish(self) -> None:
         with self.lock:
             summary, search, screened, practice = self.summary, self.search, self.screened, self.practice
+            reel = sorted(self.reel.values(), key=lambda video: video[REEL_ORDER])
         if not summary:
             return
         reports = [] if search is None else read_reports(self.live)
         now = datetime.now(UTC)
         live = {"search": search_field(search, reports, now), "updated_at": now.isoformat(timespec="seconds")}
-        publish_metadata(SECTION, {**summary, **screened, "practice": practice, **self.journal.fields(), **live})
+        fields = {**summary, **screened, "practice": practice, "reel": reel}
+        publish_metadata(SECTION, {**fields, **self.journal.fields(), **live})
 
     def notice_lab(self) -> None:
         running = self.lab_marker.exists()

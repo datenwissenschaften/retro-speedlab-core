@@ -9,13 +9,15 @@ import pytest
 from fakes import saving_environment, write_config
 
 from datenwissenschaften.policy.prior import PolicyPrior
+from datenwissenschaften.tas import feed as feed_module
 from datenwissenschaften.tas import footage, movie, run, searcher, workers
 from datenwissenschaften.tas.explore import search_segment
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.paths import TAS_MOVIE, atomic_write
 from datenwissenschaften.tas.preferences import Preferences
 from datenwissenschaften.tas.prior import ActionPrior
-from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Route
+from datenwissenschaften.tas.reel import Reel
+from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Part, Route, Routes
 from datenwissenschaften.tas.run import BACKTRACK_SEARCHES
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import Checkpoint, Crossing, shave
@@ -362,3 +364,28 @@ def test_worker_processes_compute_with_one_math_thread_each(monkeypatch):
     run.worker_pool(1).shutdown()
 
     assert all(os.environ[name] == "1" for name in run.MATH_THREADS)
+
+
+def test_every_level_with_pieces_gets_its_best_video_once_in_level_order(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    published: list[dict] = []
+    monkeypatch.setattr(feed_module, "publish_metadata", lambda section, values: published.append(values))
+    rendered: list[Path] = []
+    monkeypatch.setattr(
+        footage, "render_video", lambda paths, recordings: rendered.extend(recordings) or fake_render(paths, recordings)
+    )
+    parts = [Part("Survive", "Survive", "Boss"), Part("Level 1", "Boss", None)]
+    routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", parts)
+    routes.save(Leg("Level 1", Start("Boss", bytes([3])), None), [Segment("Boss", [[0, 0]] * 2, bytes([5]), False)])
+    tas.feed.show([Segment("Boss", [[0, 0]], b"", False)], "Boss")
+    shown = Reel(tas.settings, tas.feed, runner, routes)
+
+    shown.show()
+    shown.screens["Level 1"][1].settle()
+    shown.show()
+    shown.screens["Level 1"][1].settle()
+
+    reel = published[-1]["reel"]
+    assert [(level["part"], level["video"], level["frames"]) for level in reel] == [("Level 1", "levels/1.mp4", 2)]
+    assert len(rendered) == 1

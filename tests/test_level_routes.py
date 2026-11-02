@@ -21,6 +21,8 @@ from datenwissenschaften.tas.turns import Turn, save_turn
 
 COURSE = SimpleNamespace(first="Menu", levels={"Level 1": ("Play", "Heavy"), "Level 2": ("Level2", "Boss2")})
 POWER_ON = Start("Menu", b"on")
+NO_REEL = SimpleNamespace(show=lambda: None)
+LOADER = levels.LevelLoader(b"loader", 2)
 RUN = [
     Segment("Play", [[1]] * 3, b"play", False),
     Segment("Heavy", [[1]] * 4, b"heavy", False),
@@ -124,7 +126,7 @@ def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_th
             raise OneRound
         return segments
 
-    trainer = LevelTrainer(trainer_tas(tmp_path, calls, extend, improve), kept, POWER_ON, None)
+    trainer = LevelTrainer(trainer_tas(tmp_path, calls, extend, improve), kept, POWER_ON, None, NO_REEL)
     with pytest.raises(OneRound):
         trainer.forever()
 
@@ -168,7 +170,9 @@ def test_unbeaten_levels_take_turns_and_a_level_without_its_part_before_starts_f
     def improve(leg: Leg, segments: list[Segment]) -> list[Segment]:
         raise OneRound
 
-    trainer = LevelTrainer(trainer_tas(tmp_path, [], extend, improve), kept, POWER_ON, levels.LevelLoader(b"loader", 2))
+    trainer = LevelTrainer(
+        trainer_tas(tmp_path, [], extend, improve), kept, POWER_ON, levels.LevelLoader(b"loader", 2), NO_REEL
+    )
     with pytest.raises(OneRound):
         trainer.forever()
 
@@ -196,7 +200,9 @@ def test_an_unbeaten_level_loaded_before_the_level_before_it_was_beaten_starts_w
         calls.append((leg.name, leg.entry))
         raise OneRound
 
-    trainer = LevelTrainer(trainer_tas(tmp_path, [], extend, None), kept, POWER_ON, levels.LevelLoader(b"loader", 2))
+    trainer = LevelTrainer(
+        trainer_tas(tmp_path, [], extend, None), kept, POWER_ON, levels.LevelLoader(b"loader", 2), NO_REEL
+    )
     with pytest.raises(OneRound):
         trainer.forever()
 
@@ -225,7 +231,9 @@ def test_after_a_restart_the_levels_take_turns_from_the_turn_that_was_running(
         practised.append(leg.name)
         raise OneRound
 
-    trainer = LevelTrainer(trainer_tas(tmp_path, [], extend, None), kept, POWER_ON, levels.LevelLoader(b"loader", 2))
+    trainer = LevelTrainer(
+        trainer_tas(tmp_path, [], extend, None), kept, POWER_ON, levels.LevelLoader(b"loader", 2), NO_REEL
+    )
     with pytest.raises(OneRound):
         trainer.beat_levels()
 

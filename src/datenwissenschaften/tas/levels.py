@@ -17,6 +17,7 @@ from datenwissenschaften.tas.practice import (
     write_practice_route,
 )
 from datenwissenschaften.tas.prior import PRIOR_FILE, write_prior
+from datenwissenschaften.tas.reel import Reel
 from datenwissenschaften.tas.routes import FULL_RUN, Leg, Part, Routes, finished, load_progress, save_progress
 from datenwissenschaften.tas.run import Tas, tas_run, worker_pool
 from datenwissenschaften.tas.runner import Start
@@ -26,8 +27,9 @@ PRACTICE_SEARCHES = 3
 
 
 class LevelTrainer:
-    def __init__(self, tas: Tas, routes: Routes, power_on: Start, loader: LevelLoader | None) -> None:
+    def __init__(self, tas: Tas, routes: Routes, power_on: Start, loader: LevelLoader | None, reel: Reel) -> None:
         self.tas = tas
+        self.reel = reel
         self.routes = routes
         self.power_on = power_on
         self.loader = loader
@@ -64,6 +66,7 @@ class LevelTrainer:
         write_practice_route(self.tas.runner, self.routes, route_path(self.tas.settings), done)
         write_prior(self.tas.runner, self.routes, self.tas.output / PRIOR_FILE)
         self.tas.feed.practised(done)
+        self.reel.show()
 
     def practise(self, part: Part) -> None:
         entry = self.routes.reached(part) or self.entry(part)
@@ -116,4 +119,5 @@ def speedrun_forever(wrapper: str, config: Path) -> None:
         tas = tas_run(wrapper, config, pool)
         ensure_guide(settings, tas.runner, tas.routes.stitched())
         loader = ensure_loader(tas.output / LOADER_FILE, tas.runner, tas.routes)
-        LevelTrainer(tas, tas.routes, tas.runner.power_on(), loader).forever()
+        reel = Reel(settings, tas.feed, tas.runner, tas.routes)
+        LevelTrainer(tas, tas.routes, tas.runner.power_on(), loader, reel).forever()
