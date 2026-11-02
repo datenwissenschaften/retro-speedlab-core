@@ -33,7 +33,13 @@ def search_field(search: SearchRound | None, reports: list[WorkerReport], now: d
         "started_at": search.started_at.isoformat(timespec="seconds"),
         "ends_at": (search.started_at + timedelta(seconds=search.seconds)).isoformat(timespec="seconds"),
         "workers": [
-            {"seed": report.seed, "cells": report.cells, "frames": report.frames, "best_frames": report.best_frames}
+            {
+                "seed": report.seed,
+                "mode": report.mode,
+                "cells": report.cells,
+                "frames": report.frames,
+                "best_frames": report.best_frames,
+            }
             for report in reports
         ],
         "cells": sum(report.cells for report in reports),

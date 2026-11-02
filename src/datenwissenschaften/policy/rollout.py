@@ -11,6 +11,7 @@ from datenwissenschaften.policy.prior import (
     log_probabilities,
     observation,
 )
+from datenwissenschaften.tas.live import WorkerLive
 from datenwissenschaften.tas.novelty import RamNovelty
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import leaves
@@ -38,7 +39,13 @@ def reward_of(outcome_reward: float, novelty: int, exited: bool, alive: bool) ->
 
 
 def collect(
-    runner: SegmentRunner, start: Start, weights: Weights, novelty: RamNovelty, decisions: int, rng: np.random.Generator
+    runner: SegmentRunner,
+    start: Start,
+    weights: Weights,
+    novelty: RamNovelty,
+    decisions: int,
+    rng: np.random.Generator,
+    live: WorkerLive | None,
 ) -> Rollout:
     layers, actions = layers_of(weights), len(runner.wrapper.action_table)
     rollout = Rollout([], [], [], [], [], [], 0)
@@ -51,6 +58,8 @@ def collect(
         action = int(rng.choice(actions, p=np.exp(log_probs) / np.exp(log_probs).sum()))
         outcome = runner.decide(action)
         played += 1
+        if live is not None:
+            live.step(runner, sum(rollout.dones), None, len(outcome.pressed))
         exited = leaves(runner, start, outcome.state, outcome.won)
         ended = exited or not outcome.alive or outcome.state != start.state or played >= EPISODE_DECISIONS
         rollout.observations.append(observation(memory))

@@ -27,6 +27,8 @@ def search_segment(
     spent = [0.0] * len(STRATEGIES)
     while exploration.running():
         turn = min(range(len(STRATEGIES)), key=lambda index: spent[index] / SHARES[index])
+        if live is not None:
+            live.mode = STRATEGIES[turn].__name__
         began = time.monotonic()
         STRATEGIES[turn](exploration, rng)
         spent[turn] += time.monotonic() - began

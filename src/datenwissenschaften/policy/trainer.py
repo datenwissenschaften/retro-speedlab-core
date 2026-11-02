@@ -17,6 +17,7 @@ from datenwissenschaften.policy.ppo import update
 from datenwissenschaften.policy.prior import POLICY_FILE
 from datenwissenschaften.policy.rollout import ROLLOUT_DECISIONS, Rollout, merged
 from datenwissenschaften.settings import load_config
+from datenwissenschaften.tas.live import LIVE_DIR
 from datenwissenschaften.tas.paths import tas_dir
 from datenwissenschaften.tas.policy_start import POLICY_START_FILE, load_policy_start
 from datenwissenschaften.tas.run import worker_pool
@@ -34,6 +35,7 @@ class Collectors:
     config: Path
     pool: Executor
     emulators: int
+    live: Path
 
 
 class PolicyTrainer:
@@ -50,7 +52,14 @@ class PolicyTrainer:
         weights, collectors = numpy_weights(self.net), self.collectors
         jobs = [
             collectors.pool.submit(
-                collect_rollout, collectors.wrapper, collectors.config, start, weights, ROLLOUT_DECISIONS, seed
+                collect_rollout,
+                collectors.wrapper,
+                collectors.config,
+                start,
+                weights,
+                ROLLOUT_DECISIONS,
+                seed,
+                collectors.live,
             )
             for seed in range(self.rounds * collectors.emulators, (self.rounds + 1) * collectors.emulators)
         ]
@@ -79,7 +88,8 @@ def train_policy_forever(wrapper: str, config: Path) -> None:
     emulators = settings.speedrun.policy_emulators
     with worker_pool(emulators) as pool:
         runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, os.getpid()))
-        trainer = PolicyTrainer(runner, tas_dir(settings), gpu(), Collectors(wrapper, config, pool, emulators))
+        collectors = Collectors(wrapper, config, pool, emulators, tas_dir(settings) / LIVE_DIR)
+        trainer = PolicyTrainer(runner, tas_dir(settings), gpu(), collectors)
         while multiprocessing.parent_process().is_alive():
             if not trainer.train_round():
                 time.sleep(WAIT_SECONDS)

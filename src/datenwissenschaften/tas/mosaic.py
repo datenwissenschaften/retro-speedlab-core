@@ -5,11 +5,12 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from datenwissenschaften.ui.media import JPEG_QUALITY, jpeg
+from datenwissenschaften.ui.media import jpeg
 
 TILE_SUFFIX = ".jpg"
-MOSAIC_TILES = 9
-TILE_SCALE = 0.5
+MOSAIC_TILES = 12
+TILE_SCALE = 1.0
+MOSAIC_QUALITY = 72
 
 
 @dataclass(slots=True, frozen=True)
@@ -44,5 +45,5 @@ def compose(directory: Path) -> Mosaic | None:
     for index, picture in enumerate(pictures):
         row, column = divmod(index, columns)
         canvas[row * height : (row + 1) * height, column * width : (column + 1) * width] = picture
-    encoded = cv2.imencode(".jpg", canvas, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])[1].tobytes()
+    encoded = cv2.imencode(".jpg", canvas, [cv2.IMWRITE_JPEG_QUALITY, MOSAIC_QUALITY])[1].tobytes()
     return Mosaic(encoded, [seed for seed, _ in tiles])

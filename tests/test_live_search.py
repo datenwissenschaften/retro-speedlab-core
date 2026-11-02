@@ -37,13 +37,14 @@ def test_a_worker_writes_its_report_and_tile_and_the_main_process_reads_them_bac
         ("Survive", 2): Cell(START, None, 0, 0, None, 0.0, 0),
     }
     crossings = [Crossing(START, runner.wrapper.action_table[0], False, ("Boss",))]
-    busy, quiet = WorkerLive(tmp_path, 7), WorkerLive(tmp_path, 3)
+    busy, quiet = WorkerLive(tmp_path, 7, "frontier"), WorkerLive(tmp_path, 3, "policy")
 
-    busy.step(runner, archive, crossings, 4)
-    busy.step(runner, archive, crossings, 4)
-    quiet.step(runner, {}, [], 2)
+    busy.step(runner, len(archive), crossings[0].frames, 4)
+    busy.step(runner, len(archive), crossings[0].frames, 4)
+    quiet.step(runner, 0, None, 2)
 
-    assert read_reports(tmp_path) == [WorkerReport(3, 0, 2, None), WorkerReport(7, 2, 4, 1)]
+    expected = [WorkerReport(3, "policy", 0, 2, None), WorkerReport(7, "frontier", 2, 4, 1)]
+    assert read_reports(tmp_path) == expected
     assert (tmp_path / "7.jpg").read_bytes()[:2] == b"\xff\xd8"
     clear_reports(tmp_path)
     assert read_reports(tmp_path) == [] and compose(tmp_path) is None
@@ -57,16 +58,16 @@ def test_a_report_that_vanishes_while_it_is_read_is_skipped(tmp_path: Path, monk
     assert read_reports(tmp_path) == [] and shown_tiles(tmp_path) == []
 
 
-def test_the_mosaic_shows_the_first_nine_workers_in_seed_order_in_three_rows(tmp_path: Path):
-    for seed in range(10, 0, -1):
-        (tmp_path / f"{seed}.jpg").write_bytes(tile(np.full((224, 256, 3), seed * 20, np.uint8)))
+def test_the_mosaic_shows_the_first_twelve_emulators_in_seed_order_in_three_rows_of_four(tmp_path: Path):
+    for seed in range(13, 0, -1):
+        (tmp_path / f"{seed}.jpg").write_bytes(tile(np.full((224, 256, 3), seed * 18, np.uint8)))
 
     mosaic = compose(tmp_path)
     picture = cv2.imdecode(np.frombuffer(mosaic.jpeg, np.uint8), cv2.IMREAD_GRAYSCALE)
 
-    assert mosaic.seeds == list(range(1, 10))
-    assert picture.shape == (3 * 112, 3 * 128)
-    assert abs(int(picture[56, 64]) - 20) < 4 and abs(int(picture[280, 320]) - 180) < 4
+    assert mosaic.seeds == list(range(1, 13))
+    assert picture.shape == (3 * 224, 4 * 256)
+    assert abs(int(picture[112, 128]) - 18) < 4 and abs(int(picture[560, 896]) - 216) < 4
 
 
 def test_the_mosaic_skips_files_that_are_not_a_worker_tile(tmp_path: Path):
@@ -83,12 +84,12 @@ def test_two_workers_share_one_row_of_the_mosaic(tmp_path: Path):
     mosaic = compose(tmp_path)
 
     assert mosaic.seeds == [4, 5]
-    assert cv2.imdecode(np.frombuffer(mosaic.jpeg, np.uint8), cv2.IMREAD_COLOR).shape == (112, 256, 3)
+    assert cv2.imdecode(np.frombuffer(mosaic.jpeg, np.uint8), cv2.IMREAD_COLOR).shape == (224, 512, 3)
 
 
 def test_the_live_search_adds_up_its_workers():
     search = SearchRound("Scale2", 0, 2, STARTED, 120.0, 393)
-    reports = [WorkerReport(5, 10, 600, 393), WorkerReport(4, 10, 600, None)]
+    reports = [WorkerReport(5, "walk", 10, 600, 393), WorkerReport(4, "tree", 10, 600, None)]
 
     assert search_field(search, reports, STARTED + timedelta(seconds=2)) == {
         "state": "Scale2",
@@ -98,8 +99,8 @@ def test_the_live_search_adds_up_its_workers():
         "started_at": "2026-10-29T14:07:10+00:00",
         "ends_at": "2026-10-29T14:09:10+00:00",
         "workers": [
-            {"seed": 5, "cells": 10, "frames": 600, "best_frames": 393},
-            {"seed": 4, "cells": 10, "frames": 600, "best_frames": None},
+            {"seed": 5, "mode": "walk", "cells": 10, "frames": 600, "best_frames": 393},
+            {"seed": 4, "mode": "tree", "cells": 10, "frames": 600, "best_frames": None},
         ],
         "cells": 20,
         "frames": 1200,

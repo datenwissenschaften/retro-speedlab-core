@@ -15,6 +15,7 @@ from datenwissenschaften.policy.network import PolicyNet, export_policy, numpy_w
 from datenwissenschaften.policy.prior import PolicyPrior
 from datenwissenschaften.policy.rollout import collect, merged
 from datenwissenschaften.policy.trainer import Collectors, PolicyTrainer
+from datenwissenschaften.tas.live import read_reports
 from datenwissenschaften.tas.novelty import RamNovelty
 from datenwissenschaften.tas.policy_start import POLICY_START_FILE, save_policy_start
 from datenwissenschaften.tas.preferences import Preferences
@@ -42,7 +43,7 @@ def test_ppo_plays_episodes_from_the_start_and_learns_from_them():
     optimizer = torch.optim.Adam(net.parameters(), lr=3e-4)
     novelty, rng = RamNovelty(runner.memory()), np.random.default_rng(1)
 
-    halves = [collect(runner, START, numpy_weights(net), novelty, 128, rng) for _ in range(2)]
+    halves = [collect(runner, START, numpy_weights(net), novelty, 128, rng, None) for _ in range(2)]
     rollout = merged(halves)
     loss = ppo.update(net, optimizer, rollout, CPU)
 
@@ -60,12 +61,15 @@ def test_the_trainer_waits_for_a_level_and_then_trains_on_what_its_emulators_pla
     monkeypatch.setattr(collector, "worker_runner", lambda wrapper, config: runner)
     collector.level_novelty.cache_clear()
     pool = ThreadPoolExecutor(max_workers=1)
-    trainer = PolicyTrainer(runner, tmp_path, CPU, Collectors("fakes:FakeWrapper", tmp_path, pool, 2))
+    live = tmp_path / "live"
+    live.mkdir()
+    trainer = PolicyTrainer(runner, tmp_path, CPU, Collectors("fakes:FakeWrapper", tmp_path, pool, 2, live))
 
     assert not trainer.train_round()
     save_policy_start(tmp_path / POLICY_START_FILE, runner.power_on())
     assert trainer.train_round()
     assert trainer.rounds == 1
+    assert [report.mode for report in read_reports(live)] == ["policy"]
     assert PolicyPrior(tmp_path / "policy.npz").probabilities(runner.memory(), 2) is not None
 
 

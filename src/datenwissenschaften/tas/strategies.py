@@ -8,6 +8,7 @@ from datenwissenschaften.tas.runner import Start
 from datenwissenschaften.tas.search import EXPLORE_DECISIONS, KEEP_ACTION, STILL_FRAMES, choose
 
 FRONTIER_DEPTH = 3
+WALK = "walk"
 FRONTIER_HOLDS = (1, 3, 8)
 FRONTIER_SECONDS = 20.0
 

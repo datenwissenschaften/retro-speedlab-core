@@ -64,7 +64,8 @@ class Exploration:
             Trail(step.trail, outcome.pressed), step.frames + len(outcome.pressed), step.score + outcome.reward, False
         )
         if self.live is not None:
-            self.live.step(self.runner, self.archive, self.crossings, len(outcome.pressed))
+            best = self.crossings[0].frames if self.crossings else None
+            self.live.step(self.runner, len(self.archive), best, len(outcome.pressed))
         if moved.frames >= self.limit():
             return replace(moved, ended=True)
         if leaves(self.runner, self.start, outcome.state, outcome.won):

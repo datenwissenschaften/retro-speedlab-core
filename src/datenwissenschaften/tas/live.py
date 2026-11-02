@@ -1,15 +1,11 @@
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import msgspec
 
 from datenwissenschaften.tas.mosaic import TILE_SUFFIX, tile
 from datenwissenschaften.tas.paths import atomic_write
-from datenwissenschaften.tas.runner import CellKey, SegmentRunner
-
-if TYPE_CHECKING:
-    from datenwissenschaften.tas.search import Cell, Crossing
+from datenwissenschaften.tas.runner import SegmentRunner
 
 LIVE_DIR = "live"
 REPORT_SUFFIX = ".msgpack"
@@ -19,6 +15,7 @@ FRAME_SECONDS = 1.0
 
 class WorkerReport(msgspec.Struct, frozen=True):
     seed: int
+    mode: str
     cells: int
     frames: int
     best_frames: int | None
@@ -40,16 +37,15 @@ def clear_reports(directory: Path) -> None:
 
 
 class WorkerLive:
-    def __init__(self, directory: Path, seed: int) -> None:
+    def __init__(self, directory: Path, seed: int, mode: str) -> None:
         self.directory = directory
         self.seed = seed
+        self.mode = mode
         self.frames = 0
         self.report_due = 0.0
         self.frame_due = 0.0
 
-    def step(
-        self, runner: SegmentRunner, archive: "dict[CellKey, Cell]", crossings: "list[Crossing]", frames: int
-    ) -> None:
+    def step(self, runner: SegmentRunner, cells: int, best: int | None, frames: int) -> None:
         self.frames += frames
         now = time.monotonic()
         if now >= self.frame_due:
@@ -57,6 +53,5 @@ class WorkerLive:
             atomic_write(self.directory / f"{self.seed}{TILE_SUFFIX}", tile(runner.emulator.em.get_screen()))
         if now >= self.report_due:
             self.report_due = now + REPORT_SECONDS
-            best = crossings[0].frames if crossings else None
-            report = WorkerReport(self.seed, len(archive), self.frames, best)
+            report = WorkerReport(self.seed, self.mode, cells, self.frames, best)
             atomic_write(self.directory / f"{self.seed}{REPORT_SUFFIX}", msgspec.msgpack.encode(report))

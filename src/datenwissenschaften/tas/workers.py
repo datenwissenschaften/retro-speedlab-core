@@ -12,6 +12,7 @@ from datenwissenschaften.tas.preferences import Preferences
 from datenwissenschaften.tas.prior import PRIOR_FILE, ActionPrior
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import Crossing, Searched, shave
+from datenwissenschaften.tas.strategies import WALK
 from datenwissenschaften.workflow.wrapper import wrapper_class
 
 
@@ -29,7 +30,7 @@ def worker_preferences(config: Path) -> Preferences:
 def explore(
     wrapper: str, config: Path, start: Start, bound: int, seed: int, seconds: float, live: Path | None
 ) -> Searched:
-    watched = None if live is None else WorkerLive(live, seed)
+    watched = None if live is None else WorkerLive(live, seed, WALK)
     runner, preferences = worker_runner(wrapper, config), worker_preferences(config)
     return search_segment(runner, start, bound, seed, seconds, watched, preferences)
 
