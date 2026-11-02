@@ -70,18 +70,20 @@ def test_the_tree_search_finds_the_way_out_by_expanding_its_most_promising_moves
 
 
 def test_the_modes_take_turns_by_their_share_of_the_time(monkeypatch):
+    clock = [0.0]
     spent: dict[str, float] = {"quick": 0.0, "slow": 0.0}
 
     def mode(name: str, seconds: float):
         def run(explored: Exploration, rng: random.Random) -> None:
-            time.sleep(seconds)
+            clock[0] += seconds
             spent[name] += seconds
 
         return run
 
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(explore, "STRATEGIES", (mode("quick", 0.001), mode("slow", 0.02)))
     monkeypatch.setattr(explore, "SHARES", (0.5, 0.5))
 
     explore.search_segment(LineRunner(), START, UNBOUNDED, 1, 0.4, None, NO_PREFERENCES)
 
-    assert abs(spent["quick"] - spent["slow"]) < 0.05
+    assert abs(spent["quick"] - spent["slow"]) <= 0.02

@@ -51,6 +51,11 @@ def finished(segments: list[Segment], until: str | None) -> bool:
     return bool(segments) and (segments[-1].won or segments[-1].state == until)
 
 
+def known(segments: list[Segment], states: tuple[str, ...]) -> list[Segment]:
+    unknown = next((index for index, segment in enumerate(segments) if segment.state not in states), len(segments))
+    return segments[:unknown]
+
+
 def load_progress(path: Path) -> list[Segment]:
     return msgspec.msgpack.decode(path.read_bytes(), type=list[Segment]) if path.is_file() else []
 
@@ -65,6 +70,17 @@ class Routes:
         self.progress = progress
         self.parts = parts
         self.routes = msgspec.msgpack.decode(path.read_bytes(), type=dict[str, Route]) if path.is_file() else {}
+
+    def prune(self, states: tuple[str, ...]) -> int:
+        kept = {name: Route(route.entry, known(list(route.segments), states)) for name, route in self.routes.items()}
+        progress = load_progress(self.progress)
+        dropped = sum(len(self.routes[name].segments) - len(route.segments) for name, route in kept.items())
+        dropped += len(progress) - len(known(progress, states))
+        if dropped:
+            self.routes = kept
+            atomic_write(self.path, msgspec.msgpack.encode(kept))
+            save_progress(self.progress, known(progress, states))
+        return dropped
 
     def segments(self, name: str) -> list[Segment]:
         return list(self.routes[name].segments) if name in self.routes else []

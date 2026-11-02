@@ -221,6 +221,8 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
     movie, compare = screen(settings, feed, "movie", render_movie), screen(settings, feed, "compare", render_compare)
     searcher = Searcher(wrapper, config, settings, pool, feed)
     routes = Routes(output / ROUTES_FILE, output / PROGRESS_FILE, parts_of(course))
+    if dropped := routes.prune(runner.order):
+        logger.warning(f"{dropped} stored pieces end in states the game package no longer has; they are searched again")
     return Tas(settings, runner, searcher, routes, feed, movie, compare, 0, None)
 
 

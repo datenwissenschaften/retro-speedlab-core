@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 import time
 from concurrent.futures import Executor
@@ -79,6 +80,7 @@ def train_policy_forever(wrapper: str, config: Path) -> None:
     with worker_pool(emulators) as pool:
         runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, os.getpid()))
         trainer = PolicyTrainer(runner, tas_dir(settings), gpu(), Collectors(wrapper, config, pool, emulators))
-        while True:
+        while multiprocessing.parent_process().is_alive():
             if not trainer.train_round():
                 time.sleep(WAIT_SECONDS)
+    logger.warning("The speedrun has stopped, so the policy stops with it")
