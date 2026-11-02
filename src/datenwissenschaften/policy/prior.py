@@ -8,16 +8,40 @@ from datenwissenschaften.route.route_map import changed_at
 POLICY_FILE = "policy.npz"
 BYTE_SCALE = 255.0
 
+WEIGHT = "weight"
+BIAS = "bias"
+VALUE_WEIGHT = "value_weight"
+VALUE_BIAS = "value_bias"
+
 Layers = list[tuple[np.ndarray, np.ndarray]]
+Weights = dict[str, np.ndarray]
 
 
-def load_layers(path: Path) -> Layers:
+def layers_of(weights: Weights) -> Layers:
+    count = sum(name.startswith(WEIGHT) for name in weights)
+    return [(weights[f"{WEIGHT}{index}"], weights[f"{BIAS}{index}"]) for index in range(count)]
+
+
+def load_weights(path: Path) -> Weights:
     with np.load(path) as arrays:
-        return [(arrays[f"weight{index}"], arrays[f"bias{index}"]) for index in range(len(arrays.files) // 2)]
+        return {name: arrays[name] for name in arrays.files}
 
 
 def observation(memory: np.ndarray) -> np.ndarray:
     return memory.astype(np.float32) / BYTE_SCALE
+
+
+def hidden_of(layers: Layers, memory: np.ndarray) -> np.ndarray:
+    hidden = observation(memory)
+    for weight, bias in layers[:-1]:
+        hidden = np.tanh(weight @ hidden + bias)
+    return hidden
+
+
+def log_probabilities(layers: Layers, hidden: np.ndarray, actions: int) -> np.ndarray:
+    logits = (layers[-1][0] @ hidden + layers[-1][1])[:actions]
+    shifted = logits - logits.max()
+    return shifted - np.log(np.exp(shifted).sum())
 
 
 class PolicyPrior:
@@ -29,7 +53,7 @@ class PolicyPrior:
     def current(self) -> Layers:
         changed = changed_at(self.path)
         if changed != self.loaded:
-            self.layers = [] if changed is None else load_layers(self.path)
+            self.layers = [] if changed is None else layers_of(load_weights(self.path))
             self.loaded = changed
         return self.layers
 
@@ -37,12 +61,7 @@ class PolicyPrior:
         layers = self.current()
         if not layers:
             return None
-        hidden = observation(memory)
-        for weight, bias in layers[:-1]:
-            hidden = np.tanh(weight @ hidden + bias)
-        logits = (layers[-1][0] @ hidden + layers[-1][1])[:actions]
-        exponents = np.exp(logits - logits.max())
-        return exponents / exponents.sum()
+        return np.exp(log_probabilities(layers, hidden_of(layers, memory), actions))
 
     def choose(self, memory: np.ndarray, actions: int, rng: random.Random) -> int | None:
         probabilities = self.probabilities(memory, actions)

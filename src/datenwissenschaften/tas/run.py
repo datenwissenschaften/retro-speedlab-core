@@ -1,4 +1,5 @@
 import multiprocessing
+import os
 import threading
 from collections.abc import Callable
 from concurrent.futures import Executor, ProcessPoolExecutor
@@ -38,6 +39,7 @@ MAX_CHECKPOINTS = 5
 IMPROVE_ROUNDS = 1
 
 MAIN_WORKER = 0
+MATH_THREADS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")
 TRIAL_MOVIE = f"trial-{TAS_MOVIE}"
 
 Footage = Callable[[RetroSpeedlabPaths, Path, tuple[bytes, ...]], Path]
@@ -201,6 +203,7 @@ def screen(settings: RetroSpeedlabConfig, feed: SpeedrunFeed, name: str, render:
 
 
 def worker_pool(workers: int) -> ProcessPoolExecutor:
+    os.environ.update(dict.fromkeys(MATH_THREADS, "1"))
     return ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn"))
 
 

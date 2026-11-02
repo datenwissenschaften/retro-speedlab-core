@@ -1,70 +1,18 @@
-from dataclasses import dataclass
-
 import numpy as np
 import torch
 from torch.distributions import Categorical
 
 from datenwissenschaften.policy.network import PolicyNet
-from datenwissenschaften.policy.prior import observation
-from datenwissenschaften.tas.novelty import RamNovelty
-from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.tas.search import leaves
+from datenwissenschaften.policy.rollout import Rollout
 
-ROLLOUT_DECISIONS = 2048
-EPISODE_DECISIONS = 128
 EPOCHS = 4
 MINIBATCH = 256
 GAMMA = 0.99
 LAMBDA = 0.95
 CLIP = 0.2
-VALUE_WEIGHT = 0.5
+VALUE_LOSS_WEIGHT = 0.5
 ENTROPY_WEIGHT = 0.01
-NOVELTY_REWARD = 0.01
-EXIT_REWARD = 10.0
-DEATH_PENALTY = 1.0
 STEADY = 1e-8
-
-
-@dataclass(slots=True)
-class Rollout:
-    observations: list[np.ndarray]
-    actions: list[int]
-    log_probs: list[float]
-    values: list[float]
-    rewards: list[float]
-    dones: list[bool]
-    exits: int
-
-
-def reward_of(outcome_reward: float, novelty: int, exited: bool, alive: bool) -> float:
-    return outcome_reward + NOVELTY_REWARD * novelty + EXIT_REWARD * exited - DEATH_PENALTY * (not alive)
-
-
-def collect(runner: SegmentRunner, start: Start, net: PolicyNet, device: torch.device, novelty: RamNovelty) -> Rollout:
-    rollout = Rollout([], [], [], [], [], [], 0)
-    runner.restore(start)
-    decisions = 0
-    while len(rollout.actions) < ROLLOUT_DECISIONS:
-        seen = observation(runner.memory())
-        with torch.no_grad():
-            logits, value = net(torch.from_numpy(seen).to(device)[None])
-        distribution = Categorical(logits=logits[0])
-        action = distribution.sample()
-        outcome = runner.decide(int(action))
-        decisions += 1
-        exited = leaves(runner, start, outcome.state, outcome.won)
-        ended = exited or not outcome.alive or outcome.state != start.state or decisions >= EPISODE_DECISIONS
-        rollout.observations.append(seen)
-        rollout.actions.append(int(action))
-        rollout.log_probs.append(float(distribution.log_prob(action)))
-        rollout.values.append(float(value[0]))
-        rollout.rewards.append(reward_of(outcome.reward, novelty.see(runner.memory()), exited, outcome.alive))
-        rollout.dones.append(ended)
-        rollout.exits += exited
-        if ended:
-            runner.restore(start)
-            decisions = 0
-    return rollout
 
 
 def advantages(rollout: Rollout) -> tuple[np.ndarray, np.ndarray]:
@@ -95,7 +43,7 @@ def update(net: PolicyNet, optimizer: torch.optim.Optimizer, rollout: Rollout, d
             clipped = torch.clamp(ratio, 1 - CLIP, 1 + CLIP)
             policy_loss = -torch.min(ratio * gains_t[batch], clipped * gains_t[batch]).mean()
             value_loss = (returns_t[batch] - values).pow(2).mean()
-            loss = policy_loss + VALUE_WEIGHT * value_loss - ENTROPY_WEIGHT * distribution.entropy().mean()
+            loss = policy_loss + VALUE_LOSS_WEIGHT * value_loss - ENTROPY_WEIGHT * distribution.entropy().mean()
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

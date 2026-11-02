@@ -1,3 +1,4 @@
+import os
 from concurrent.futures import Future
 from pathlib import Path
 from types import SimpleNamespace
@@ -353,3 +354,11 @@ def test_a_level_that_rests_right_after_going_back_a_piece_keeps_that_piece_drop
     segments = tas.extend(leg, [], 1 + BACKTRACK_SEARCHES)
 
     assert segments == [] and tas.routes.segments(leg.name) == []
+
+
+def test_worker_processes_compute_with_one_math_thread_each(monkeypatch):
+    monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
+
+    run.worker_pool(1).shutdown()
+
+    assert all(os.environ[name] == "1" for name in run.MATH_THREADS)

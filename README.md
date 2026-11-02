@@ -124,9 +124,11 @@ rewritten after every level's turn.
 
 ## PPO policy
 
-With `speedrun.policy`, a separate process with its own emulator trains a small
-network (RAM in, actions and a value out) with PPO on the GPU, always on the
-level whose turn it is. Its reward is the state's reward, RAM values never seen
+With `speedrun.policy`, a separate process trains a small network (RAM in,
+actions and a value out) with PPO on the GPU, always on the level whose turn it
+is. `speedrun.policy_emulators` emulator processes play its episodes in
+parallel with the network in numpy; every worker process computes with one math
+thread, so the search workers and these emulators share the cores evenly. Its reward is the state's reward, RAM values never seen
 on that level, a bonus for the exit and a penalty for a death. After every round
 of 2048 decisions it exports its weights to `cache/tas/policy.npz`, which the
 workers read with numpy.

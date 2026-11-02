@@ -29,6 +29,7 @@ speedrun:
   segment_seconds: 120
   guide: false
   policy: false
+  policy_emulators: 3
   id: airstriker-genesis-v0
   title: Airstriker
   platform: Genesis

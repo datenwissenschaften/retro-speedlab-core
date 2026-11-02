@@ -101,7 +101,7 @@ def start_policy(wrapper: str, config: Path) -> None:
     from datenwissenschaften.policy.trainer import train_policy_forever
 
     trainer = multiprocessing.get_context("spawn").Process(
-        target=train_policy_forever, args=(wrapper, config), name="policy", daemon=True
+        target=train_policy_forever, args=(wrapper, config), name="policy", daemon=False
     )
     trainer.start()
     logger.info(f"The policy trains with PPO in process {trainer.pid}")

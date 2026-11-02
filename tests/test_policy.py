@@ -1,4 +1,5 @@
 import random
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import msgspec
@@ -8,10 +9,13 @@ import torch
 from fakes import saving_environment
 from test_tas import START, LineRunner
 
-from datenwissenschaften.policy import ppo
-from datenwissenschaften.policy.network import PolicyNet, export_policy
+from datenwissenschaften.policy import collector, ppo
+from datenwissenschaften.policy import trainer as trainer_module
+from datenwissenschaften.policy.network import PolicyNet, export_policy, numpy_weights
 from datenwissenschaften.policy.prior import PolicyPrior
-from datenwissenschaften.policy.trainer import PolicyTrainer
+from datenwissenschaften.policy.rollout import collect, merged
+from datenwissenschaften.policy.trainer import Collectors, PolicyTrainer
+from datenwissenschaften.tas.novelty import RamNovelty
 from datenwissenschaften.tas.policy_start import POLICY_START_FILE, save_policy_start
 from datenwissenschaften.tas.preferences import Preferences
 from datenwissenschaften.tas.prior import ActionPrior
@@ -33,28 +37,35 @@ def test_the_workers_read_the_same_policy_the_trainer_exported(tmp_path: Path):
     assert PolicyPrior(tmp_path / "none.npz").choose(memory, 3, random.Random(1)) is None
 
 
-def test_ppo_plays_episodes_from_the_start_and_learns_from_them(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(ppo, "ROLLOUT_DECISIONS", 256)
+def test_ppo_plays_episodes_from_the_start_and_learns_from_them():
     runner, net = LineRunner(), PolicyNet(1, 3)
     optimizer = torch.optim.Adam(net.parameters(), lr=3e-4)
+    novelty, rng = RamNovelty(runner.memory()), np.random.default_rng(1)
 
-    rollout = ppo.collect(runner, START, net, CPU, ppo.RamNovelty(runner.memory()))
+    halves = [collect(runner, START, numpy_weights(net), novelty, 128, rng) for _ in range(2)]
+    rollout = merged(halves)
     loss = ppo.update(net, optimizer, rollout, CPU)
 
-    assert len(rollout.actions) == len(rollout.rewards) == 256 and any(rollout.dones)
+    assert len(rollout.actions) == len(rollout.rewards) == 256 and rollout.dones[127] and rollout.dones[-1]
     assert np.isfinite(loss)
     gains, returns = ppo.advantages(rollout)
     assert gains.shape == returns.shape == (256,)
 
 
-def test_the_trainer_waits_for_a_level_and_then_trains_and_exports(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(ppo, "ROLLOUT_DECISIONS", 64)
+def test_the_trainer_waits_for_a_level_and_then_trains_on_what_its_emulators_play(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(trainer_module, "ROLLOUT_DECISIONS", 32)
     runner = SegmentRunner(saving_environment(tmp_path))
-    trainer = PolicyTrainer(runner, tmp_path, CPU)
+    monkeypatch.setattr(collector, "worker_runner", lambda wrapper, config: runner)
+    collector.level_novelty.cache_clear()
+    pool = ThreadPoolExecutor(max_workers=1)
+    trainer = PolicyTrainer(runner, tmp_path, CPU, Collectors("fakes:FakeWrapper", tmp_path, pool, 2))
 
     assert not trainer.train_round()
     save_policy_start(tmp_path / POLICY_START_FILE, runner.power_on())
     assert trainer.train_round()
+    assert trainer.rounds == 1
     assert PolicyPrior(tmp_path / "policy.npz").probabilities(runner.memory(), 2) is not None
 
 
