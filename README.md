@@ -12,11 +12,18 @@ this repository turns it into a speedrun.
 
 - **Power-on start like a real speedrun**: every movie boots the game at its
   title screen; levels are states of one full-game run
-- **Go-Explore segment search** on many emulator processes, split at the state
-  machine's transitions
+- **Every level practised on its own**: the engine keeps the frame before the
+  first level change a route makes and loads any level from it; the levels take
+  turns of three searches each
+- **Three search modes per segment** on many emulator processes: Go-Explore
+  walks, a breadth-first frontier search over short input combinations and a
+  Monte Carlo tree search
+- **Learned guidance**: RAM values never seen before, a move table learned from
+  every stored piece, and a PPO policy that trains on the GPU
 - **Every segment is verified**: the whole movie replays from power-on before a
   new segment counts
-- **Route memory** from earlier runs guides the search towards a state's exit
+- **Route memory** from the practised levels guides the search towards each
+  level's exit
 - `.bk2` movie and MP4 video of the verified run
 - **Live relay** of the newest verified segment, the run's time, level splits
   and the lab's status to the Retro Speedlab backend
@@ -53,18 +60,29 @@ python -m datenwissenschaften.tas.run improve <wrapper> <config>
 python -m datenwissenschaften.tas.run verify <wrapper> <config> <progress>
 ```
 
-The run is split at the state machine's transitions. Each segment is searched
-Go-Explore style on `speedrun.workers` emulator processes: an archive keeps the
-fastest savestate per cell (state, 8 px position, height, airborne and
-`RamInfo.dynamics()`, the game's coarse view of whatever moves nearby) and
-branches from rarely visited cells with short random input bursts. Half the time
-it branches from the tenth of cells that earned the most of the segment's
-reward, and it favours cells the route memory knows to be few decisions from the
-exit; a full archive drops its least promising cell. Workers step the emulator
-core without rendering. A crossing into a later state ends a branch and counts
-only when the new state holds; deaths and backward transitions drop it. Of the
-three fastest distinct crossings, the one whose next segment is also fastest is
-kept, and frames it does not need are shaved off. A segment gets
+The run is split at the state machine's transitions. Each segment is searched on
+`speedrun.workers` emulator processes over an archive that keeps the fastest
+savestate per cell (state, 8 px position, height, airborne and
+`RamInfo.dynamics()`, the game's coarse view of whatever moves nearby). Three
+modes share each search by time:
+
+- **Go-Explore walks** (60 %) branch from rarely visited cells with short input
+  bursts; half the time they start from the tenth of cells that earned the most
+  of the segment's reward.
+- **Frontier search** (20 %) tries every action with holds of 1, 3 and 8
+  decisions, three deep and breadth first, from a chosen cell: the frame-precise
+  jumps random walks rarely hit.
+- **Monte Carlo tree search** (20 %) expands the moves with the best upper
+  confidence bound and scores short rollouts by reward and new cells.
+
+Cells gain weight for RAM byte values never seen before in the segment and for
+being close to the exit on the route memory. Walks and rollouts follow a move
+table learned from every stored piece (`cache/tas/prior.msgpack`) 30 % of the
+time and the PPO policy 20 % of the time. A full archive drops its least
+promising cell. A crossing into a later state ends a branch and counts only when
+the new state holds; deaths and backward transitions drop it. Of the three
+fastest distinct crossings, the one whose next segment is also fastest is kept,
+and frames it does not need are shaved off. A segment gets
 `speedrun.segment_seconds` per round and twice as long with each retry. Random
 numbers live in the savestates, so the search plans against the real RNG and can
 wait frames to change it. A segment without a way out is marked stuck in
@@ -99,10 +117,19 @@ game package.
 
 ## Route memory
 
-`paths.models/<game>/<state>/route.json` lists, per 8 px cell, how many
-decisions the fastest known run needed from there to the state's exit. The
-search weights cells on the route by how close they are to the exit. A state
-without the file is searched without guidance.
+`cache/reference/route.json` lists, per 16 px cell of every beaten level, how
+many frames the level's route still needed from there to its exit. The search
+weights cells on the route by how close they are to the exit, and the file is
+rewritten after every level's turn.
+
+## PPO policy
+
+With `speedrun.policy`, a separate process with its own emulator trains a small
+network (RAM in, actions and a value out) with PPO on the GPU, always on the
+level whose turn it is. Its reward is the state's reward, RAM values never seen
+on that level, a bonus for the exit and a penalty for a death. After every round
+of 2048 decisions it exports its weights to `cache/tas/policy.npz`, which the
+workers read with numpy.
 
 ## Workflows and the lab
 
