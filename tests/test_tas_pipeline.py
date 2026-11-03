@@ -20,7 +20,7 @@ from datenwissenschaften.tas.reel import Reel
 from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Part, Route, Routes
 from datenwissenschaften.tas.run import BACKTRACK_SEARCHES
 from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.tas.search import Checkpoint, Crossing, shave
+from datenwissenschaften.tas.search import UNBOUNDED, Checkpoint, Crossing, shave
 from datenwissenschaften.tas.stuck import STUCK_FILE, Stuck, load_stuck
 from datenwissenschaften.tas.turns import Turn, load_turn, save_turn
 
@@ -307,9 +307,18 @@ def test_a_level_with_patience_rests_after_that_many_searches(tmp_path: Path, mo
     assert searched == ["Survive", "Survive"]
 
 
-@pytest.mark.parametrize(("taken", "searches"), [(Turn(FULL_RUN, 2), 1), (Turn(FULL_RUN, 3), 3), (Turn("Other", 2), 3)])
+@pytest.mark.parametrize(
+    ("taken", "searches", "ended"),
+    [
+        (Turn(FULL_RUN, 2), 1, Turn(FULL_RUN, 3)),
+        (Turn(FULL_RUN, 3), 3, Turn(FULL_RUN, 3)),
+        (Turn("Other", 2), 3, Turn(FULL_RUN, 3)),
+        (Turn(FULL_RUN, 5, 4), 2, Turn(FULL_RUN, 7, 4)),
+        (Turn(FULL_RUN, 11, 10), 1, Turn(FULL_RUN, 12, 10)),
+    ],
+)
 def test_a_turn_cut_by_a_restart_goes_on_with_the_searches_it_has_left(
-    tmp_path: Path, monkeypatch, taken: Turn, searches: int
+    tmp_path: Path, monkeypatch, taken: Turn, searches: int, ended: Turn
 ):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
@@ -320,24 +329,26 @@ def test_a_turn_cut_by_a_restart_goes_on_with_the_searches_it_has_left(
     tas.extend(Leg(FULL_RUN, runner.power_on(), "Exit"), [], 3)
 
     assert len(searched) == searches
-    assert load_turn(tas.turn_file) == Turn(FULL_RUN, 3)
+    assert load_turn(tas.turn_file) == ended
 
 
-def test_a_level_rests_after_its_searches_even_when_they_find_something(tmp_path: Path, monkeypatch):
+def test_a_level_keeps_its_turn_while_its_searches_find_pieces(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
     found = searcher.Searcher.best
     searched: list[str] = []
 
-    def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Crossing | None:
-        searched.append(start.state)
+    def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Crossing | Checkpoint | None:
+        if bound == UNBOUNDED:
+            searched.append(start.state)
         return found(self, start, bound, rounds)
 
     monkeypatch.setattr(searcher.Searcher, "best", best)
 
     segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Exit"), [], 1)
 
-    assert [segment.state for segment in segments] == ["Boss"] and searched[0] == "Survive"
+    assert [segment.state for segment in segments] == ["Boss"]
+    assert searched == ["Survive", "Boss"]
 
 
 def test_a_level_that_rests_right_after_going_back_a_piece_keeps_that_piece_dropped(tmp_path: Path, monkeypatch):

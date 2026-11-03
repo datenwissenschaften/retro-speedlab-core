@@ -27,7 +27,7 @@ from datenwissenschaften.tas.search import UNBOUNDED, Checkpoint, Crossing
 from datenwissenschaften.tas.searcher import Searcher
 from datenwissenschaften.tas.shown import SHOWN_FILE, worth_showing
 from datenwissenschaften.tas.stuck import STUCK_FILE, load_stuck, mark_stuck
-from datenwissenschaften.tas.turns import TURN_FILE, Turn, save_turn, searches_taken
+from datenwissenschaften.tas.turns import TURN_FILE, Turn, save_turn, turn_of
 from datenwissenschaften.ui.relay import relay_key
 from datenwissenschaften.ui.video_upload import VideoUpload
 from datenwissenschaften.workflow.wrapper import wrapper_class
@@ -116,14 +116,14 @@ class Tas:
         return replayed
 
     def extend(self, leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
-        searches = 0 if patience is None else searches_taken(self.turn_file, leg.name, patience)
+        turn = Turn(leg.name, 0) if patience is None else turn_of(self.turn_file, leg.name, patience)
         while not finished(segments := self.verified(leg, segments), leg.exit):
-            if patience is not None and searches >= patience:
-                logger.info(f"{leg.name} rests after {searches} searches; the next level takes its turn")
+            if patience is not None and turn.over(patience):
+                logger.info(f"{leg.name} rests after {turn.searches} searches; the next level takes its turn")
                 return segments
-            searches += 1
+            turn = turn.searched()
             if patience is not None:
-                save_turn(self.turn_file, Turn(leg.name, searches))
+                save_turn(self.turn_file, turn)
             start = self.start(leg, segments, len(segments))
             self.feed.show(self.routes.view(leg.name, segments), start.state)
             found = self.searcher.best(start, UNBOUNDED, SEARCH_ROUNDS)
@@ -141,6 +141,9 @@ class Tas:
                 segments = self.stuck(leg, segments, start)
                 continue
             self.barred = None
+            turn = turn.found()
+            if patience is not None:
+                save_turn(self.turn_file, turn)
             self.leave(found.end.state)
             self.feed.event("found", found.end.state, found.frames)
             segments = self.keep(leg, [*segments, segment_of(found)], found.end.state)

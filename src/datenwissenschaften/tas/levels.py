@@ -57,7 +57,7 @@ class LevelTrainer:
         names = [part.name for part in self.routes.parts]
         if turn is None or turn.part not in names:
             return unbeaten
-        first = names.index(turn.part) + (turn.searches >= PRACTICE_SEARCHES)
+        first = names.index(turn.part) + turn.over(PRACTICE_SEARCHES)
         later = [part for part in unbeaten if names.index(part.name) >= first]
         return [*later, *(part for part in unbeaten if part not in later)]
 
