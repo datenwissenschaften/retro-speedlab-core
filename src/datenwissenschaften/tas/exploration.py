@@ -1,8 +1,8 @@
 import time
 from dataclasses import dataclass, replace
 
+from datenwissenschaften.tas.archives import Archive
 from datenwissenschaften.tas.live import WorkerLive
-from datenwissenschaften.tas.novelty import RamNovelty
 from datenwissenschaften.tas.preferences import Preferences
 from datenwissenschaften.tas.runner import CellKey, SegmentRunner, Start
 from datenwissenschaften.tas.search import (
@@ -40,6 +40,7 @@ class Exploration:
         deadline: float,
         live: WorkerLive | None,
         preferences: Preferences,
+        archive: Archive,
     ) -> None:
         self.runner = runner
         self.start = start
@@ -48,8 +49,8 @@ class Exploration:
         self.live = live
         self.preferences = preferences
         runner.restore(start)
-        self.novelty = RamNovelty(runner.memory())
-        self.archive: dict[CellKey, Cell] = {runner.key(0): Cell(start, None, 0, 0, runner.remaining(), 0.0, 0)}
+        self.novelty = archive.novelty
+        self.archive: dict[CellKey, Cell] = archive.cells
         self.crossings: list[Crossing] = []
 
     def running(self) -> bool:
@@ -84,6 +85,9 @@ class Exploration:
         novelty = self.novelty.see(self.runner.memory())
         self.archive[key] = Cell(here, step.trail, step.frames, 0, self.runner.remaining(), step.score, novelty)
         return True
+
+    def kept(self) -> Archive:
+        return Archive(self.archive, self.novelty)
 
     def searched(self) -> Searched:
         return Searched(self.crossings, checkpoint_of(self.archive))

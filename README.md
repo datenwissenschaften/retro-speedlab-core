@@ -79,7 +79,9 @@ Cells gain weight for RAM byte values never seen before in the segment and for
 being close to the exit on the route memory. Walks and rollouts follow a move
 table learned from every stored piece (`cache/tas/prior.msgpack`) 30 % of the
 time and the PPO policy 20 % of the time. A full archive drops its least
-promising cell. A crossing into a later state ends a branch and counts only when
+promising cell. Each search process keeps the 1000 best cells of the last 12
+starts it explored, so a later search from the same start goes on where the
+last one stopped instead of starting over. A crossing into a later state ends a branch and counts only when
 the new state holds; deaths and backward transitions drop it. Of the three
 fastest distinct crossings, the one whose next segment is also fastest is kept,
 and frames it does not need are shaved off. A segment gets

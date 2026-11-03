@@ -8,6 +8,7 @@ from fakes import saving_environment
 from test_tas import NO_PREFERENCES, START, LineRunner
 
 from datenwissenschaften.tas import explore
+from datenwissenschaften.tas.archives import KEPT_CELLS, Archive, Archives, fresh_archive, pruned
 from datenwissenschaften.tas.exploration import Exploration
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.novelty import RamNovelty
@@ -49,7 +50,9 @@ def test_the_prior_learns_the_actions_of_the_stored_pieces(tmp_path: Path):
 
 
 def exploration() -> Exploration:
-    return Exploration(LineRunner(), START, UNBOUNDED, time.monotonic() + 5.0, None, NO_PREFERENCES)
+    runner = LineRunner()
+    archive = fresh_archive(runner, START)
+    return Exploration(runner, START, UNBOUNDED, time.monotonic() + 5.0, None, NO_PREFERENCES, archive)
 
 
 def test_the_frontier_tries_every_short_input_from_a_place_and_finds_the_shortest_crossing():
@@ -84,6 +87,23 @@ def test_the_modes_take_turns_by_their_share_of_the_time(monkeypatch):
     monkeypatch.setattr(explore, "STRATEGIES", (mode("quick", 0.001), mode("slow", 0.02)))
     monkeypatch.setattr(explore, "SHARES", (0.5, 0.5))
 
-    explore.search_segment(LineRunner(), START, UNBOUNDED, 1, 0.4, None, NO_PREFERENCES)
+    explore.search_segment(LineRunner(), START, UNBOUNDED, 1, 0.4, None, NO_PREFERENCES, Archives())
 
     assert abs(spent["quick"] - spent["slow"]) <= 0.02
+
+
+def test_a_search_from_the_same_start_goes_on_from_the_places_the_last_one_found():
+    archives = Archives()
+    explore.search_segment(LineRunner(), START, UNBOUNDED, 1, 0.2, None, NO_PREFERENCES, archives)
+    explored = archives.resumed(LineRunner(), START, UNBOUNDED)
+
+    assert len(explored.cells) > 1
+    assert len(archives.resumed(LineRunner(), START, UNBOUNDED - 1).cells) == 1
+
+
+def test_a_kept_archive_holds_only_the_best_scored_places():
+    explored = exploration()
+    frontier(explored, random.Random(1))
+    many = {index: explored.archive[next(iter(explored.archive))] for index in range(KEPT_CELLS + 5)}
+
+    assert len(pruned(Archive(many, explored.novelty)).cells) == KEPT_CELLS

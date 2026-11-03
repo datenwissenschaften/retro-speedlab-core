@@ -24,6 +24,7 @@ dependencies = [
     "flyte==2.12.0",
     "typer==0.27.3",
     "sentry-sdk==2.73.0",
+    "cachetools>=7.2.8",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

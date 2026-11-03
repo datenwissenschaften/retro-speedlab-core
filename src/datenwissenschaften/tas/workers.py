@@ -5,6 +5,7 @@ from pathlib import Path
 from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.policy.prior import POLICY_FILE, PolicyPrior
 from datenwissenschaften.settings import load_config
+from datenwissenschaften.tas.archives import Archives
 from datenwissenschaften.tas.explore import search_segment
 from datenwissenschaften.tas.live import WorkerLive
 from datenwissenschaften.tas.paths import tas_dir
@@ -27,12 +28,17 @@ def worker_preferences(config: Path) -> Preferences:
     return Preferences(ActionPrior(output / PRIOR_FILE), PolicyPrior(output / POLICY_FILE))
 
 
+@cache
+def worker_archives() -> Archives:
+    return Archives()
+
+
 def explore(
     wrapper: str, config: Path, start: Start, bound: int, seed: int, seconds: float, live: Path | None
 ) -> Searched:
     watched = None if live is None else WorkerLive(live, seed, WALK)
     runner, preferences = worker_runner(wrapper, config), worker_preferences(config)
-    return search_segment(runner, start, bound, seed, seconds, watched, preferences)
+    return search_segment(runner, start, bound, seed, seconds, watched, preferences, worker_archives())
 
 
 def polish(wrapper: str, config: Path, start: Start, crossing: Crossing, seconds: float) -> Crossing:

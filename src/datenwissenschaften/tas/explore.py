@@ -1,6 +1,7 @@
 import random
 import time
 
+from datenwissenschaften.tas.archives import Archives
 from datenwissenschaften.tas.exploration import Exploration
 from datenwissenschaften.tas.live import WorkerLive
 from datenwissenschaften.tas.preferences import Preferences
@@ -21,9 +22,11 @@ def search_segment(
     seconds: float,
     live: WorkerLive | None,
     preferences: Preferences,
+    archives: Archives,
 ) -> Searched:
     rng = random.Random(seed)
-    exploration = Exploration(runner, start, bound, time.monotonic() + seconds, live, preferences)
+    archive = archives.resumed(runner, start, bound)
+    exploration = Exploration(runner, start, bound, time.monotonic() + seconds, live, preferences, archive)
     spent = [0.0] * len(STRATEGIES)
     while exploration.running():
         turn = min(range(len(STRATEGIES)), key=lambda index: spent[index] / SHARES[index])
@@ -32,4 +35,5 @@ def search_segment(
         began = time.monotonic()
         STRATEGIES[turn](exploration, rng)
         spent[turn] += time.monotonic() - began
+    archives.keep(start, bound, exploration.kept())
     return exploration.searched()

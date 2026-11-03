@@ -11,6 +11,7 @@ from fakes import saving_environment, write_config
 from datenwissenschaften.policy.prior import PolicyPrior
 from datenwissenschaften.tas import feed as feed_module
 from datenwissenschaften.tas import footage, movie, run, searcher, workers
+from datenwissenschaften.tas.archives import Archives
 from datenwissenschaften.tas.explore import search_segment
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.paths import TAS_MOVIE, atomic_write
@@ -202,7 +203,7 @@ def test_workers_search_and_shave_from_a_savestate(tmp_path: Path, monkeypatch):
     runner = workers.worker_runner.__wrapped__("fakes:FakeWrapper", write_config(tmp_path))
     start = runner.power_on()
     preferences = Preferences(ActionPrior(tmp_path / "prior.msgpack"), PolicyPrior(tmp_path / "policy.npz"))
-    crossing = search_segment(runner, start, 100, 1, SECONDS, None, preferences).crossings[0]
+    crossing = search_segment(runner, start, 100, 1, SECONDS, None, preferences, Archives()).crossings[0]
     monkeypatch.setattr(workers, "worker_runner", lambda wrapper, config: runner)
     monkeypatch.setattr(workers, "worker_preferences", lambda config: preferences)
 
