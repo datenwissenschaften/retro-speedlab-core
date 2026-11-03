@@ -5,7 +5,10 @@ import msgspec
 from datenwissenschaften.tas.paths import atomic_write
 
 TURN_FILE = "turn.json"
+COURSE_FILE = "course.json"
 LONGEST_TURN = 4
+
+LevelStates = dict[str, tuple[str, ...]]
 
 
 class Turn(msgspec.Struct, frozen=True):
@@ -36,3 +39,9 @@ def turn_of(path: Path, part: str, patience: int) -> Turn:
     if turn is None or turn.part != part or turn.over(patience):
         return Turn(part, 0)
     return turn
+
+
+def changed_level(path: Path, levels: LevelStates) -> str | None:
+    before = msgspec.json.decode(path.read_bytes(), type=LevelStates) if path.is_file() else levels
+    atomic_write(path, msgspec.json.encode(levels))
+    return next((level for level, states in levels.items() if level not in before or before[level] != states), None)

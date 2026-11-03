@@ -17,7 +17,7 @@ from datenwissenschaften.tas.routes import (
     save_progress,
 )
 from datenwissenschaften.tas.runner import Start
-from datenwissenschaften.tas.turns import Turn, save_turn
+from datenwissenschaften.tas.turns import Turn, load_turn, save_turn
 
 COURSE = SimpleNamespace(first="Menu", levels={"Level 1": ("Play", "Heavy"), "Level 2": ("Level2", "Boss2")})
 POWER_ON = Start("Menu", b"on")
@@ -243,6 +243,39 @@ def test_after_a_restart_the_levels_take_turns_from_the_turn_that_was_running(
         trainer.beat_levels()
 
     assert practised == [first]
+
+
+def test_after_the_game_package_changes_the_states_of_a_level_that_level_takes_the_next_turn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
+    monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path, done: None)
+    monkeypatch.setattr(levels, "write_prior", lambda runner, kept, path: None)
+    monkeypatch.setattr(levels, "practised", pieces)
+    monkeypatch.setattr(levels, "level_start", lambda runner, loader, level, state: Start(state, b"cheat"))
+    kept = routes(tmp_path)
+    kept.split(RUN[:1], POWER_ON)
+    tas = trainer_tas(tmp_path, [], None, None)
+    practised: list[str] = []
+
+    def extend(leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
+        practised.append(leg.name)
+        raise OneRound
+
+    tas.extend = extend
+    tas.feed.course = COURSE
+    levels.turn_to_changed_level(tas)
+    save_turn(tas.turn_file, Turn("Level 1", 1))
+    levels.turn_to_changed_level(tas)
+    assert load_turn(tas.turn_file) == Turn("Level 1", 1)
+    tas.feed.course = SimpleNamespace(first="Menu", levels={**COURSE.levels, "Level 2": ("Level2", "Bridge2", "Boss2")})
+    levels.turn_to_changed_level(tas)
+
+    trainer = LevelTrainer(tas, kept, POWER_ON, levels.LevelLoader(b"loader", 2), NO_REEL)
+    with pytest.raises(OneRound):
+        trainer.beat_levels()
+
+    assert practised == ["Level 2"]
 
 
 def test_pieces_in_states_the_game_package_dropped_are_pruned_and_searched_again(tmp_path: Path):

@@ -21,7 +21,7 @@ from datenwissenschaften.tas.reel import Reel
 from datenwissenschaften.tas.routes import FULL_RUN, Leg, Part, Routes, finished, load_progress, save_progress
 from datenwissenschaften.tas.run import Tas, tas_run, worker_pool
 from datenwissenschaften.tas.runner import Start
-from datenwissenschaften.tas.turns import load_turn
+from datenwissenschaften.tas.turns import COURSE_FILE, Turn, changed_level, load_turn, save_turn
 
 PRACTICE_SEARCHES = 3
 
@@ -100,6 +100,14 @@ class LevelTrainer:
             self.full_run()
 
 
+def turn_to_changed_level(tas: Tas) -> None:
+    changed = changed_level(tas.output / COURSE_FILE, tas.feed.course.levels)
+    if changed is None:
+        return
+    logger.info(f"The game package changed the states of {changed}; it takes the next turn")
+    save_turn(tas.turn_file, Turn(changed, 0))
+
+
 def start_policy(wrapper: str, config: Path) -> None:
     from datenwissenschaften.policy.trainer import train_policy_forever
 
@@ -120,4 +128,5 @@ def speedrun_forever(wrapper: str, config: Path) -> None:
         ensure_guide(settings, tas.runner, tas.routes.stitched())
         loader = ensure_loader(tas.output / LOADER_FILE, tas.runner, tas.routes)
         reel = Reel(settings, tas.feed, tas.runner, tas.routes)
+        turn_to_changed_level(tas)
         LevelTrainer(tas, tas.routes, tas.runner.power_on(), loader, reel).forever()
