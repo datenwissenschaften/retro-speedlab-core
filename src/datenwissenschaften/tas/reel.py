@@ -43,7 +43,9 @@ class Reel:
             segments = self.routes.segments(part.name)
             number, shown = self.screens[part.name]
             key = msgspec.msgpack.encode([segment.pressed for segment in segments])
-            if segments and key != shown.queued:
+            if not segments:
+                self.feed.unreeled(part.name)
+            elif key != shown.queued:
                 shown.queue(self.cut(part, number, key))
 
     def cut(self, part: Part, number: int, key: bytes) -> Cut:

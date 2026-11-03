@@ -1,12 +1,13 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import msgspec
+import numpy as np
 
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.paths import atomic_write
 from datenwissenschaften.tas.report import Course
-from datenwissenschaften.tas.runner import Start
+from datenwissenschaften.tas.runner import SegmentRunner, Start
 
 ROUTES_FILE = "levels.msgpack"
 FULL_RUN = "Full run"
@@ -51,9 +52,18 @@ def finished(segments: list[Segment], until: str | None) -> bool:
     return bool(segments) and (segments[-1].won or segments[-1].state == until)
 
 
-def known(segments: list[Segment], states: tuple[str, ...]) -> list[Segment]:
-    unknown = next((index for index, segment in enumerate(segments) if segment.state not in states), len(segments))
-    return segments[:unknown]
+def relabelled(runner: SegmentRunner, start: Start, segments: list[Segment]) -> list[Segment]:
+    runner.restore(start)
+    kept = []
+    for segment in segments:
+        for buttons in segment.pressed:
+            runner.press(np.asarray(buttons, dtype=np.int8))
+        kept.append(replace(segment, state=runner.wrapper.state_machine.state_name))
+    return kept
+
+
+def stale(segments: list[Segment], states: tuple[str, ...]) -> bool:
+    return any(segment.state not in states for segment in segments)
 
 
 def load_progress(path: Path) -> list[Segment]:
@@ -71,16 +81,20 @@ class Routes:
         self.parts = parts
         self.routes = msgspec.msgpack.decode(path.read_bytes(), type=dict[str, Route]) if path.is_file() else {}
 
-    def prune(self, states: tuple[str, ...]) -> int:
-        kept = {name: Route(route.entry, known(list(route.segments), states)) for name, route in self.routes.items()}
+    def relabel(self, runner: SegmentRunner) -> list[str]:
+        states, entries = runner.order, {part.name: part.entry_state for part in self.parts}
+        changed = [name for name, route in self.routes.items() if stale(list(route.segments), states)]
+        for name in changed:
+            route = self.routes[name]
+            segments = relabelled(runner, Start(entries[name], route.entry), list(route.segments))
+            self.routes = {**self.routes, name: Route(route.entry, segments)}
+        if changed:
+            atomic_write(self.path, msgspec.msgpack.encode(self.routes))
         progress = load_progress(self.progress)
-        dropped = sum(len(self.routes[name].segments) - len(route.segments) for name, route in kept.items())
-        dropped += len(progress) - len(known(progress, states))
-        if dropped:
-            self.routes = kept
-            atomic_write(self.path, msgspec.msgpack.encode(kept))
-            save_progress(self.progress, known(progress, states))
-        return dropped
+        if stale(progress, states):
+            save_progress(self.progress, relabelled(runner, runner.power_on(), progress))
+            changed.append(FULL_RUN)
+        return changed
 
     def segments(self, name: str) -> list[Segment]:
         return list(self.routes[name].segments) if name in self.routes else []

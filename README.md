@@ -140,8 +140,9 @@ workers read with numpy.
 improves the movie forever. `lab` first starts the critic (`agent/critic.sh`)
 once five new reports landed in `agent/reports/` since its last review; the
 stream shows its lessons as `metadata.critic`. Then it starts a lab run
-(`agent/daily.sh` of the game package) at once when the search is stuck, or once
-the movie has not improved for `agent.stall_minutes` minutes. Claude Code works
+(`agent/daily.sh` of the game package) once no level stored a piece, the movie
+did not improve and no lab run ended for `agent.stall_minutes` minutes; a level
+resting after its turn does not call the lab, since the next level may move. Claude Code works
 for `agent.minutes` minutes on its own git worktree of the game package, and its
 branch ships only when its checks pass and the current movie still replays with
 it (`tas.run verify`). The lead session delegates to the subagents defined in the
@@ -214,7 +215,7 @@ raise an error when the configuration is loaded.
 | `upload.url`, `upload.api_key` | Retro Speedlab API; `null` disables the relay |
 | `ui.enable`, `ui.release` | Live relay on or off and the release label shown on stream |
 | `twitch.enabled` | Whether the stream page goes live on Twitch |
-| `agent.stall_minutes` | Minutes without a faster movie before the `lab` task starts a lab run |
+| `agent.stall_minutes` | Minutes without a new piece, a faster movie or a lab run before the `lab` task starts one |
 | `speedrun.workers`, `speedrun.segment_seconds` | Search processes and seconds per segment round |
 | `speedrun.id`, `speedrun.title`, `speedrun.platform` | The game as the stream names it |
 | `speedrun.category`, `speedrun.speedrun_com`, `speedrun.tasvideos` | The category run and where its records are read: speedrun.com game, category and variables, TASVideos publication |

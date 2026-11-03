@@ -14,7 +14,6 @@ from datenwissenschaften.tas.routes import (
     Routes,
     load_progress,
     parts_of,
-    save_progress,
 )
 from datenwissenschaften.tas.runner import Start
 from datenwissenschaften.tas.turns import Turn, load_turn, save_turn
@@ -276,17 +275,3 @@ def test_after_the_game_package_changes_the_states_of_a_level_that_level_takes_t
         trainer.beat_levels()
 
     assert practised == ["Level 2"]
-
-
-def test_pieces_in_states_the_game_package_dropped_are_pruned_and_searched_again(tmp_path: Path):
-    kept = routes(tmp_path)
-    kept.split(RUN, POWER_ON)
-    save_progress(tmp_path / "progress.msgpack", RUN)
-
-    dropped = kept.prune(("Menu", "Play", "Heavy", "Level2"))
-
-    loaded = routes(tmp_path)
-    assert dropped == 2
-    assert [loaded.segments(part.name) for part in loaded.parts] == [RUN[:1], RUN[1:3], []]
-    assert load_progress(tmp_path / "progress.msgpack") == RUN[:3]
-    assert loaded.prune(("Menu", "Play", "Heavy", "Level2")) == 0

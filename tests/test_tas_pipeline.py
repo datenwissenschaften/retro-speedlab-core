@@ -17,7 +17,7 @@ from datenwissenschaften.tas.paths import TAS_MOVIE, atomic_write
 from datenwissenschaften.tas.preferences import Preferences
 from datenwissenschaften.tas.prior import ActionPrior
 from datenwissenschaften.tas.reel import Reel
-from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Part, Route, Routes
+from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Part, Route, Routes, load_progress, save_progress
 from datenwissenschaften.tas.run import BACKTRACK_SEARCHES
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import UNBOUNDED, Checkpoint, Crossing, shave
@@ -400,3 +400,34 @@ def test_every_level_with_pieces_gets_its_best_video_once_in_level_order(tmp_pat
     reel = published[-1]["reel"]
     assert [(level["part"], level["video"], level["frames"]) for level in reel] == [("Level 1", "levels/1.mp4", 2)]
     assert len(rendered) == 1
+
+
+def test_pieces_in_states_the_game_package_dropped_keep_their_place_under_the_state_they_reach_now(tmp_path: Path):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Survive", "Survive", "Boss")])
+    gone = [Segment("Gone", [[0, 0]] * 1, bytes([1]), False), Segment("Boss", [[0, 0]] * 2, bytes([3]), False)]
+    routes.save(Leg("Survive", Start("Survive", bytes([0])), "Boss"), gone)
+    save_progress(tmp_path / "progress.msgpack", gone)
+
+    assert routes.relabel(runner) == ["Survive", FULL_RUN]
+
+    kept = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", routes.parts)
+    assert [segment.state for segment in kept.segments("Survive")] == ["Survive", "Boss"]
+    assert [segment.pressed for segment in kept.segments("Survive")] == [segment.pressed for segment in gone]
+    assert [segment.state for segment in load_progress(tmp_path / "progress.msgpack")] == ["Survive", "Boss"]
+    assert kept.relabel(runner) == []
+
+
+def test_a_level_without_a_route_leaves_the_reel(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    routes = Routes(
+        tmp_path / "levels.msgpack",
+        tmp_path / "progress.msgpack",
+        [Part("Survive", "Survive", "Boss"), Part("Level 1", "Boss", None)],
+    )
+    tas.feed.reeled("Level 1", {"number": 1, "part": "Level 1"})
+
+    Reel(tas.settings, tas.feed, runner, routes).show()
+
+    assert tas.feed.reel == {}

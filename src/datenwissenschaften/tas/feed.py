@@ -53,6 +53,10 @@ class SpeedrunFeed:
             self.reel = {**self.reel, level: field}
         self.publish()
 
+    def unreeled(self, level: str) -> None:
+        with self.lock:
+            self.reel = {name: video for name, video in self.reel.items() if name != level}
+
     def practised(self, progress: dict[str, PartProgress]) -> None:
         practice = {level: self.level_progress(part) for level, part in progress.items()}
         with self.lock:

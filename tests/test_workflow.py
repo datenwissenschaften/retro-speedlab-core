@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest
 from fakes import FakeWrapper, write_config
 
-from datenwissenschaften.settings import load_config
+from datenwissenschaften.tas.routes import ROUTES_FILE
 from datenwissenschaften.tas.run import BACKTRACK_SEARCHES
 from datenwissenschaften.tas.stuck import STUCK_FILE, mark_stuck
 from datenwissenschaften.workflow import lab as lab_module
-from datenwissenschaften.workflow.lab import lab, lab_run_due, remember_baseline
+from datenwissenschaften.workflow.lab import lab, lab_run_due
 from datenwissenschaften.workflow.wrapper import wrapper_class
 
 STALLED_SECONDS_AGO = 31 * 60
@@ -50,32 +50,15 @@ def test_no_lab_run_while_the_search_progresses(tmp_path: Path):
     assert not lab_run_due(config)
 
 
-def stuck_searches(tmp_path: Path, searches: int) -> None:
-    for _ in range(searches):
+def test_a_stuck_level_alone_calls_no_lab_run_while_another_level_stores_pieces(tmp_path: Path):
+    config = str(write_config(tmp_path))
+    searching(tmp_path)
+    progress(tmp_path, STALLED_SECONDS_AGO)
+    for _ in range(3 * BACKTRACK_SEARCHES):
         mark_stuck(tmp_path / "cache" / "tas" / STUCK_FILE, "Boss")
+    (tmp_path / "cache" / "tas" / ROUTES_FILE).write_bytes(b"")
 
-
-def test_a_stuck_search_lets_the_lab_in_once_it_has_backtracked(tmp_path: Path):
-    config = str(write_config(tmp_path))
-    progress(tmp_path, 60)
-    searching(tmp_path)
-
-    stuck_searches(tmp_path, BACKTRACK_SEARCHES - 1)
     assert not lab_run_due(config)
-    stuck_searches(tmp_path, 1)
-    assert lab_run_due(config)
-
-
-def test_after_a_lab_run_the_search_tries_the_new_package_before_the_next_one(tmp_path: Path):
-    config = str(write_config(tmp_path))
-    searching(tmp_path)
-    stuck_searches(tmp_path, BACKTRACK_SEARCHES)
-    remember_baseline(load_config(Path(config)))
-
-    stuck_searches(tmp_path, BACKTRACK_SEARCHES - 1)
-    assert not lab_run_due(config)
-    stuck_searches(tmp_path, 1)
-    assert lab_run_due(config)
 
 
 def test_no_lab_run_while_the_search_is_not_running(tmp_path: Path):
