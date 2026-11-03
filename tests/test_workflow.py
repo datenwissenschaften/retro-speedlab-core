@@ -1,11 +1,13 @@
 import json
-import os
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
+import msgspec
 import pytest
 from fakes import FakeWrapper, write_config
 
+from datenwissenschaften.tas.journal import JOURNAL_FILE, Journal, JournalStore
 from datenwissenschaften.tas.routes import ROUTES_FILE
 from datenwissenschaften.tas.run import BACKTRACK_SEARCHES
 from datenwissenschaften.tas.stuck import STUCK_FILE, mark_stuck
@@ -17,11 +19,10 @@ STALLED_SECONDS_AGO = 31 * 60
 
 
 def progress(tmp_path: Path, seconds_ago: float) -> None:
-    movie = tmp_path / "cache" / "tas" / "progress.msgpack"
-    movie.parent.mkdir(parents=True, exist_ok=True)
-    movie.write_bytes(b"")
-    moment = time.time() - seconds_ago
-    os.utime(movie, (moment, moment))
+    path = tmp_path / "cache" / "tas" / JOURNAL_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    moment = datetime.fromtimestamp(time.time() - seconds_ago, UTC).isoformat(timespec="seconds")
+    path.write_bytes(msgspec.json.encode(Journal([], [], [], {}, {}, moment)))
 
 
 def searching(tmp_path: Path) -> None:
@@ -56,8 +57,21 @@ def test_a_stuck_level_alone_calls_no_lab_run_while_another_level_stores_pieces(
     progress(tmp_path, STALLED_SECONDS_AGO)
     for _ in range(3 * BACKTRACK_SEARCHES):
         mark_stuck(tmp_path / "cache" / "tas" / STUCK_FILE, "Boss")
+    JournalStore(tmp_path / "cache" / "tas" / JOURNAL_FILE).event("found", "Peak", 300)
+
+    assert not lab_run_due(config)
+
+
+def test_checkpoints_and_stored_routes_are_no_progress_that_holds_off_the_lab(tmp_path: Path):
+    config = str(write_config(tmp_path))
+    searching(tmp_path)
+    journal = JournalStore(tmp_path / "cache" / "tas" / JOURNAL_FILE)
+    journal.event("checkpoint", "Boss", 420)
+    journal.event("stuck", "Boss", None)
     (tmp_path / "cache" / "tas" / ROUTES_FILE).write_bytes(b"")
 
+    assert lab_run_due(config)
+    journal.event("found", "Boss", 420)
     assert not lab_run_due(config)
 
 
