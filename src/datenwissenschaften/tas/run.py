@@ -26,7 +26,7 @@ from datenwissenschaften.tas.screen import Screen
 from datenwissenschaften.tas.search import UNBOUNDED, Checkpoint, Crossing
 from datenwissenschaften.tas.searcher import Searcher
 from datenwissenschaften.tas.shown import SHOWN_FILE, worth_showing
-from datenwissenschaften.tas.stuck import STUCK_FILE, load_stuck, mark_stuck
+from datenwissenschaften.tas.stuck import FAILURES_FILE, STUCK_FILE, cleared, failed, load_stuck, mark_stuck
 from datenwissenschaften.tas.turns import TURN_FILE, Turn, save_turn, turn_of
 from datenwissenschaften.ui.relay import relay_key
 from datenwissenschaften.ui.video_upload import VideoUpload
@@ -35,6 +35,7 @@ from datenwissenschaften.workflow.wrapper import wrapper_class
 LOG_FILE = "search.log"
 SEARCH_ROUNDS = 2
 BACKTRACK_SEARCHES = 3
+PRACTICE_BACKTRACK_TURNS = 3
 MAX_CHECKPOINTS = 5
 IMPROVE_ROUNDS = 1
 
@@ -131,6 +132,8 @@ class Tas:
                 start.state == self.barred or checkpoints_in_a_row(leg, segments) >= MAX_CHECKPOINTS
             ):
                 found = None
+            if found is not None:
+                cleared(self.output / FAILURES_FILE, start.state)
             if isinstance(found, Checkpoint):
                 self.feed.event("checkpoint", start.state, found.frames)
                 self.stuck_file.unlink(missing_ok=True)
@@ -138,7 +141,7 @@ class Tas:
                 logger.info(f"Checkpoint in {start.state} after {found.frames} frames, {found.gain:.1f} reward on")
                 continue
             if found is None:
-                segments = self.stuck(leg, segments, start)
+                segments = self.stuck(leg, segments, start, patience)
                 continue
             self.barred = None
             turn = turn.found()
@@ -155,10 +158,13 @@ class Tas:
         self.feed.show(self.routes.view(leg.name, segments), segments[-1].state)
         return segments
 
-    def stuck(self, leg: Leg, segments: list[Segment], start: Start) -> list[Segment]:
+    def stuck(self, leg: Leg, segments: list[Segment], start: Start, patience: int | None) -> list[Segment]:
         searches = mark_stuck(self.stuck_file, start.state).searches
         self.feed.event("stuck", start.state, None)
-        if searches % BACKTRACK_SEARCHES:
+        if patience is not None:
+            searches = failed(self.output / FAILURES_FILE, start.state)
+        every = BACKTRACK_SEARCHES if patience is None else patience * PRACTICE_BACKTRACK_TURNS
+        if searches % every:
             logger.warning(f"No way out of {start.state} after {searches} searches; searching again")
             return segments
         logger.warning(f"No way out of {start.state} after {searches} searches; searching the way into it again")

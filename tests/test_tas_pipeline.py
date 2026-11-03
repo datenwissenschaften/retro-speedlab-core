@@ -21,7 +21,7 @@ from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Part, Rou
 from datenwissenschaften.tas.run import BACKTRACK_SEARCHES
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import UNBOUNDED, Checkpoint, Crossing, shave
-from datenwissenschaften.tas.stuck import STUCK_FILE, Stuck, load_stuck
+from datenwissenschaften.tas.stuck import FAILURES_FILE, STUCK_FILE, Stuck, cleared, load_failures, load_stuck
 from datenwissenschaften.tas.turns import Turn, load_turn, save_turn
 
 BOSS_FRAMES = 3
@@ -262,7 +262,7 @@ def test_the_search_goes_back_a_piece_only_after_three_failed_searches(tmp_path:
 
     leg = Leg(FULL_RUN, runner.power_on(), "Boss")
 
-    kept = [tas.stuck(leg, piece, Start("Survive", bytes([1]))) for _ in range(BACKTRACK_SEARCHES)]
+    kept = [tas.stuck(leg, piece, Start("Survive", bytes([1])), None) for _ in range(BACKTRACK_SEARCHES)]
 
     assert kept == [piece, piece, []]
     assert tas.barred == "Survive"
@@ -351,7 +351,7 @@ def test_a_level_keeps_its_turn_while_its_searches_find_pieces(tmp_path: Path, m
     assert searched == ["Survive", "Boss"]
 
 
-def test_a_level_that_rests_right_after_going_back_a_piece_keeps_that_piece_dropped(tmp_path: Path, monkeypatch):
+def test_a_level_that_failed_three_turns_goes_back_a_piece_and_keeps_it_dropped(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
     checkpoint = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 1.0)
@@ -364,9 +364,12 @@ def test_a_level_that_rests_right_after_going_back_a_piece_keeps_that_piece_drop
     monkeypatch.setattr(searcher.Searcher, "best", best)
     leg = Leg("Level 1", runner.power_on(), "Exit")
 
-    segments = tas.extend(leg, [], 1 + BACKTRACK_SEARCHES)
+    patience = 1 + BACKTRACK_SEARCHES
+    first = tas.extend(leg, [], patience)
+    later = [tas.extend(leg, tas.routes.segments(leg.name), patience) for _ in range(run.PRACTICE_BACKTRACK_TURNS)]
 
-    assert segments == [] and tas.routes.segments(leg.name) == []
+    assert len(first) == 1 and [len(segments) for segments in later[:-1]] == [1, 1]
+    assert later[-1] == [] and tas.routes.segments(leg.name) == []
 
 
 def test_worker_processes_compute_with_one_math_thread_each(monkeypatch):
@@ -431,3 +434,19 @@ def test_a_level_without_a_route_leaves_the_reel(tmp_path: Path, monkeypatch):
     Reel(tas.settings, tas.feed, runner, routes).show()
 
     assert tas.feed.reel == {}
+
+
+def test_a_practised_level_keeps_its_pieces_until_three_turns_failed_and_a_find_resets_the_count(
+    tmp_path: Path, monkeypatch
+):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    leg = Leg("Level 1", runner.power_on(), "Exit")
+    piece = [Segment("Survive", [[0, 0]], bytes([1]), False)]
+    patience = 3
+
+    kept = [tas.stuck(leg, piece, Start("Survive", bytes([1])), patience) for _ in range(3 * patience)]
+
+    assert [len(segments) for segments in kept] == [1] * (3 * patience - 1) + [0]
+    cleared(tas.output / FAILURES_FILE, "Survive")
+    assert load_failures(tas.output / FAILURES_FILE) == {}
