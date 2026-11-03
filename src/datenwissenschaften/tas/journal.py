@@ -10,6 +10,7 @@ from datenwissenschaften.tas.paths import atomic_write
 
 JOURNAL_FILE = "journal.json"
 SHOWN_EVENTS = 20
+PROGRESS_EVENTS = ("found", "improved")
 SHOWN_HISTORY = 200
 SHOWN_MILESTONES = 50
 TENTHS_PER_MINUTE = 600
@@ -39,6 +40,7 @@ class Journal(msgspec.Struct):
     milestones: list[Milestone]
     firsts: dict[str, float]
     bests: dict[str, float]
+    progressed: str | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -57,6 +59,13 @@ def now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
+def last_progress(path: Path) -> float:
+    if not path.is_file():
+        return 0.0
+    progressed = msgspec.json.decode(path.read_bytes(), type=Journal).progressed
+    return datetime.fromisoformat(progressed).timestamp() if progressed else 0.0
+
+
 class JournalStore:
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -66,7 +75,10 @@ class JournalStore:
 
     def event(self, kind: str, state: str | None, frames: int | None) -> None:
         with self.lock:
-            self.journal.events = [*self.journal.events, Event(now(), kind, state, frames)][-SHOWN_EVENTS:]
+            event = Event(now(), kind, state, frames)
+            self.journal.events = [*self.journal.events, event][-SHOWN_EVENTS:]
+            if kind in PROGRESS_EVENTS:
+                self.journal.progressed = event.at
             self._save()
 
     def track(self, splits: list[Split], seconds: float) -> dict[str, float]:

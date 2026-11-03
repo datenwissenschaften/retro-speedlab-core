@@ -141,7 +141,8 @@ improves the movie forever. `lab` first starts the critic (`agent/critic.sh`)
 once five new reports landed in `agent/reports/` since its last review; the
 stream shows its lessons as `metadata.critic`. Then it starts a lab run
 (`agent/daily.sh` of the game package) once no level stored a piece, the movie
-did not improve and no lab run ended for `agent.stall_minutes` minutes; a level
+did not improve and no lab run ended for `agent.stall_minutes` minutes, as the
+journal records them; a checkpoint is no piece, and a level
 resting after its turn does not call the lab, since the next level may move. Claude Code works
 for `agent.minutes` minutes on its own git worktree of the game package, and its
 branch ships only when its checks pass and the current movie still replays with

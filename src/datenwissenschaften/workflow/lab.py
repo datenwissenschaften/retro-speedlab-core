@@ -9,9 +9,9 @@ from datenwissenschaften.lab.critic import CRITIC_FILE, read_critic
 from datenwissenschaften.lab.reports import publish_reports
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
+from datenwissenschaften.tas.journal import JOURNAL_FILE, last_progress
 from datenwissenschaften.tas.live import LIVE_DIR
-from datenwissenschaften.tas.paths import PROGRESS_FILE, tas_dir
-from datenwissenschaften.tas.routes import ROUTES_FILE
+from datenwissenschaften.tas.paths import tas_dir
 from datenwissenschaften.workflow.environment import speedlab
 
 SECONDS_PER_MINUTE = 60
@@ -27,10 +27,10 @@ def search_running(config: RetroSpeedlabConfig) -> bool:
     return (time.time() - live.stat().st_mtime) / SECONDS_PER_MINUTE < config.lab.stall_minutes
 
 
-def last_progress(config: RetroSpeedlabConfig) -> float:
-    marks = [tas_dir(config) / name for name in (PROGRESS_FILE, ROUTES_FILE)]
-    marks.append(config.paths.lab_run_marker.with_name(LAST_LAB_RUN))
-    return max((mark.stat().st_mtime for mark in marks if mark.is_file()), default=0.0)
+def last_change(config: RetroSpeedlabConfig) -> float:
+    lab_run = config.paths.lab_run_marker.with_name(LAST_LAB_RUN)
+    ended = lab_run.stat().st_mtime if lab_run.is_file() else 0.0
+    return max(last_progress(tas_dir(config) / JOURNAL_FILE), ended)
 
 
 @speedlab.task
@@ -43,7 +43,7 @@ def lab_run_due(config: str) -> bool:
     if not search_running(settings):
         logger.info("No lab run: the search is not running")
         return False
-    stalled_minutes = (time.time() - last_progress(settings)) / SECONDS_PER_MINUTE
+    stalled_minutes = (time.time() - last_change(settings)) / SECONDS_PER_MINUTE
     if stalled_minutes < settings.lab.stall_minutes:
         logger.info(f"No lab run: the last progress was {stalled_minutes:.0f} minutes ago")
         return False
