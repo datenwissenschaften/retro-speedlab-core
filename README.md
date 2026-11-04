@@ -165,6 +165,21 @@ latest step and every hand-off with its short task, the lead's latest actions
 with URLs and secret-like words hidden, and the lines it changed. Every task
 runs locally with `flyte run --local`.
 
+### Lab traces
+
+After the verdict, `python -m datenwissenschaften.lab.tracing LOG GAME STAMP BASE VERDICT COMMITS`
+turns the run's Claude Code log into one [Langfuse](https://langfuse.com) trace, sent as
+OpenTelemetry spans with their recorded times:
+
+- every `claude -p` round is a chain;
+- every model turn is a generation with its token usage;
+- every tool call is a tool span;
+- every subagent is an agent span holding its own turns and tools.
+
+The trace is scored with `accepted`, `cost_usd`, `commits`, `minutes`, `turns`, `subagents` and
+`tool_errors`, so runs can be compared over time. It needs `LANGFUSE_PUBLIC_KEY`,
+`LANGFUSE_SECRET_KEY` and `LANGFUSE_BASE_URL`; without them the run is logged as not traced.
+
 ## Live relay
 
 With `ui.enable: true` and an upload key, the engine relays to the Retro
