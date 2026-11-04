@@ -3,6 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import wandb
 
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.ram import RamInfo, ram
@@ -10,6 +11,7 @@ from datenwissenschaften.route.route_map import RouteMap
 from datenwissenschaften.states.state import State
 
 FRAME_RATE = 60.0
+NO_EXPERIMENT = wandb.init(project="tests", mode="disabled")
 SAVING_SCRIPT = [(3, 0), (3, 1), (3, 2), (3, 5), (3, 6), (3, 6), (3, 6), (3, 6)]
 
 

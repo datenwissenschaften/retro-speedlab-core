@@ -12,6 +12,7 @@ import typer
 from loguru import logger
 
 from datenwissenschaften.environment.factory import make_environment
+from datenwissenschaften.experiments import start_experiment
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, RetroSpeedlabPaths, load_config
 from datenwissenschaften.tas.feed import SpeedrunFeed
@@ -60,6 +61,7 @@ MAX_CHECKPOINTS = 5
 IMPROVE_ROUNDS = 1
 
 MAIN_WORKER = 0
+SEARCH_JOB = "search"
 MATH_THREADS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")
 TRIAL_MOVIE = f"trial-{TAS_MOVIE}"
 
@@ -275,7 +277,10 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
     runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, MAIN_WORKER))
     course = course_of(runner, settings.speedrun.game)
     journal = JournalStore(output / JOURNAL_FILE)
-    feed = SpeedrunFeed(course, journal, output / LIVE_DIR, output / STUCK_FILE, settings.paths.lab_run_marker)
+    experiment = start_experiment(settings, SEARCH_JOB)
+    feed = SpeedrunFeed(
+        course, journal, output / LIVE_DIR, output / STUCK_FILE, settings.paths.lab_run_marker, experiment
+    )
     threading.Thread(target=feed.publish_every, args=(threading.Event(),), name="speedrun-feed", daemon=True).start()
     movie, compare = screen(settings, feed, "movie", render_movie), screen(settings, feed, "compare", render_compare)
     searcher = Searcher(wrapper, config, settings, pool, feed)

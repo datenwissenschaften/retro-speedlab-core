@@ -27,6 +27,7 @@ dependencies = [
     "cachetools>=7.2.8",
     "langfuse==5.1.0",
     "opentelemetry-sdk==1.45.2",
+    "wandb==0.31.0",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

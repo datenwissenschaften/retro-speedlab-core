@@ -167,6 +167,17 @@ latest step and every hand-off with its short task, the lead's latest actions
 with URLs and secret-like words hidden, and the lines it changed. Every task
 runs locally with `flyte run --local`.
 
+### Experiments
+
+The search and the policy each log one [Weights & Biases](https://wandb.ai) run per release
+(project `retro-speedlab`, grouped by `ui.release`, jobs `search` and `policy`):
+
+- **search:** `run/seconds`, `run/pieces`, every level's split as `levels/<level>`, and running counts of
+  `search/found`, `search/improved`, `search/checkpoint` and `search/stuck` with their frames;
+- **policy:** reward, exits, episodes and loss per PPO round.
+
+Without `WANDB_API_KEY` the runs are disabled and logged as not tracked.
+
 ### Lab traces
 
 After the verdict, `python -m datenwissenschaften.lab.tracing LOG GAME STAMP BASE VERDICT COMMITS`

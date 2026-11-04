@@ -6,9 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import torch
+import wandb
 from loguru import logger
 
 from datenwissenschaften.environment.factory import make_environment
+from datenwissenschaften.experiments import start_experiment
 from datenwissenschaften.gpu import gpu
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.policy.collector import collect_rollout
@@ -32,6 +34,7 @@ from datenwissenschaften.workflow.wrapper import wrapper_class
 LEARNING_RATE = 3e-4
 WAIT_SECONDS = 30.0
 POLICY_LOG = "policy.log"
+POLICY_JOB = "policy"
 
 
 @dataclass(slots=True, frozen=True)
@@ -44,8 +47,16 @@ class Collectors:
 
 
 class PolicyTrainer:
-    def __init__(self, runner: SegmentRunner, output: Path, device: torch.device, collectors: Collectors) -> None:
+    def __init__(
+        self,
+        runner: SegmentRunner,
+        output: Path,
+        device: torch.device,
+        collectors: Collectors,
+        experiment: wandb.Run,
+    ) -> None:
         self.output = output
+        self.experiment = experiment
         self.device = device
         self.collectors = collectors
         runner.power_on()
@@ -84,8 +95,12 @@ class PolicyTrainer:
             logger.info(f"The policy found a way out of {start.state}; the search replays it next")
         episodes = max(1, sum(rollout.dones))
         exits, emulators = len(rollout.exits), self.collectors.emulators
+        reward = sum(rollout.rewards) / episodes
+        self.experiment.log(
+            {"policy/reward": reward, "policy/exits": exits, "policy/episodes": episodes, "policy/loss": loss}
+        )
         logger.info(
-            f"Policy round {self.rounds} in {start.state}: reward {sum(rollout.rewards) / episodes:.2f} per episode, "
+            f"Policy round {self.rounds} in {start.state}: reward {reward:.2f} per episode, "
             f"{exits} exits in {episodes} episodes from {emulators} emulators, loss {loss:.3f}"
         )
         return True
@@ -99,7 +114,7 @@ def train_policy_forever(wrapper: str, config: Path) -> None:
     with worker_pool(emulators) as pool:
         runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, os.getpid()))
         collectors = Collectors(wrapper, config, pool, emulators, tas_dir(settings) / LIVE_DIR)
-        trainer = PolicyTrainer(runner, tas_dir(settings), gpu(), collectors)
+        trainer = PolicyTrainer(runner, tas_dir(settings), gpu(), collectors, start_experiment(settings, POLICY_JOB))
         while multiprocessing.parent_process().is_alive():
             if not trainer.train_round():
                 time.sleep(WAIT_SECONDS)

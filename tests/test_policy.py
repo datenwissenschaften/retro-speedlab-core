@@ -6,7 +6,7 @@ import msgspec
 import numpy as np
 import pytest
 import torch
-from fakes import saving_environment
+from fakes import NO_EXPERIMENT, saving_environment
 from test_tas import START, LineRunner
 
 from datenwissenschaften.policy import collector, ppo
@@ -63,7 +63,9 @@ def test_the_trainer_waits_for_a_level_and_then_trains_on_what_its_emulators_pla
     pool = ThreadPoolExecutor(max_workers=1)
     live = tmp_path / "live"
     live.mkdir()
-    trainer = PolicyTrainer(runner, tmp_path, CPU, Collectors("fakes:FakeWrapper", tmp_path, pool, 2, live))
+    trainer = PolicyTrainer(
+        runner, tmp_path, CPU, Collectors("fakes:FakeWrapper", tmp_path, pool, 2, live), NO_EXPERIMENT
+    )
 
     assert not trainer.train_round()
     save_policy_start(tmp_path / POLICY_START_FILE, runner.power_on())

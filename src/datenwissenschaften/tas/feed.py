@@ -1,9 +1,11 @@
 import threading
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import msgspec
+import wandb
 
 from datenwissenschaften.tas.journal import JournalStore
 from datenwissenschaften.tas.live import clear_reports, read_reports
@@ -19,12 +21,16 @@ REEL_ORDER = "number"
 
 
 class SpeedrunFeed:
-    def __init__(self, course: Course, journal: JournalStore, live: Path, stuck: Path, lab_marker: Path) -> None:
+    def __init__(
+        self, course: Course, journal: JournalStore, live: Path, stuck: Path, lab_marker: Path, experiment: wandb.Run
+    ) -> None:
         self.course = course
         self.journal = journal
         self.live = live
         self.stuck = stuck
         self.lab_marker = lab_marker
+        self.experiment = experiment
+        self.events: Counter[str] = Counter()
         self.lock = threading.Lock()
         self.summary: dict[str, Any] = {}
         self.searching: str | None = None
@@ -37,7 +43,10 @@ class SpeedrunFeed:
 
     def show(self, segments: list[Segment], searching: str) -> None:
         found = splits(self.course, segments)
-        firsts = self.journal.track(found, frames(segments) / self.course.frame_rate)
+        seconds = frames(segments) / self.course.frame_rate
+        firsts = self.journal.track(found, seconds)
+        levels = {f"levels/{split.level}": split.level_seconds for split in found}
+        self.experiment.log({"run/seconds": seconds, "run/pieces": len(segments), **levels})
         summary = report(self.course, segments, found, firsts, searching, load_stuck(self.stuck))
         with self.lock:
             self.summary, self.searching = summary, searching
@@ -68,6 +77,9 @@ class SpeedrunFeed:
 
     def event(self, kind: str, state: str | None, frames: int | None) -> None:
         self.journal.event(kind, state, frames)
+        self.events[kind] += 1
+        shown = {} if frames is None else {f"search/{kind}_frames": frames}
+        self.experiment.log({f"search/{kind}": self.events[kind], **shown})
 
     def begin(self, search: SearchRound) -> None:
         clear_reports(self.live)

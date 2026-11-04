@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import cv2
 import numpy as np
 import pytest
-from fakes import fake_environment, write_config
+from fakes import NO_EXPERIMENT, fake_environment, write_config
 
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.tas import feed as feed_module
@@ -183,7 +183,7 @@ def test_the_feed_publishes_the_movie_with_the_live_search_and_notices_a_lab_run
     monkeypatch.setattr(feed_module, "publish_metadata", lambda section, values: published.append(values))
     marker = tmp_path / ".lab-run"
     journal = JournalStore(tmp_path / "journal.json")
-    feed = SpeedrunFeed(course(tmp_path), journal, tmp_path / "live", tmp_path / "stuck.json", marker)
+    feed = SpeedrunFeed(course(tmp_path), journal, tmp_path / "live", tmp_path / "stuck.json", marker, NO_EXPERIMENT)
     segments = [Segment("Play", [[0, 1]] * 60, b"", False), Segment("Level2", [[0, 0]] * 60, b"", False)]
 
     feed.show(segments, "Level2")
@@ -207,7 +207,9 @@ def test_the_feed_publishes_nothing_before_it_has_a_run_to_show(tmp_path: Path, 
     published: list[dict] = []
     monkeypatch.setattr(feed_module, "publish_metadata", lambda section, values: published.append(values))
     journal = JournalStore(tmp_path / "journal.json")
-    feed = SpeedrunFeed(course(tmp_path), journal, tmp_path / "live", tmp_path / "stuck.json", tmp_path / ".lab-run")
+    feed = SpeedrunFeed(
+        course(tmp_path), journal, tmp_path / "live", tmp_path / "stuck.json", tmp_path / ".lab-run", NO_EXPERIMENT
+    )
 
     feed.publish()
     feed.shown("movie", {"version": "abc", "frames": 120})
@@ -245,7 +247,9 @@ def test_the_feed_publishes_how_far_every_level_got_in_seconds(tmp_path: Path, m
     published: list[dict] = []
     monkeypatch.setattr(feed_module, "publish_metadata", lambda section, values: published.append(values))
     journal = JournalStore(tmp_path / "journal.json")
-    feed = SpeedrunFeed(course(tmp_path), journal, tmp_path / "live", tmp_path / "stuck.json", tmp_path / ".lab-run")
+    feed = SpeedrunFeed(
+        course(tmp_path), journal, tmp_path / "live", tmp_path / "stuck.json", tmp_path / ".lab-run", NO_EXPERIMENT
+    )
     feed.show([Segment("Play", [[0, 1]] * 60, b"", False)], "Play")
 
     feed.practised({"Level 2": PartProgress("Level2", 3, 90, False, True, {"weight": 12})})
