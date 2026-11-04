@@ -10,8 +10,6 @@ BYTE_SCALE = 255.0
 
 WEIGHT = "weight"
 BIAS = "bias"
-VALUE_WEIGHT = "value_weight"
-VALUE_BIAS = "value_bias"
 
 Layers = list[tuple[np.ndarray, np.ndarray]]
 Weights = dict[str, np.ndarray]

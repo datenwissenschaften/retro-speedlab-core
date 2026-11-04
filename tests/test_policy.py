@@ -1,84 +1,109 @@
 import random
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 
 import msgspec
 import numpy as np
 import pytest
 import torch
-from fakes import NO_EXPERIMENT, saving_environment
+from fakes import NO_EXPERIMENT
+from stable_baselines3.common.vec_env import DummyVecEnv
 from test_tas import START, LineRunner
 
-from datenwissenschaften.policy import collector, ppo
+from datenwissenschaften.policy import env as env_module
 from datenwissenschaften.policy import trainer as trainer_module
-from datenwissenschaften.policy.network import PolicyNet, export_policy, numpy_weights
-from datenwissenschaften.policy.prior import PolicyPrior
-from datenwissenschaften.policy.rollout import collect, merged
-from datenwissenschaften.policy.trainer import Collectors, PolicyTrainer
+from datenwissenschaften.policy.env import EPISODE_DECISIONS, EXIT, PolicyEnv
+from datenwissenschaften.policy.prior import POLICY_FILE, PolicyPrior, observation
+from datenwissenschaften.policy.trainer import RoundCallback, export_policy, policy_model
 from datenwissenschaften.tas.live import read_reports
-from datenwissenschaften.tas.novelty import RamNovelty
-from datenwissenschaften.tas.policy_start import POLICY_START_FILE, save_policy_start
+from datenwissenschaften.tas.policy_start import (
+    POLICY_EXITS_FILE,
+    POLICY_START_FILE,
+    load_policy_exits,
+    save_policy_start,
+)
 from datenwissenschaften.tas.preferences import Preferences
 from datenwissenschaften.tas.prior import ActionPrior
-from datenwissenschaften.tas.runner import SegmentRunner
+from datenwissenschaften.tas.runner import Start
 
 CPU = torch.device("cpu")
+RIGHT, LEFT = 1, 2
+SCREEN = (224, 240, 3)
 
 
-def test_the_workers_read_the_same_policy_the_trainer_exported(tmp_path: Path):
-    net = PolicyNet(4, 3)
-    memory = np.asarray([0, 64, 128, 255], dtype=np.uint8)
-    export_policy(net, tmp_path / "policy.npz")
+class PoweredLine(LineRunner):
+    def __init__(self) -> None:
+        super().__init__()
+        self.emulator = SimpleNamespace(em=SimpleNamespace(get_screen=lambda: np.zeros(SCREEN, dtype=np.uint8)))
 
-    probabilities = PolicyPrior(tmp_path / "policy.npz").probabilities(memory, 3)
+    def power_on(self) -> Start:
+        self.restore(START)
+        return START
+
+
+@pytest.fixture
+def line_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> PolicyEnv:
+    monkeypatch.setattr(env_module, "worker_runner", lambda wrapper, config: PoweredLine())
+    save_policy_start(tmp_path / POLICY_START_FILE, START)
+    (tmp_path / "live").mkdir()
+    return PolicyEnv("fakes:FakeWrapper", tmp_path / "config.yaml", tmp_path, tmp_path / "live")
+
+
+def test_an_episode_starts_where_the_search_stands_and_ends_on_the_way_out(line_env: PolicyEnv):
+    line_env.reset(seed=1)
+    steps = [line_env.step(np.int64(RIGHT)) for _ in range(3)]
+
+    assert [step[2] for step in steps] == [False, False, True]
+    state, pressed = steps[-1][4][EXIT]
+    assert state == "Walk" and len(pressed) == 6
+    assert steps[-1][1] > steps[0][1]
+
+
+def test_an_episode_ends_by_death_or_after_its_decisions(line_env: PolicyEnv):
+    line_env.reset(seed=1)
+    _, reward, terminated, _, info = line_env.step(np.int64(LEFT))
+    _, reward, terminated, _, info = line_env.step(np.int64(LEFT))
+    assert terminated and reward < 0 and EXIT not in info
+
+    line_env.reset(seed=1)
+    truncated = [line_env.step(np.int64(0))[3] for _ in range(EPISODE_DECISIONS)]
+    assert truncated[-1] and not any(truncated[:-1])
+
+
+def test_the_search_reads_the_policy_the_trainer_exported(line_env: PolicyEnv, tmp_path: Path):
+    model = policy_model(DummyVecEnv([lambda: line_env]), CPU)
+    memory = np.asarray([3], dtype=np.uint8)
+    export_policy(model.policy, tmp_path / POLICY_FILE)
+
+    probabilities = PolicyPrior(tmp_path / POLICY_FILE).probabilities(memory, 3)
 
     with torch.no_grad():
-        logits, _ = net(torch.from_numpy(memory.astype(np.float32) / 255)[None])
-    assert np.allclose(probabilities, torch.softmax(logits[0], 0).numpy(), atol=1e-5)
+        expected = model.policy.get_distribution(torch.from_numpy(observation(memory))[None]).distribution.probs
+    assert np.allclose(probabilities, expected[0].numpy(), atol=1e-5)
     assert PolicyPrior(tmp_path / "none.npz").choose(memory, 3, random.Random(1)) is None
 
 
-def test_ppo_plays_episodes_from_the_start_and_learns_from_them():
-    runner, net = LineRunner(), PolicyNet(1, 3)
-    optimizer = torch.optim.Adam(net.parameters(), lr=3e-4)
-    novelty, rng = RamNovelty(runner.memory()), np.random.default_rng(1)
-
-    halves = [collect(runner, START, numpy_weights(net), novelty, 128, rng, None) for _ in range(2)]
-    rollout = merged(halves)
-    loss = ppo.update(net, optimizer, rollout, CPU)
-
-    assert len(rollout.actions) == len(rollout.rewards) == 256 and rollout.dones[127] and rollout.dones[-1]
-    assert np.isfinite(loss)
-    gains, returns = ppo.advantages(rollout)
-    assert gains.shape == returns.shape == (256,)
-
-
-def test_the_trainer_waits_for_a_level_and_then_trains_on_what_its_emulators_play(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_ppo_rounds_export_the_policy_and_keep_the_shortest_way_out(
+    line_env: PolicyEnv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    monkeypatch.setattr(trainer_module, "ROLLOUT_DECISIONS", 32)
-    runner = SegmentRunner(saving_environment(tmp_path))
-    monkeypatch.setattr(collector, "worker_runner", lambda wrapper, config: runner)
-    collector.level_novelty.cache_clear()
-    pool = ThreadPoolExecutor(max_workers=1)
-    live = tmp_path / "live"
-    live.mkdir()
-    trainer = PolicyTrainer(
-        runner, tmp_path, CPU, Collectors("fakes:FakeWrapper", tmp_path, pool, 2, live), NO_EXPERIMENT
-    )
+    monkeypatch.setattr(trainer_module, "ROLLOUT_DECISIONS", 64)
+    monkeypatch.setattr(trainer_module, "MINIBATCH", 32)
+    model = policy_model(DummyVecEnv([lambda: line_env]), CPU)
+    callback = RoundCallback(tmp_path, NO_EXPERIMENT)
 
-    assert not trainer.train_round()
-    save_policy_start(tmp_path / POLICY_START_FILE, runner.power_on())
-    assert trainer.train_round()
-    assert trainer.rounds == 1
-    assert [report.mode for report in read_reports(live)] == ["policy"]
-    assert PolicyPrior(tmp_path / "policy.npz").probabilities(runner.memory(), 2) is not None
+    model.learn(128, callback=callback)
+
+    assert callback.rounds == 1
+    assert PolicyPrior(tmp_path / POLICY_FILE).probabilities(np.zeros(1, dtype=np.uint8), 3) is not None
+    assert [report.mode for report in read_reports(tmp_path / "live")] == ["policy"]
+    exits = load_policy_exits(tmp_path / POLICY_EXITS_FILE)
+    assert "Walk" not in exits or len(exits["Walk"]) >= 6
 
 
-def test_the_search_follows_the_table_or_the_policy_part_of_the_time(tmp_path: Path):
+def test_the_search_follows_the_table_or_the_policy_part_of_the_time(line_env: PolicyEnv, tmp_path: Path):
     (tmp_path / "prior.msgpack").write_bytes(msgspec.msgpack.encode({"Walk": {2: 1}}))
-    export_policy(PolicyNet(1, 3), tmp_path / "policy.npz")
-    preferences = Preferences(ActionPrior(tmp_path / "prior.msgpack"), PolicyPrior(tmp_path / "policy.npz"))
+    export_policy(policy_model(DummyVecEnv([lambda: line_env]), CPU).policy, tmp_path / POLICY_FILE)
+    preferences = Preferences(ActionPrior(tmp_path / "prior.msgpack"), PolicyPrior(tmp_path / POLICY_FILE))
     rng = random.Random(3)
 
     chosen = [preferences.choose(LineRunner(), 3, rng) for _ in range(200)]

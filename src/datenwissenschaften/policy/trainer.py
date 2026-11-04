@@ -1,121 +1,130 @@
+import io
 import multiprocessing
-import os
 import time
-from concurrent.futures import Executor
-from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 
+import numpy as np
 import torch
 import wandb
 from loguru import logger
+from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.policies import ActorCriticPolicy
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecEnv
+from torch import nn
 
-from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.experiments import start_experiment
 from datenwissenschaften.gpu import gpu
 from datenwissenschaften.logger import setup_logging
-from datenwissenschaften.policy.collector import collect_rollout
-from datenwissenschaften.policy.network import PolicyNet, export_policy, numpy_weights
-from datenwissenschaften.policy.ppo import update
-from datenwissenschaften.policy.prior import POLICY_FILE
-from datenwissenschaften.policy.rollout import ROLLOUT_DECISIONS, Rollout, merged
+from datenwissenschaften.policy.env import EXIT, PolicyEnv
+from datenwissenschaften.policy.prior import BIAS, POLICY_FILE, WEIGHT, Weights
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.tas.live import LIVE_DIR
-from datenwissenschaften.tas.paths import tas_dir
-from datenwissenschaften.tas.policy_start import (
-    POLICY_EXITS_FILE,
-    POLICY_START_FILE,
-    load_policy_start,
-    save_policy_exit,
-)
-from datenwissenschaften.tas.run import worker_pool
-from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.workflow.wrapper import wrapper_class
+from datenwissenschaften.tas.paths import atomic_write, tas_dir
+from datenwissenschaften.tas.policy_start import POLICY_EXITS_FILE, POLICY_START_FILE, save_policy_exit
 
+ROLLOUT_DECISIONS = 1024
+HIDDEN = 256
+MINIBATCH = 256
+EPOCHS = 4
 LEARNING_RATE = 3e-4
+ENTROPY_WEIGHT = 0.01
 WAIT_SECONDS = 30.0
 POLICY_LOG = "policy.log"
 POLICY_JOB = "policy"
+SPAWN = "spawn"
 
 
-@dataclass(slots=True, frozen=True)
-class Collectors:
-    wrapper: str
-    config: Path
-    pool: Executor
-    emulators: int
-    live: Path
+def policy_weights(policy: ActorCriticPolicy) -> Weights:
+    hidden = [layer for layer in policy.mlp_extractor.policy_net if isinstance(layer, nn.Linear)]
+    weights: Weights = {}
+    for index, layer in enumerate([*hidden, policy.action_net]):
+        weights[f"{WEIGHT}{index}"] = layer.weight.detach().cpu().numpy()
+        weights[f"{BIAS}{index}"] = layer.bias.detach().cpu().numpy()
+    return weights
 
 
-class PolicyTrainer:
-    def __init__(
-        self,
-        runner: SegmentRunner,
-        output: Path,
-        device: torch.device,
-        collectors: Collectors,
-        experiment: wandb.Run,
-    ) -> None:
+def export_policy(policy: ActorCriticPolicy, path: Path) -> None:
+    buffer = io.BytesIO()
+    np.savez(buffer, **policy_weights(policy))
+    atomic_write(path, buffer.getvalue())
+
+
+def policy_model(env: VecEnv, device: torch.device) -> PPO:
+    return PPO(
+        "MlpPolicy",
+        env,
+        n_steps=ROLLOUT_DECISIONS,
+        batch_size=MINIBATCH,
+        n_epochs=EPOCHS,
+        learning_rate=LEARNING_RATE,
+        ent_coef=ENTROPY_WEIGHT,
+        policy_kwargs={"net_arch": {"pi": [HIDDEN, HIDDEN], "vf": [HIDDEN, HIDDEN]}, "activation_fn": nn.Tanh},
+        device=device,
+    )
+
+
+class RoundCallback(BaseCallback):
+    def __init__(self, output: Path, experiment: wandb.Run) -> None:
+        super().__init__()
         self.output = output
         self.experiment = experiment
-        self.device = device
-        self.collectors = collectors
-        runner.power_on()
-        self.net = PolicyNet(len(runner.memory()), len(runner.wrapper.action_table)).to(device)
-        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=LEARNING_RATE)
         self.rounds = 0
+        self.rewards = 0.0
+        self.episodes = 0
+        self.exits = 0
 
-    def rollout(self, start: Start) -> Rollout:
-        weights, collectors = numpy_weights(self.net), self.collectors
-        jobs = [
-            collectors.pool.submit(
-                collect_rollout,
-                collectors.wrapper,
-                collectors.config,
-                start,
-                weights,
-                ROLLOUT_DECISIONS,
-                seed,
-                collectors.live,
-            )
-            for seed in range(self.rounds * collectors.emulators, (self.rounds + 1) * collectors.emulators)
-        ]
-        return merged([job.result() for job in jobs])
+    def _on_step(self) -> bool:
+        self.rewards += float(np.sum(self.locals["rewards"]))
+        self.episodes += int(np.sum(self.locals["dones"]))
+        for info in self.locals["infos"]:
+            if EXIT in info:
+                self.exits += 1
+                self.keep_exit(*info[EXIT])
+        return True
 
-    def train_round(self) -> bool:
-        start = load_policy_start(self.output / POLICY_START_FILE)
-        if start is None:
-            return False
-        rollout = self.rollout(start)
-        loss = update(self.net, self.optimizer, rollout, self.device)
-        export_policy(self.net, self.output / POLICY_FILE)
+    def keep_exit(self, state: str, pressed: np.ndarray) -> None:
+        if save_policy_exit(self.output / POLICY_EXITS_FILE, state, pressed):
+            logger.info(f"The policy found a way out of {state}; the search replays it next")
+
+    def _on_rollout_start(self) -> None:
+        if self.episodes == 0:
+            return
+        export_policy(self.model.policy, self.output / POLICY_FILE)
         self.rounds += 1
-        if rollout.exits and save_policy_exit(
-            self.output / POLICY_EXITS_FILE, start.state, min(rollout.exits, key=len)
-        ):
-            logger.info(f"The policy found a way out of {start.state}; the search replays it next")
-        episodes = max(1, sum(rollout.dones))
-        exits, emulators = len(rollout.exits), self.collectors.emulators
-        reward = sum(rollout.rewards) / episodes
+        reward = self.rewards / self.episodes
+        trained = {f"policy/{name.split('/')[-1]}": value for name, value in self.logger.name_to_value.items()}
         self.experiment.log(
-            {"policy/reward": reward, "policy/exits": exits, "policy/episodes": episodes, "policy/loss": loss}
+            {"policy/reward": reward, "policy/exits": self.exits, "policy/episodes": self.episodes, **trained}
         )
         logger.info(
-            f"Policy round {self.rounds} in {start.state}: reward {reward:.2f} per episode, "
-            f"{exits} exits in {episodes} episodes from {emulators} emulators, loss {loss:.3f}"
+            f"Policy round {self.rounds}: reward {reward:.2f} per episode, {self.exits} exits in "
+            f"{self.episodes} episodes"
         )
-        return True
+        self.rewards, self.episodes, self.exits = 0.0, 0, 0
+
+
+def wait_for_start(output: Path) -> bool:
+    while not (output / POLICY_START_FILE).is_file():
+        if not multiprocessing.parent_process().is_alive():
+            return False
+        time.sleep(WAIT_SECONDS)
+    return True
 
 
 def train_policy_forever(wrapper: str, config: Path) -> None:
     settings = load_config(config)
     setup_logging(settings.log_level)
-    logger.add(tas_dir(settings) / POLICY_LOG)
-    emulators = settings.speedrun.policy_emulators
-    with worker_pool(emulators) as pool:
-        runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, os.getpid()))
-        collectors = Collectors(wrapper, config, pool, emulators, tas_dir(settings) / LIVE_DIR)
-        trainer = PolicyTrainer(runner, tas_dir(settings), gpu(), collectors, start_experiment(settings, POLICY_JOB))
-        while multiprocessing.parent_process().is_alive():
-            if not trainer.train_round():
-                time.sleep(WAIT_SECONDS)
+    output = tas_dir(settings)
+    logger.add(output / POLICY_LOG)
+    if not wait_for_start(output):
+        return
+    make = partial(PolicyEnv, wrapper, config, output, output / LIVE_DIR)
+    env = SubprocVecEnv([make] * settings.speedrun.policy_emulators, start_method=SPAWN)
+    model = policy_model(env, gpu())
+    callback = RoundCallback(output, start_experiment(settings, POLICY_JOB))
+    while multiprocessing.parent_process().is_alive():
+        model.learn(ROLLOUT_DECISIONS * env.num_envs, callback=callback, reset_num_timesteps=False)
+    env.close()
     logger.warning("The speedrun has stopped, so the policy stops with it")

@@ -137,15 +137,17 @@ rewritten after every level's turn.
 
 ## PPO policy
 
-With `speedrun.policy`, a separate process trains a small network (RAM in,
-actions and a value out) with PPO on the GPU, always from the start the search
-is working on (`cache/tas/policy_start.msgpack`). `speedrun.policy_emulators` emulator processes play its episodes in
-parallel with the network in numpy; every worker process computes with one math
-thread, so the search workers and these emulators share the cores evenly. Its reward is the state's reward, RAM values never seen
-on that level, a bonus for the exit and a penalty for a death. After every round
-of 2048 decisions it exports its weights to `cache/tas/policy.npz`, which the
-workers read with numpy, and keeps the shortest episode that left the state for
-the search to replay.
+With `speedrun.policy`, a separate process trains a policy with
+[Stable-Baselines3](https://stable-baselines3.readthedocs.io) PPO on the GPU, always from the start
+the search is working on (`cache/tas/policy_start.msgpack`). `policy.env.PolicyEnv` is a
+[Gymnasium](https://gymnasium.farama.org) environment around one emulator: RAM in, a button
+combination out. Its reward is the state's reward, RAM values never seen on that level, a bonus
+for the exit and a penalty for a death; an episode ends on the exit, a death, another state or
+after 128 decisions. `speedrun.policy_emulators` environments play in parallel in a
+`SubprocVecEnv`. After every round of 1024 decisions per emulator the policy network (two tanh
+layers of 256) is exported to `cache/tas/policy.npz`, which the search workers read with numpy,
+the shortest episode that left the state is kept for the search to replay, and the round's
+reward, exits and losses go to Weights & Biases.
 
 ## Workflows and the lab
 

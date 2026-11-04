@@ -45,7 +45,7 @@ Repository = "https://github.com/datenwissenschaften/retro-speedlab-core"
 Documentation = "https://speedlab.datenwissenschaften.com/getting-started"
 
 [project.optional-dependencies]
-vision = ["torch==2.9.1"]
+vision = ["torch==2.9.1", "stable-baselines3==2.9.2"]
 
 [dependency-groups]
 dev = [
