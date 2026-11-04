@@ -74,7 +74,7 @@ class Tas:
     movie: Screen
     compare: Screen
     turn: int
-    barred: str | None
+    barred: dict[str, str]
 
     @property
     def output(self) -> Path:
@@ -129,7 +129,7 @@ class Tas:
             self.feed.show(self.routes.view(leg.name, segments), start.state)
             found = self.searcher.best(start, UNBOUNDED, SEARCH_ROUNDS)
             if isinstance(found, Checkpoint) and (
-                start.state == self.barred or checkpoints_in_a_row(leg, segments) >= MAX_CHECKPOINTS
+                start.state == self.barred.get(leg.name) or checkpoints_in_a_row(leg, segments) >= MAX_CHECKPOINTS
             ):
                 found = None
             if found is not None:
@@ -143,7 +143,7 @@ class Tas:
             if found is None:
                 segments = self.stuck(leg, segments, start, patience)
                 continue
-            self.barred = None
+            self.barred.pop(leg.name, None)
             turn = turn.found()
             if patience is not None:
                 save_turn(self.turn_file, turn)
@@ -169,7 +169,7 @@ class Tas:
             return segments
         logger.warning(f"No way out of {start.state} after {searches} searches; searching the way into it again")
         if segments and segments[-1].state == start.state:
-            self.barred = start.state
+            self.barred[leg.name] = start.state
         kept = segments[: len(segments) - max(1, checkpoints_in_a_row(leg, segments))]
         return self.keep(leg, kept, self.start(leg, kept, len(kept)).state)
 
@@ -234,7 +234,7 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
         logger.warning(
             f"Pieces of {', '.join(relabelled)} ended in states the game package dropped; they keep their place"
         )
-    return Tas(settings, runner, searcher, routes, feed, movie, compare, 0, None)
+    return Tas(settings, runner, searcher, routes, feed, movie, compare, 0, {})
 
 
 @app.command()
