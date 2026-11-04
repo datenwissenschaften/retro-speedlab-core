@@ -31,7 +31,7 @@ class Rollout:
     values: list[float]
     rewards: list[float]
     dones: list[bool]
-    exits: int
+    exits: list[np.ndarray]
 
 
 def reward_of(outcome_reward: float, novelty: int, exited: bool, alive: bool) -> float:
@@ -48,9 +48,9 @@ def collect(
     live: WorkerLive | None,
 ) -> Rollout:
     layers, actions = layers_of(weights), len(runner.wrapper.action_table)
-    rollout = Rollout([], [], [], [], [], [], 0)
+    rollout = Rollout([], [], [], [], [], [], [])
     runner.restore(start)
-    played = 0
+    played, episode = 0, []
     while len(rollout.actions) < decisions:
         memory = runner.memory()
         hidden = hidden_of(layers, memory)
@@ -58,6 +58,7 @@ def collect(
         action = int(rng.choice(actions, p=np.exp(log_probs) / np.exp(log_probs).sum()))
         outcome = runner.decide(action)
         played += 1
+        episode.append(outcome.pressed)
         if live is not None:
             live.step(runner, sum(rollout.dones), None, len(outcome.pressed))
         exited = leaves(runner, start, outcome.state, outcome.won)
@@ -68,10 +69,11 @@ def collect(
         rollout.values.append(float(weights[VALUE_WEIGHT] @ hidden + weights[VALUE_BIAS]))
         rollout.rewards.append(reward_of(outcome.reward, novelty.see(runner.memory()), exited, outcome.alive))
         rollout.dones.append(ended or len(rollout.actions) == decisions)
-        rollout.exits += exited
+        if exited:
+            rollout.exits.append(np.concatenate(episode))
         if ended:
             runner.restore(start)
-            played = 0
+            played, episode = 0, []
     return rollout
 
 
@@ -83,5 +85,5 @@ def merged(rollouts: list[Rollout]) -> Rollout:
         [value for rollout in rollouts for value in rollout.values],
         [reward for rollout in rollouts for reward in rollout.rewards],
         [done for rollout in rollouts for done in rollout.dones],
-        sum(rollout.exits for rollout in rollouts),
+        [pressed for rollout in rollouts for pressed in rollout.exits],
     )

@@ -138,6 +138,7 @@ def fake_routes(tmp_path: Path) -> RouteMap:
 
 def write_config(tmp_path: Path) -> Path:
     config_path = tmp_path / "config.yaml"
+    (tmp_path / "hints.json").write_text("[]")
     config_path.write_text(
         "\n".join(
             [

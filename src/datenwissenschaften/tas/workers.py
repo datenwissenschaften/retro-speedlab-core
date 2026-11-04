@@ -32,7 +32,8 @@ def worker_preferences(config: Path) -> Preferences:
 
 @cache
 def worker_archives(config: Path) -> Archives:
-    return Archives(tas_dir(load_config(config)) / ARCHIVES_DIR)
+    settings = load_config(config)
+    return Archives(tas_dir(settings) / ARCHIVES_DIR, settings.speedrun.workers)
 
 
 def explore(

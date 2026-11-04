@@ -75,7 +75,7 @@ class LineRunner:
 
 
 def test_the_search_finds_the_fastest_way_into_the_next_state(tmp_path: Path):
-    archives = Archives(tmp_path)
+    archives = Archives(tmp_path, 2)
     crossings = search_segment(LineRunner(), START, UNBOUNDED, 7, 1.0, None, NO_PREFERENCES, archives).crossings
 
     assert crossings[0].end.state == "Goal"
@@ -84,14 +84,14 @@ def test_the_search_finds_the_fastest_way_into_the_next_state(tmp_path: Path):
 
 
 def test_a_bound_only_accepts_crossings_faster_than_the_movie_has(tmp_path: Path):
-    archives = Archives(tmp_path)
+    archives = Archives(tmp_path, 2)
     assert search_segment(LineRunner(), START, GOAL_X, 7, 0.2, None, NO_PREFERENCES, archives).crossings == []
     assert search_segment(LineRunner(), START, GOAL_X + 1, 7, 1.0, None, NO_PREFERENCES, archives).crossings != []
 
 
 def test_a_search_that_cannot_leave_returns_the_point_with_the_most_reward_as_a_checkpoint(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(search, "CHECKPOINT_GAIN", GOAL_X - 2)
-    searched = search_segment(LineRunner(), START, GOAL_X, 7, 0.2, None, NO_PREFERENCES, Archives(tmp_path))
+    searched = search_segment(LineRunner(), START, GOAL_X, 7, 0.2, None, NO_PREFERENCES, Archives(tmp_path, 2))
 
     assert searched.crossings == []
     assert searched.checkpoint.end.state == "Walk"
@@ -100,7 +100,8 @@ def test_a_search_that_cannot_leave_returns_the_point_with_the_most_reward_as_a_
 
 
 def test_without_enough_reward_there_is_no_checkpoint(tmp_path: Path):
-    assert search_segment(LineRunner(), START, 2, 7, 0.2, None, NO_PREFERENCES, Archives(tmp_path)).checkpoint is None
+    archives = Archives(tmp_path, 2)
+    assert search_segment(LineRunner(), START, 2, 7, 0.2, None, NO_PREFERENCES, archives).checkpoint is None
     assert farthest([None, None]) is None
     near, far = (Checkpoint(START, np.zeros((frames, 1), np.int8), gain) for frames, gain in ((4, 3.0), (2, 1.0)))
     assert farthest([far, None, near]) is near

@@ -13,8 +13,17 @@ from datenwissenschaften.tas import feed as feed_module
 from datenwissenschaften.tas import footage, movie, run, searcher, workers
 from datenwissenschaften.tas.archives import Archives
 from datenwissenschaften.tas.explore import search_segment
+from datenwissenschaften.tas.hints import Hint, Press, hints_path, load_hints, pressed
+from datenwissenschaften.tas.live import clear_reports
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.paths import TAS_MOVIE, atomic_write
+from datenwissenschaften.tas.policy_start import (
+    POLICY_EXITS_FILE,
+    POLICY_START_FILE,
+    load_policy_exits,
+    load_policy_start,
+    save_policy_exit,
+)
 from datenwissenschaften.tas.preferences import Preferences
 from datenwissenschaften.tas.prior import ActionPrior
 from datenwissenschaften.tas.reel import Reel
@@ -203,7 +212,7 @@ def test_workers_search_and_shave_from_a_savestate(tmp_path: Path, monkeypatch):
     runner = workers.worker_runner.__wrapped__("fakes:FakeWrapper", write_config(tmp_path))
     start = runner.power_on()
     preferences = Preferences(ActionPrior(tmp_path / "prior.msgpack"), PolicyPrior(tmp_path / "policy.npz"))
-    archives = Archives(tmp_path / "archives")
+    archives = Archives(tmp_path / "archives", 2)
     crossing = search_segment(runner, start, 100, 1, SECONDS, None, preferences, archives).crossings[0]
     monkeypatch.setattr(workers, "worker_runner", lambda wrapper, config: runner)
     monkeypatch.setattr(workers, "worker_preferences", lambda config: preferences)
@@ -502,3 +511,63 @@ def test_a_practised_level_keeps_its_pieces_until_three_turns_failed_and_a_find_
     assert [len(segments) for segments in kept] == [1] * (3 * patience - 1) + [0]
     cleared(tas.output / FAILURES_FILE, "Survive")
     assert load_failures(tas.output / FAILURES_FILE) == {}
+
+
+def test_the_lab_hint_leads_out_of_a_state_before_any_search(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    tas.hints = [Hint("Survive", [Press(BOSS_FRAMES, ["A"])])]
+    bounds: list[int] = []
+    monkeypatch.setattr(searcher.Searcher, "best", lambda self, start, bound, rounds: bounds.append(bound))
+
+    segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [], 1)
+
+    assert [segment.state for segment in segments] == ["Boss"]
+    assert UNBOUNDED not in bounds
+
+
+def test_hints_are_read_from_next_to_the_config_and_name_real_buttons(tmp_path: Path):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    config = write_config(tmp_path)
+    hints_path(config).write_text('[{"state": "Survive", "presses": [[2, ["A"]], [1, []]]}]')
+
+    hints = load_hints(hints_path(config))
+
+    assert pressed(runner, hints[0]).tolist() == [[1, 0], [1, 0], [0, 0]]
+    with pytest.raises(ValueError, match="presses B"):
+        pressed(runner, Hint("Survive", [Press(1, ["B"])]))
+    hints_path(config).unlink()
+    with pytest.raises(RuntimeError, match="Missing"):
+        load_hints(hints_path(config))
+
+
+def test_a_way_out_the_policy_found_is_replayed_before_any_search(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    save_policy_exit(tas.output / POLICY_EXITS_FILE, "Survive", np.ones((BOSS_FRAMES, 2), np.int8))
+    bounds: list[int] = []
+    monkeypatch.setattr(searcher.Searcher, "best", lambda self, start, bound, rounds: bounds.append(bound))
+
+    segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [], 1)
+
+    assert [segment.state for segment in segments] == ["Boss"]
+    assert UNBOUNDED not in bounds
+    assert load_policy_start(tas.output / POLICY_START_FILE).state == "Survive"
+
+
+def test_only_the_shortest_way_out_of_a_state_is_kept_for_the_search(tmp_path: Path):
+    path = tmp_path / POLICY_EXITS_FILE
+
+    assert save_policy_exit(path, "Boss", np.ones((4, 2), np.int8))
+    assert not save_policy_exit(path, "Boss", np.ones((5, 2), np.int8))
+    assert save_policy_exit(path, "Boss", np.ones((2, 2), np.int8))
+    assert load_policy_exits(path) == {"Boss": [[1, 1], [1, 1]]}
+
+
+def test_clearing_the_live_view_leaves_files_still_being_written(tmp_path: Path):
+    (tmp_path / "1.jpg").write_bytes(b"tile")
+    (tmp_path / ".2.jpg.7.tmp").write_bytes(b"half")
+
+    clear_reports(tmp_path)
+
+    assert [path.name for path in tmp_path.iterdir()] == [".2.jpg.7.tmp"]

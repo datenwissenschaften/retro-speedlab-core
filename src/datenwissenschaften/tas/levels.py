@@ -7,7 +7,6 @@ from datenwissenschaften.reference.fetch import ensure_reference
 from datenwissenschaften.reference.guide import ensure_guide
 from datenwissenschaften.reference.paths import route_path
 from datenwissenschaften.settings import load_config
-from datenwissenschaften.tas.policy_start import POLICY_START_FILE, save_policy_start
 from datenwissenschaften.tas.practice import (
     LOADER_FILE,
     LevelLoader,
@@ -72,7 +71,6 @@ class LevelTrainer:
         entry = self.routes.reached(part) or self.entry(part)
         if entry is None:
             return
-        save_policy_start(self.tas.output / POLICY_START_FILE, entry)
         self.tas.extend(Leg(part.name, entry, part.exit), self.routes.segments(part.name), PRACTICE_SEARCHES)
         self.share_practice()
 

@@ -32,7 +32,7 @@ def read_reports(directory: Path) -> list[WorkerReport]:
 
 
 def clear_reports(directory: Path) -> None:
-    for path in directory.glob("*"):
+    for path in directory.glob("[!.]*"):
         path.unlink(missing_ok=True)
 
 

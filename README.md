@@ -79,9 +79,15 @@ Cells gain weight for RAM byte values never seen before in the segment and for
 being close to the exit on the route memory. Walks and rollouts follow a move
 table learned from every stored piece (`cache/tas/prior.msgpack`) 30 % of the
 time and the PPO policy 20 % of the time. A full archive drops its least
-promising cell. Each search process keeps the 1000 best cells of the last 12
-starts it explored, so a later search from the same start goes on where the
-last one stopped instead of starting over. A crossing into a later state ends a branch and counts only when
+promising cell. Each search process keeps 1000 cells of the last 12 starts it
+explored, half with the most reward and half the rarest, and saves them to
+`cache/tas/archives/<start>/<process>.msgpack`: a later search from the same
+start goes on where the last one stopped, and after a restart the processes'
+files are merged. Before it searches a state, the TAS replays the hints for it
+from each of its starts in that state: the game package's `hints.json` (written
+by the lab, `[{"state": ..., "presses": [[frames, [buttons]]]}]`) and the
+shortest way out the PPO policy found (`cache/tas/policy_exits.msgpack`); a hint
+that crosses and holds becomes the next piece. A crossing into a later state ends a branch and counts only when
 the new state holds; deaths and backward transitions drop it. Of the three
 fastest distinct crossings, the one whose next segment is also fastest is kept,
 and frames it does not need are shaved off. A segment gets
@@ -130,13 +136,14 @@ rewritten after every level's turn.
 ## PPO policy
 
 With `speedrun.policy`, a separate process trains a small network (RAM in,
-actions and a value out) with PPO on the GPU, always on the level whose turn it
-is. `speedrun.policy_emulators` emulator processes play its episodes in
+actions and a value out) with PPO on the GPU, always from the start the search
+is working on (`cache/tas/policy_start.msgpack`). `speedrun.policy_emulators` emulator processes play its episodes in
 parallel with the network in numpy; every worker process computes with one math
 thread, so the search workers and these emulators share the cores evenly. Its reward is the state's reward, RAM values never seen
 on that level, a bonus for the exit and a penalty for a death. After every round
 of 2048 decisions it exports its weights to `cache/tas/policy.npz`, which the
-workers read with numpy.
+workers read with numpy, and keeps the shortest episode that left the state for
+the search to replay.
 
 ## Workflows and the lab
 

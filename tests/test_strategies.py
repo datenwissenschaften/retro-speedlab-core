@@ -1,5 +1,6 @@
 import random
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import msgspec
@@ -88,13 +89,13 @@ def test_the_modes_take_turns_by_their_share_of_the_time(monkeypatch, tmp_path: 
     monkeypatch.setattr(explore, "STRATEGIES", (mode("quick", 0.001), mode("slow", 0.02)))
     monkeypatch.setattr(explore, "SHARES", (0.5, 0.5))
 
-    explore.search_segment(LineRunner(), START, UNBOUNDED, 1, 0.4, None, NO_PREFERENCES, Archives(tmp_path))
+    explore.search_segment(LineRunner(), START, UNBOUNDED, 1, 0.4, None, NO_PREFERENCES, Archives(tmp_path, 2))
 
     assert abs(spent["quick"] - spent["slow"]) <= 0.02
 
 
 def test_a_search_from_the_same_start_goes_on_from_the_places_the_last_one_found(tmp_path: Path):
-    archives = Archives(tmp_path)
+    archives = Archives(tmp_path, 2)
     explore.search_segment(LineRunner(), START, UNBOUNDED, 1, 0.2, None, NO_PREFERENCES, archives)
     explored = archives.resumed(LineRunner(), START, UNBOUNDED)
 
@@ -103,29 +104,48 @@ def test_a_search_from_the_same_start_goes_on_from_the_places_the_last_one_found
 
 
 def test_the_places_a_search_found_survive_a_restart(tmp_path: Path):
-    archives = Archives(tmp_path)
+    archives = Archives(tmp_path, 2)
     explore.search_segment(LineRunner(), START, UNBOUNDED, 1, 0.2, None, NO_PREFERENCES, archives)
     kept = archives.resumed(LineRunner(), START, UNBOUNDED)
-    restarted = Archives(tmp_path).resumed(LineRunner(), START, UNBOUNDED)
+    restarted = Archives(tmp_path, 2).resumed(LineRunner(), START, UNBOUNDED)
 
-    assert restarted.cells.keys() == kept.cells.keys()
-    assert [cell.frames for cell in restarted.cells.values()] == [cell.frames for cell in kept.cells.values()]
+    assert {key: cell.frames for key, cell in restarted.cells.items()} == {
+        key: cell.frames for key, cell in kept.cells.items()
+    }
     assert (restarted.novelty.seen == kept.novelty.seen).all()
     assert all((cell.trail is None) == (restarted.cells[key].trail is None) for key, cell in kept.cells.items())
 
 
 def test_only_the_newest_archives_stay_on_disk(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(archives_module, "KEPT_ARCHIVES", 2)
-    archives = Archives(tmp_path)
+    archives = Archives(tmp_path, 2)
     for bound in range(3):
         archives.keep(START, bound, fresh_archive(LineRunner(), START))
 
-    assert len(list(tmp_path.glob("*.msgpack"))) == 2
+    assert len([folder for folder in tmp_path.iterdir() if folder.is_dir()]) == 2
 
 
-def test_a_kept_archive_holds_only_the_best_scored_places():
+def test_each_search_process_keeps_its_own_file_and_a_restart_merges_them(tmp_path: Path, monkeypatch):
     explored = exploration()
-    frontier(explored, random.Random(1))
-    many = {index: explored.archive[next(iter(explored.archive))] for index in range(KEPT_CELLS + 5)}
+    root = explored.archive[next(iter(explored.archive))]
+    near, far = replace(root, frames=3), replace(root, frames=9)
+    for pid, cells in ((1, {("spot",): far, ("only",): near}), (2, {("spot",): near})):
+        monkeypatch.setattr(archives_module.os, "getpid", lambda pid=pid: pid)
+        Archives(tmp_path, 2).keep(START, UNBOUNDED, Archive(cells, explored.novelty))
 
-    assert len(pruned(Archive(many, explored.novelty)).cells) == KEPT_CELLS
+    restarted = Archives(tmp_path, 2).resumed(LineRunner(), START, UNBOUNDED)
+
+    assert {key: cell.frames for key, cell in restarted.cells.items()} == {("spot",): 3, ("only",): 3}
+
+
+def test_a_kept_archive_holds_the_best_scored_and_the_rarest_places():
+    explored = exploration()
+    root = explored.archive[next(iter(explored.archive))]
+    scored = {index: replace(root, score=float(index), novelty=0) for index in range(KEPT_CELLS)}
+    rare = {f"rare{index}": replace(root, score=-1.0, novelty=100) for index in range(5)}
+
+    kept = pruned(Archive({**scored, **rare}, explored.novelty)).cells
+
+    assert len(kept) == KEPT_CELLS
+    assert rare.keys() <= kept.keys()
+    assert KEPT_CELLS - 1 in kept

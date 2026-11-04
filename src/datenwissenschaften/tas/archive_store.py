@@ -1,4 +1,5 @@
 import os
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -73,7 +74,5 @@ def load_archive(path: Path) -> tuple[dict[CellKey, Cell], RamNovelty]:
     return {hashable(cell.key): loaded_cell(stored.state, cell) for cell in stored.cells}, novelty
 
 
-def prune_archives(directory: Path, kept: int) -> None:
-    archives = sorted(directory.glob(f"*{ARCHIVE_SUFFIX}"), key=lambda path: path.stat().st_mtime, reverse=True)
-    for path in archives[kept:]:
-        path.unlink(missing_ok=True)
+def newest(paths: Iterable[Path]) -> list[Path]:
+    return sorted(paths, key=lambda path: path.stat().st_mtime, reverse=True)

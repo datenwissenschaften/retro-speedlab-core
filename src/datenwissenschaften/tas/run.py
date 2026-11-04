@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
 
+import numpy as np
 import typer
 from loguru import logger
 
@@ -15,10 +16,17 @@ from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, RetroSpeedlabPaths, load_config
 from datenwissenschaften.tas.feed import SpeedrunFeed
 from datenwissenschaften.tas.footage import compare_cut, movie_cut, render_compare, render_movie
+from datenwissenschaften.tas.hints import Hint, hinted, hints_path, load_hints, pressed
 from datenwissenschaften.tas.journal import JOURNAL_FILE, JournalStore
 from datenwissenschaften.tas.live import LIVE_DIR
 from datenwissenschaften.tas.movie import Segment, frames, verified_segments
 from datenwissenschaften.tas.paths import PROGRESS_FILE, TAS_MOVIE, tas_dir
+from datenwissenschaften.tas.policy_start import (
+    POLICY_EXITS_FILE,
+    POLICY_START_FILE,
+    load_policy_exits,
+    save_policy_start,
+)
 from datenwissenschaften.tas.report import course_of
 from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Routes, finished, load_progress, parts_of
 from datenwissenschaften.tas.runner import SegmentRunner, Start
@@ -85,6 +93,8 @@ class Tas:
     movie: Screen
     compare: Screen
     turn: int
+    hints: list[Hint]
+    hinted: set[tuple[str, str]]
 
     @property
     def output(self) -> Path:
@@ -110,6 +120,21 @@ class Tas:
     @property
     def barred(self) -> dict[str, str]:
         return load_barred(self.barred_file)
+
+    def hint(self, leg: Leg, segments: list[Segment], start: Start) -> tuple[list[Segment], Crossing] | None:
+        if (leg.name, start.state) in self.hinted:
+            return None
+        starts = [self.start(leg, segments, index) for index in range(len(segments) + 1)]
+        lab = [pressed(self.runner, hint) for hint in self.hints if hint.state == start.state]
+        policy = load_policy_exits(self.output / POLICY_EXITS_FILE)
+        tried = [*lab, *([np.asarray(policy[start.state], dtype=np.int8)] if start.state in policy else [])]
+        found = hinted(self.runner, tried, starts)
+        if found is None:
+            return None
+        self.hinted.add((leg.name, start.state))
+        index, crossing = found
+        logger.info(f"A hint leads out of {start.state} into {crossing.end.state}")
+        return segments[:index], crossing
 
     def leave(self, state: str) -> None:
         stuck = load_stuck(self.stuck_file)
@@ -144,8 +169,13 @@ class Tas:
             if patience is not None:
                 save_turn(self.turn_file, turn)
             start = self.start(leg, segments, len(segments))
+            save_policy_start(self.output / POLICY_START_FILE, start)
             self.feed.show(self.routes.view(leg.name, segments), start.state)
-            found = self.searcher.best(start, UNBOUNDED, SEARCH_ROUNDS)
+            hint = self.hint(leg, segments, start)
+            if hint is None:
+                found = self.searcher.best(start, UNBOUNDED, SEARCH_ROUNDS)
+            else:
+                segments, found = hint
             if isinstance(found, Checkpoint) and (
                 start.state == self.barred.get(leg.name) or checkpoints_in_a_row(leg, segments) >= MAX_CHECKPOINTS
             ):
@@ -252,7 +282,7 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
         logger.warning(
             f"Pieces of {', '.join(relabelled)} ended in states the game package dropped; they keep their place"
         )
-    return Tas(settings, runner, searcher, routes, feed, movie, compare, 0)
+    return Tas(settings, runner, searcher, routes, feed, movie, compare, 0, load_hints(hints_path(config)), set())
 
 
 @app.command()
@@ -272,6 +302,7 @@ def kept_on_verify(leg: Leg, segments: list[Segment]) -> int:
 def verify(wrapper: str, config: Path, routes_file: Path) -> None:
     settings = load_config(config)
     setup_logging(settings.log_level)
+    hints = load_hints(hints_path(config))
     runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, MAIN_WORKER))
     routes = Routes(
         routes_file, routes_file.with_name(PROGRESS_FILE), parts_of(course_of(runner, settings.speedrun.game))
@@ -287,7 +318,7 @@ def verify(wrapper: str, config: Path, routes_file: Path) -> None:
             raise RuntimeError(f"Only {verified} of {len(segments)} segments of {leg.name} replay with {wrapper}")
         if verified < len(segments):
             logger.warning(f"The newest segment of {leg.name} into {segments[-1].state} no longer replays")
-    logger.info(f"Every part of {routes_file} replays with {wrapper}")
+    logger.info(f"Every part of {routes_file} replays with {wrapper}; {len(hints)} hints read")
 
 
 if __name__ == "__main__":

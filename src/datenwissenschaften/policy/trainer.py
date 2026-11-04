@@ -19,7 +19,12 @@ from datenwissenschaften.policy.rollout import ROLLOUT_DECISIONS, Rollout, merge
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.tas.live import LIVE_DIR
 from datenwissenschaften.tas.paths import tas_dir
-from datenwissenschaften.tas.policy_start import POLICY_START_FILE, load_policy_start
+from datenwissenschaften.tas.policy_start import (
+    POLICY_EXITS_FILE,
+    POLICY_START_FILE,
+    load_policy_start,
+    save_policy_exit,
+)
 from datenwissenschaften.tas.run import worker_pool
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.workflow.wrapper import wrapper_class
@@ -73,10 +78,15 @@ class PolicyTrainer:
         loss = update(self.net, self.optimizer, rollout, self.device)
         export_policy(self.net, self.output / POLICY_FILE)
         self.rounds += 1
+        if rollout.exits and save_policy_exit(
+            self.output / POLICY_EXITS_FILE, start.state, min(rollout.exits, key=len)
+        ):
+            logger.info(f"The policy found a way out of {start.state}; the search replays it next")
         episodes = max(1, sum(rollout.dones))
+        exits, emulators = len(rollout.exits), self.collectors.emulators
         logger.info(
             f"Policy round {self.rounds} in {start.state}: reward {sum(rollout.rewards) / episodes:.2f} per episode, "
-            f"{rollout.exits} exits in {episodes} episodes from {self.collectors.emulators} emulators, loss {loss:.3f}"
+            f"{exits} exits in {episodes} episodes from {emulators} emulators, loss {loss:.3f}"
         )
         return True
 
