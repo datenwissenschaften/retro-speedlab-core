@@ -4,6 +4,7 @@ import httpx
 import typer
 from loguru import logger
 
+from datenwissenschaften.lab.progress import score_previous_run
 from datenwissenschaften.lab.timeline import timeline
 from datenwissenschaften.lab.tracing import LabRun, run_scores, send_trace
 from datenwissenschaften.lab.transcript import Round, read_transcript
@@ -48,6 +49,7 @@ def record_lab_run(config: Path, log: Path, stamp: str, base: str, outcome: str,
         raise ValueError(f"the lab log {log} has no finished round")
     publish_lab_run(settings, run, rounds)
     send_trace(run, rounds)
+    score_previous_run(settings, stamp)
 
 
 if __name__ == "__main__":

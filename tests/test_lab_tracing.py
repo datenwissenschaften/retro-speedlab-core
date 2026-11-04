@@ -7,6 +7,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from datenwissenschaften.lab import tracing
+from datenwissenschaften.lab.progress import progress_scores
 from datenwissenschaften.lab.record import summary
 from datenwissenschaften.lab.timeline import timeline
 from datenwissenschaften.lab.tracing import TRACE_SESSION, TYPE, LabRun, export_run, run_scores, send_trace
@@ -112,3 +113,11 @@ def test_the_published_summary_counts_whole_numbers(tmp_path: Path) -> None:
 def test_an_unknown_outcome_fails() -> None:
     with pytest.raises(ValueError, match="outcome"):
         LabRun("game", "stamp", "base", "claude", 0)
+
+
+def test_progress_after_a_run_becomes_session_scores() -> None:
+    progressed = {"progressed": True, "hours": 1.5, "seconds": -2.25}
+    stalled = {"progressed": False, "hours": None, "seconds": 0.0}
+
+    assert progress_scores(progressed) == {"progressed": 1.0, "run_seconds_change": -2.25, "hours_to_progress": 1.5}
+    assert progress_scores(stalled) == {"progressed": 0.0, "run_seconds_change": 0.0}

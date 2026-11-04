@@ -149,19 +149,27 @@ def trace_run(langfuse: Langfuse, tracer: Tracer, run: LabRun, rounds: list[Roun
     return trace_ids
 
 
-def send_trace(run: LabRun, rounds: list[Round]) -> None:
-    missing = [key for key in LANGFUSE_KEYS if key not in os.environ]
-    if missing:
-        logger.warning(f"The lab run {run.stamp} is not traced: {', '.join(missing)} not set")
-        return
-    provider = TracerProvider()
-    langfuse = Langfuse(
+def missing_langfuse_keys() -> list[str]:
+    return [key for key in LANGFUSE_KEYS if key not in os.environ]
+
+
+def langfuse_client(provider: TracerProvider) -> Langfuse:
+    return Langfuse(
         public_key=os.environ["LANGFUSE_PUBLIC_KEY"],
         secret_key=os.environ["LANGFUSE_SECRET_KEY"],
         base_url=os.environ["LANGFUSE_BASE_URL"],
         tracer_provider=provider,
         should_export_span=exports_every_span,
     )
+
+
+def send_trace(run: LabRun, rounds: list[Round]) -> None:
+    missing = missing_langfuse_keys()
+    if missing:
+        logger.warning(f"The lab run {run.stamp} is not traced: {', '.join(missing)} not set")
+        return
+    provider = TracerProvider()
+    langfuse = langfuse_client(provider)
     trace_ids = trace_run(langfuse, provider.get_tracer(TRACER_NAME), run, rounds)
     langfuse.shutdown()
     logger.info(f"The lab run {run.stamp} is traced as session {session_of(run)!r} with {len(trace_ids)} rounds")
