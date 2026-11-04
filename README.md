@@ -178,20 +178,21 @@ The search and the policy each log one [Weights & Biases](https://wandb.ai) run 
 
 Without `WANDB_API_KEY` the runs are disabled and logged as not tracked.
 
-### Lab traces
+### Lab runs
 
-After the verdict, `python -m datenwissenschaften.lab.tracing LOG GAME STAMP BASE VERDICT COMMITS`
-turns the run's Claude Code log into one [Langfuse](https://langfuse.com) trace, sent as
-OpenTelemetry spans with their recorded times:
+After the verdict, `python -m datenwissenschaften.lab.record CONFIG LOG STAMP BASE OUTCOME COMMITS`
+(outcome `rejected`, `notes` or `deployed`) reads the run's Claude Code log once and
 
-- every `claude -p` round is a chain;
-- every model turn is a generation with its token usage;
-- every tool call is a tool span;
-- every subagent is an agent span holding its own turns and tools.
+- publishes its numbers and a swimlane timeline (the lead and every subagent as lanes, tool calls as
+  blocks, hand-offs as arrows) to the website at `PUT /lab-runs/{game}/{stamp}`;
+- sends it to [Langfuse](https://langfuse.com) as the session `lab-run STAMP`, one trace per
+  `claude -p` round, as OpenTelemetry spans with their recorded times. Every model turn is a
+  generation with its token usage, every tool call a tool span and every subagent an agent span
+  holding its own turns and tools. The session is scored with `accepted`, `deployed`, `cost_usd`,
+  `commits`, `minutes`, `turns`, `subagents` and `tool_errors`.
 
-The trace is scored with `accepted`, `cost_usd`, `commits`, `minutes`, `turns`, `subagents` and
-`tool_errors`, so runs can be compared over time. It needs `LANGFUSE_PUBLIC_KEY`,
-`LANGFUSE_SECRET_KEY` and `LANGFUSE_BASE_URL`; without them the run is logged as not traced.
+Langfuse needs `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and `LANGFUSE_BASE_URL`; without them the
+run is logged as not traced.
 
 ## Live relay
 
