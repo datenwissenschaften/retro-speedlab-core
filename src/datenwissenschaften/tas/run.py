@@ -26,7 +26,18 @@ from datenwissenschaften.tas.screen import Screen
 from datenwissenschaften.tas.search import UNBOUNDED, Checkpoint, Crossing
 from datenwissenschaften.tas.searcher import Searcher
 from datenwissenschaften.tas.shown import SHOWN_FILE, worth_showing
-from datenwissenschaften.tas.stuck import FAILURES_FILE, STUCK_FILE, cleared, failed, load_stuck, mark_stuck
+from datenwissenschaften.tas.stuck import (
+    BARRED_FILE,
+    FAILURES_FILE,
+    STUCK_FILE,
+    bar,
+    cleared,
+    failed,
+    load_barred,
+    load_stuck,
+    mark_stuck,
+    unbar,
+)
 from datenwissenschaften.tas.turns import TURN_FILE, Turn, save_turn, turn_of
 from datenwissenschaften.ui.relay import relay_key
 from datenwissenschaften.ui.video_upload import VideoUpload
@@ -74,7 +85,6 @@ class Tas:
     movie: Screen
     compare: Screen
     turn: int
-    barred: dict[str, str]
 
     @property
     def output(self) -> Path:
@@ -92,6 +102,14 @@ class Tas:
     @property
     def turn_file(self) -> Path:
         return self.output / TURN_FILE
+
+    @property
+    def barred_file(self) -> Path:
+        return self.output / BARRED_FILE
+
+    @property
+    def barred(self) -> dict[str, str]:
+        return load_barred(self.barred_file)
 
     def leave(self, state: str) -> None:
         stuck = load_stuck(self.stuck_file)
@@ -143,7 +161,7 @@ class Tas:
             if found is None:
                 segments = self.stuck(leg, segments, start, patience)
                 continue
-            self.barred.pop(leg.name, None)
+            unbar(self.barred_file, leg.name)
             turn = turn.found()
             if patience is not None:
                 save_turn(self.turn_file, turn)
@@ -169,7 +187,7 @@ class Tas:
             return segments
         logger.warning(f"No way out of {start.state} after {searches} searches; searching the way into it again")
         if segments and segments[-1].state == start.state:
-            self.barred[leg.name] = start.state
+            bar(self.barred_file, leg.name, start.state)
         kept = segments[: len(segments) - max(1, checkpoints_in_a_row(leg, segments))]
         return self.keep(leg, kept, self.start(leg, kept, len(kept)).state)
 
@@ -234,7 +252,7 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
         logger.warning(
             f"Pieces of {', '.join(relabelled)} ended in states the game package dropped; they keep their place"
         )
-    return Tas(settings, runner, searcher, routes, feed, movie, compare, 0, {})
+    return Tas(settings, runner, searcher, routes, feed, movie, compare, 0)
 
 
 @app.command()

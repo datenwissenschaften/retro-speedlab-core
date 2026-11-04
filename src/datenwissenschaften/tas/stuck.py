@@ -7,8 +7,10 @@ from datenwissenschaften.tas.paths import atomic_write
 
 STUCK_FILE = "stuck.json"
 FAILURES_FILE = "failures.json"
+BARRED_FILE = "barred.json"
 
 Failures = dict[str, int]
+Barred = dict[str, str]
 
 
 class Stuck(msgspec.Struct, frozen=True):
@@ -40,6 +42,20 @@ def failed(path: Path, state: str) -> int:
     failures[state] = failures.get(state, 0) + 1
     atomic_write(path, msgspec.json.encode(failures))
     return failures[state]
+
+
+def load_barred(path: Path) -> Barred:
+    return msgspec.json.decode(path.read_bytes(), type=Barred) if path.is_file() else {}
+
+
+def bar(path: Path, leg: str, state: str) -> None:
+    atomic_write(path, msgspec.json.encode({**load_barred(path), leg: state}))
+
+
+def unbar(path: Path, leg: str) -> None:
+    barred = load_barred(path)
+    if barred.pop(leg, None) is not None:
+        atomic_write(path, msgspec.json.encode(barred))
 
 
 def cleared(path: Path, state: str) -> None:

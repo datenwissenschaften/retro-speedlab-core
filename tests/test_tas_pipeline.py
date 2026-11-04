@@ -22,7 +22,7 @@ from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Part, Rou
 from datenwissenschaften.tas.run import BACKTRACK_SEARCHES
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import UNBOUNDED, Checkpoint, Crossing, shave
-from datenwissenschaften.tas.stuck import FAILURES_FILE, STUCK_FILE, Stuck, cleared, load_failures, load_stuck
+from datenwissenschaften.tas.stuck import FAILURES_FILE, STUCK_FILE, Stuck, bar, cleared, load_failures, load_stuck
 from datenwissenschaften.tas.turns import Turn, load_turn, save_turn
 
 BOSS_FRAMES = 3
@@ -303,7 +303,7 @@ def test_no_checkpoint_comes_back_in_a_state_the_search_just_left_one_behind(tmp
         return useless if len(calls) == 1 else found(self, start, bound, rounds)
 
     monkeypatch.setattr(searcher.Searcher, "best", best)
-    tas.barred = {FULL_RUN: "Survive"}
+    bar(tas.barred_file, FULL_RUN, "Survive")
 
     segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [], None)
 
@@ -334,6 +334,17 @@ def test_a_level_keeps_its_barred_state_when_another_level_goes_back_later(tmp_p
 
     assert [segment.state for segment in segments] == ["Boss"]
     assert tas.barred == {"Level 2": "Boss"}
+
+
+def test_a_barred_state_stays_barred_after_the_search_restarts(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    leg = Leg("Level 1", runner.power_on(), "Boss")
+    for _ in range(BACKTRACK_SEARCHES):
+        local_tas(tmp_path, monkeypatch, runner).stuck(
+            leg, [Segment("Survive", [[0, 0]], bytes([1]), False)], Start("Survive", bytes([1])), None
+        )
+
+    assert local_tas(tmp_path, monkeypatch, runner).barred == {"Level 1": "Survive"}
 
 
 def test_a_level_with_patience_rests_after_that_many_searches(tmp_path: Path, monkeypatch):
