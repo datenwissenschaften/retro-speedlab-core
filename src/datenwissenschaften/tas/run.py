@@ -170,7 +170,7 @@ class Tas:
         logger.warning(f"No way out of {start.state} after {searches} searches; searching the way into it again")
         if segments and segments[-1].state == start.state:
             self.barred = start.state
-        kept = segments[:-1]
+        kept = segments[: len(segments) - max(1, checkpoints_in_a_row(leg, segments))]
         return self.keep(leg, kept, self.start(leg, kept, len(kept)).state)
 
     def improve(self, leg: Leg, segments: list[Segment]) -> list[Segment]:

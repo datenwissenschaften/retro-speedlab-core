@@ -269,6 +269,19 @@ def test_the_search_goes_back_a_piece_only_after_three_failed_searches(tmp_path:
     assert tas.barred == "Survive"
 
 
+def test_going_back_drops_every_checkpoint_in_a_row_down_to_the_last_piece(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    piece = Segment("Boss", [[0, 0]], bytes([1]), False)
+    checkpoints = [Segment("Boss", [[0, 0]], bytes([index]), False) for index in (2, 3, 4)]
+    leg = Leg(FULL_RUN, runner.power_on(), "Exit")
+
+    kept = [tas.stuck(leg, [piece, *checkpoints], Start("Boss", bytes([4])), None) for _ in range(BACKTRACK_SEARCHES)]
+
+    assert kept[-1] == [piece]
+    assert tas.barred == "Boss"
+
+
 def test_checkpoints_in_a_row_count_the_pieces_that_stay_in_one_state():
     leg = Leg(FULL_RUN, Start("Survive", b""), "Boss")
     survive = Segment("Survive", [[0, 0]], b"", False)
