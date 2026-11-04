@@ -13,3 +13,9 @@ class RamNovelty:
         fresh = ~self.seen[self.addresses, memory]
         self.seen[self.addresses, memory] = True
         return int(fresh.sum())
+
+
+def novelty_of(seen: np.ndarray) -> RamNovelty:
+    novelty = RamNovelty(np.zeros(len(seen), dtype=np.uint8))
+    novelty.seen = seen
+    return novelty

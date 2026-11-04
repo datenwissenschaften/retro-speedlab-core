@@ -1,8 +1,10 @@
 import hashlib
 from dataclasses import dataclass
+from pathlib import Path
 
 from cachetools import LRUCache
 
+from datenwissenschaften.tas.archive_store import ARCHIVE_SUFFIX, load_archive, prune_archives, save_archive
 from datenwissenschaften.tas.novelty import RamNovelty
 from datenwissenschaften.tas.runner import CellKey, SegmentRunner, Start
 from datenwissenschaften.tas.search import Cell
@@ -10,7 +12,7 @@ from datenwissenschaften.tas.search import Cell
 KEPT_ARCHIVES = 12
 KEPT_CELLS = 1000
 
-ArchiveKey = tuple[str, bytes, int]
+ArchiveKey = str
 
 
 @dataclass(slots=True)
@@ -31,18 +33,29 @@ def pruned(archive: Archive) -> Archive:
 
 
 def archive_key(start: Start, bound: int) -> ArchiveKey:
-    return start.state, hashlib.sha256(start.emulator_state).digest(), bound
+    return hashlib.sha256(b"|".join([start.state.encode(), start.emulator_state, str(bound).encode()])).hexdigest()
 
 
 class Archives:
-    def __init__(self) -> None:
+    def __init__(self, directory: Path) -> None:
+        self.directory = directory
         self.kept: LRUCache[ArchiveKey, Archive] = LRUCache(maxsize=KEPT_ARCHIVES)
+        directory.mkdir(parents=True, exist_ok=True)
+
+    def path(self, key: ArchiveKey) -> Path:
+        return self.directory / f"{key}{ARCHIVE_SUFFIX}"
 
     def resumed(self, runner: SegmentRunner, start: Start, bound: int) -> Archive:
         key = archive_key(start, bound)
         if key in self.kept:
             return self.kept[key]
+        if self.path(key).is_file():
+            return Archive(*load_archive(self.path(key)))
         return fresh_archive(runner, start)
 
     def keep(self, start: Start, bound: int, archive: Archive) -> None:
-        self.kept[archive_key(start, bound)] = pruned(archive)
+        key = archive_key(start, bound)
+        kept = pruned(archive)
+        self.kept[key] = kept
+        save_archive(self.path(key), start.state, kept.cells, kept.novelty)
+        prune_archives(self.directory, KEPT_ARCHIVES)

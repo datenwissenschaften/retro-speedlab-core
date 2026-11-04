@@ -7,6 +7,7 @@ import numpy as np
 from fakes import saving_environment
 from test_tas import NO_PREFERENCES, START, LineRunner
 
+from datenwissenschaften.tas import archives as archives_module
 from datenwissenschaften.tas import explore
 from datenwissenschaften.tas.archives import KEPT_CELLS, Archive, Archives, fresh_archive, pruned
 from datenwissenschaften.tas.exploration import Exploration
@@ -72,7 +73,7 @@ def test_the_tree_search_finds_the_way_out_by_expanding_its_most_promising_moves
     assert explored.crossings and explored.crossings[0].frames <= 8
 
 
-def test_the_modes_take_turns_by_their_share_of_the_time(monkeypatch):
+def test_the_modes_take_turns_by_their_share_of_the_time(monkeypatch, tmp_path: Path):
     clock = [0.0]
     spent: dict[str, float] = {"quick": 0.0, "slow": 0.0}
 
@@ -87,18 +88,39 @@ def test_the_modes_take_turns_by_their_share_of_the_time(monkeypatch):
     monkeypatch.setattr(explore, "STRATEGIES", (mode("quick", 0.001), mode("slow", 0.02)))
     monkeypatch.setattr(explore, "SHARES", (0.5, 0.5))
 
-    explore.search_segment(LineRunner(), START, UNBOUNDED, 1, 0.4, None, NO_PREFERENCES, Archives())
+    explore.search_segment(LineRunner(), START, UNBOUNDED, 1, 0.4, None, NO_PREFERENCES, Archives(tmp_path))
 
     assert abs(spent["quick"] - spent["slow"]) <= 0.02
 
 
-def test_a_search_from_the_same_start_goes_on_from_the_places_the_last_one_found():
-    archives = Archives()
+def test_a_search_from_the_same_start_goes_on_from_the_places_the_last_one_found(tmp_path: Path):
+    archives = Archives(tmp_path)
     explore.search_segment(LineRunner(), START, UNBOUNDED, 1, 0.2, None, NO_PREFERENCES, archives)
     explored = archives.resumed(LineRunner(), START, UNBOUNDED)
 
     assert len(explored.cells) > 1
     assert len(archives.resumed(LineRunner(), START, UNBOUNDED - 1).cells) == 1
+
+
+def test_the_places_a_search_found_survive_a_restart(tmp_path: Path):
+    archives = Archives(tmp_path)
+    explore.search_segment(LineRunner(), START, UNBOUNDED, 1, 0.2, None, NO_PREFERENCES, archives)
+    kept = archives.resumed(LineRunner(), START, UNBOUNDED)
+    restarted = Archives(tmp_path).resumed(LineRunner(), START, UNBOUNDED)
+
+    assert restarted.cells.keys() == kept.cells.keys()
+    assert [cell.frames for cell in restarted.cells.values()] == [cell.frames for cell in kept.cells.values()]
+    assert (restarted.novelty.seen == kept.novelty.seen).all()
+    assert all((cell.trail is None) == (restarted.cells[key].trail is None) for key, cell in kept.cells.items())
+
+
+def test_only_the_newest_archives_stay_on_disk(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(archives_module, "KEPT_ARCHIVES", 2)
+    archives = Archives(tmp_path)
+    for bound in range(3):
+        archives.keep(START, bound, fresh_archive(LineRunner(), START))
+
+    assert len(list(tmp_path.glob("*.msgpack"))) == 2
 
 
 def test_a_kept_archive_holds_only_the_best_scored_places():

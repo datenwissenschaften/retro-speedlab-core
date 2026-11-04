@@ -203,9 +203,11 @@ def test_workers_search_and_shave_from_a_savestate(tmp_path: Path, monkeypatch):
     runner = workers.worker_runner.__wrapped__("fakes:FakeWrapper", write_config(tmp_path))
     start = runner.power_on()
     preferences = Preferences(ActionPrior(tmp_path / "prior.msgpack"), PolicyPrior(tmp_path / "policy.npz"))
-    crossing = search_segment(runner, start, 100, 1, SECONDS, None, preferences, Archives()).crossings[0]
+    archives = Archives(tmp_path / "archives")
+    crossing = search_segment(runner, start, 100, 1, SECONDS, None, preferences, archives).crossings[0]
     monkeypatch.setattr(workers, "worker_runner", lambda wrapper, config: runner)
     monkeypatch.setattr(workers, "worker_preferences", lambda config: preferences)
+    monkeypatch.setattr(workers, "worker_archives", lambda config: archives)
 
     assert (
         workers.explore("fakes:FakeWrapper", tmp_path, start, 100, 1, SECONDS, None).crossings[0].frames == BOSS_FRAMES

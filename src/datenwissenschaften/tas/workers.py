@@ -16,6 +16,8 @@ from datenwissenschaften.tas.search import Crossing, Searched, shave
 from datenwissenschaften.tas.strategies import WALK
 from datenwissenschaften.workflow.wrapper import wrapper_class
 
+ARCHIVES_DIR = "archives"
+
 
 @cache
 def worker_runner(wrapper: str, config: Path) -> SegmentRunner:
@@ -29,8 +31,8 @@ def worker_preferences(config: Path) -> Preferences:
 
 
 @cache
-def worker_archives() -> Archives:
-    return Archives()
+def worker_archives(config: Path) -> Archives:
+    return Archives(tas_dir(load_config(config)) / ARCHIVES_DIR)
 
 
 def explore(
@@ -38,7 +40,7 @@ def explore(
 ) -> Searched:
     watched = None if live is None else WorkerLive(live, seed, WALK)
     runner, preferences = worker_runner(wrapper, config), worker_preferences(config)
-    return search_segment(runner, start, bound, seed, seconds, watched, preferences, worker_archives())
+    return search_segment(runner, start, bound, seed, seconds, watched, preferences, worker_archives(config))
 
 
 def polish(wrapper: str, config: Path, start: Start, crossing: Crossing, seconds: float) -> Crossing:
