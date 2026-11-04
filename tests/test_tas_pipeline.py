@@ -266,7 +266,7 @@ def test_the_search_goes_back_a_piece_only_after_three_failed_searches(tmp_path:
     kept = [tas.stuck(leg, piece, Start("Survive", bytes([1])), None) for _ in range(BACKTRACK_SEARCHES)]
 
     assert kept == [piece, piece, []]
-    assert tas.barred == "Survive"
+    assert tas.barred == {FULL_RUN: "Survive"}
 
 
 def test_going_back_drops_every_checkpoint_in_a_row_down_to_the_last_piece(tmp_path: Path, monkeypatch):
@@ -279,7 +279,7 @@ def test_going_back_drops_every_checkpoint_in_a_row_down_to_the_last_piece(tmp_p
     kept = [tas.stuck(leg, [piece, *checkpoints], Start("Boss", bytes([4])), None) for _ in range(BACKTRACK_SEARCHES)]
 
     assert kept[-1] == [piece]
-    assert tas.barred == "Boss"
+    assert tas.barred == {FULL_RUN: "Boss"}
 
 
 def test_checkpoints_in_a_row_count_the_pieces_that_stay_in_one_state():
@@ -303,12 +303,37 @@ def test_no_checkpoint_comes_back_in_a_state_the_search_just_left_one_behind(tmp
         return useless if len(calls) == 1 else found(self, start, bound, rounds)
 
     monkeypatch.setattr(searcher.Searcher, "best", best)
-    tas.barred = "Survive"
+    tas.barred = {FULL_RUN: "Survive"}
 
     segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [], None)
 
     assert [segment.state for segment in segments] == ["Boss"]
-    assert tas.barred is None
+    assert tas.barred == {}
+
+
+def test_a_level_keeps_its_barred_state_when_another_level_goes_back_later(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    found = searcher.Searcher.best
+    useless = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 20.0)
+    calls: list[int] = []
+
+    def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Crossing | Checkpoint | None:
+        calls.append(bound)
+        return useless if len(calls) == 1 else found(self, start, bound, rounds)
+
+    first = Leg("Level 1", runner.power_on(), "Boss")
+    second = Leg("Level 2", Start("Boss", bytes([3])), "Exit")
+    for _ in range(BACKTRACK_SEARCHES):
+        tas.stuck(first, [Segment("Survive", [[0, 0]], bytes([1]), False)], Start("Survive", bytes([1])), None)
+    for _ in range(BACKTRACK_SEARCHES):
+        tas.stuck(second, [Segment("Boss", [[0, 0]], bytes([4]), False)], Start("Boss", bytes([4])), None)
+    monkeypatch.setattr(searcher.Searcher, "best", best)
+
+    segments = tas.extend(first, [], None)
+
+    assert [segment.state for segment in segments] == ["Boss"]
+    assert tas.barred == {"Level 2": "Boss"}
 
 
 def test_a_level_with_patience_rests_after_that_many_searches(tmp_path: Path, monkeypatch):
