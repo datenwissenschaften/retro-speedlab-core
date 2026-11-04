@@ -1,30 +1,26 @@
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import msgspec
-import typer
 from langfuse import Langfuse
 from loguru import logger
 from opentelemetry import trace
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.trace import Span, Tracer
 
-from datenwissenschaften.lab.transcript import AGENT, GENERATION, Round, Step, read_transcript
-from datenwissenschaften.logger import setup_logging
+from datenwissenschaften.lab.transcript import AGENT, GENERATION, Round, Step
 
 LANGFUSE_KEYS = ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL")
 TRACER_NAME = "retro-speedlab-lab"
-TRACE_NAME = "lab run"
-CHAIN = "chain"
+TRACE_NAME = "lab round"
+SESSION_PREFIX = "lab-run "
 ERROR_LEVEL = "ERROR"
 REJECTED = "rejected"
 DEPLOYED = "deployed"
 OUTCOMES = frozenset({REJECTED, "notes", DEPLOYED})
 BOOLEAN_SCORES = frozenset({"accepted", DEPLOYED})
-LOG_LEVEL = "INFO"
 MAX_TEXT = 4000
 NANOSECONDS = 1_000_000_000
 SECONDS_PER_MINUTE = 60
@@ -38,6 +34,7 @@ USAGE = "langfuse.observation.usage_details"
 TRACE_NAME_KEY = "langfuse.trace.name"
 TRACE_TAGS = "langfuse.trace.tags"
 TRACE_METADATA = "langfuse.trace.metadata"
+TRACE_SESSION = "session.id"
 
 
 @dataclass(slots=True, frozen=True)
@@ -101,31 +98,33 @@ class RoundExporter:
         return end
 
 
-def export_run(tracer: Tracer, run: LabRun, rounds: list[Round]) -> str:
+def session_of(run: LabRun) -> str:
+    return f"{SESSION_PREFIX}{run.stamp}"
+
+
+def export_round(tracer: Tracer, run: LabRun, number: int, lab_round: Round) -> str:
+    metadata = {"stamp": run.stamp, "base": run.base, "round": number, "cost_usd": lab_round.cost}
     root = tracer.start_span(
-        TRACE_NAME,
-        start_time=nanoseconds(rounds[0].start),
+        f"{TRACE_NAME} {number}",
+        start_time=nanoseconds(lab_round.start),
         attributes={
             TRACE_NAME_KEY: TRACE_NAME,
+            TRACE_SESSION: session_of(run),
             TRACE_TAGS: [run.game, run.outcome],
-            TRACE_METADATA: encoded({"stamp": run.stamp, "base": run.base, "commits": run.commits}),
+            TRACE_METADATA: encoded(metadata),
             TYPE: AGENT,
-            INPUT: encoded({"game": run.game, "base": run.base}),
-            OUTPUT: clipped(rounds[-1].result),
+            OUTPUT: clipped(lab_round.result),
         },
     )
-    for number, lab_round in enumerate(rounds, 1):
-        attributes = {TYPE: CHAIN, OUTPUT: clipped(lab_round.result), METADATA: encoded({"cost_usd": lab_round.cost})}
-        context = trace.set_span_in_context(root)
-        span = tracer.start_span(
-            f"round {number}", context, start_time=nanoseconds(lab_round.start), attributes=attributes
-        )
-        exporter = RoundExporter(tracer, lab_round.steps)
-        for step in exporter.below(None):
-            exporter.emit(step, span)
-        span.end(end_time=nanoseconds(lab_round.end))
-    root.end(end_time=nanoseconds(rounds[-1].end))
+    exporter = RoundExporter(tracer, lab_round.steps)
+    for step in exporter.below(None):
+        exporter.emit(step, root)
+    root.end(end_time=nanoseconds(lab_round.end))
     return format(root.get_span_context().trace_id, "032x")
+
+
+def export_run(tracer: Tracer, run: LabRun, rounds: list[Round]) -> list[str]:
+    return [export_round(tracer, run, number, lab_round) for number, lab_round in enumerate(rounds, 1)]
 
 
 def run_scores(run: LabRun, rounds: list[Round]) -> dict[str, float]:
@@ -142,28 +141,19 @@ def run_scores(run: LabRun, rounds: list[Round]) -> dict[str, float]:
     }
 
 
-def trace_run(langfuse: Langfuse, tracer: Tracer, run: LabRun, rounds: list[Round]) -> str:
-    trace_id = export_run(tracer, run, rounds)
+def trace_run(langfuse: Langfuse, tracer: Tracer, run: LabRun, rounds: list[Round]) -> list[str]:
+    trace_ids = export_run(tracer, run, rounds)
     for name, value in run_scores(run, rounds).items():
         data_type = "BOOLEAN" if name in BOOLEAN_SCORES else "NUMERIC"
-        langfuse.create_score(name=name, value=value, trace_id=trace_id, data_type=data_type)
-    return trace_id
+        langfuse.create_score(name=name, value=value, session_id=session_of(run), data_type=data_type)
+    return trace_ids
 
 
-app = typer.Typer()
-
-
-@app.command()
-def trace_lab_run(log: Path, game: str, stamp: str, base: str, outcome: str, commits: int) -> None:
-    setup_logging(LOG_LEVEL)
-    run = LabRun(game, stamp, base, outcome, commits)
+def send_trace(run: LabRun, rounds: list[Round]) -> None:
     missing = [key for key in LANGFUSE_KEYS if key not in os.environ]
     if missing:
-        logger.warning(f"The lab run {stamp} is not traced: {', '.join(missing)} not set")
+        logger.warning(f"The lab run {run.stamp} is not traced: {', '.join(missing)} not set")
         return
-    rounds = read_transcript(log)
-    if not rounds:
-        raise ValueError(f"the lab log {log} has no finished round")
     provider = TracerProvider()
     langfuse = Langfuse(
         public_key=os.environ["LANGFUSE_PUBLIC_KEY"],
@@ -172,10 +162,6 @@ def trace_lab_run(log: Path, game: str, stamp: str, base: str, outcome: str, com
         tracer_provider=provider,
         should_export_span=exports_every_span,
     )
-    trace_id = trace_run(langfuse, provider.get_tracer(TRACER_NAME), run, rounds)
+    trace_ids = trace_run(langfuse, provider.get_tracer(TRACER_NAME), run, rounds)
     langfuse.shutdown()
-    logger.info(f"The lab run {stamp} is traced: {langfuse.get_trace_url(trace_id=trace_id)}")
-
-
-if __name__ == "__main__":
-    app()
+    logger.info(f"The lab run {run.stamp} is traced as session {session_of(run)!r} with {len(trace_ids)} rounds")

@@ -7,7 +7,9 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from datenwissenschaften.lab import tracing
-from datenwissenschaften.lab.tracing import TYPE, LabRun, export_run, run_scores, trace_lab_run
+from datenwissenschaften.lab.record import summary
+from datenwissenschaften.lab.timeline import timeline
+from datenwissenschaften.lab.tracing import TRACE_SESSION, TYPE, LabRun, export_run, run_scores, send_trace
 from datenwissenschaften.lab.transcript import AGENT, GENERATION, TOOL, read_transcript
 
 REAL_LOG = Path(__file__).with_name("claude_team.jsonl")
@@ -83,7 +85,28 @@ def test_subagent_work_is_nested_under_its_agent() -> None:
 def test_a_run_without_langfuse_keys_is_not_traced(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     for key in tracing.LANGFUSE_KEYS:
         monkeypatch.delenv(key, raising=False)
-    trace_lab_run(two_rounds(tmp_path), "game", "stamp", "base", "rejected", 0)
+    send_trace(RUN, read_transcript(two_rounds(tmp_path)))
+
+
+def test_every_round_is_a_trace_in_the_session_of_its_run(tmp_path: Path) -> None:
+    spans = spans_of(read_transcript(two_rounds(tmp_path)))
+    roots = [span for span in spans if span.parent is None]
+    assert [span.name for span in roots] == ["lab round 1", "lab round 2"]
+    assert {span.attributes[TRACE_SESSION] for span in roots} == {"lab-run 2026-11-04T1000"}
+    assert len({span.context.trace_id for span in roots}) == 2
+
+
+def test_the_timeline_puts_each_subagent_in_its_own_lane() -> None:
+    drawn = timeline(read_transcript(REAL_LOG))
+    assert drawn["lanes"] == ["lead", "reader"]
+    assert [block["lane"] for block in drawn["blocks"]] == [1]
+    assert drawn["handoffs"][0]["source"] == 0 and drawn["handoffs"][0]["target"] == 1
+
+
+def test_the_published_summary_counts_whole_numbers(tmp_path: Path) -> None:
+    published = summary(RUN, read_transcript(two_rounds(tmp_path)))
+    assert published["outcome"] == "deployed" and published["turns"] == 2 and published["cost_usd"] == 2.0
+    assert published["timeline"]["blocks"][0]["failed"]
 
 
 def test_an_unknown_outcome_fails() -> None:
