@@ -11,7 +11,7 @@ from datenwissenschaften.lab.tracing import TYPE, LabRun, export_run, run_scores
 from datenwissenschaften.lab.transcript import AGENT, GENERATION, TOOL, read_transcript
 
 REAL_LOG = Path(__file__).with_name("claude_team.jsonl")
-RUN = LabRun("game", "2026-11-04T1000", "abc1234", "claude", 2)
+RUN = LabRun("game", "2026-11-04T1000", "abc1234", "deployed", 2)
 
 
 def message(identifier: str, stamp: str, *content: dict[str, object]) -> dict[str, object]:
@@ -66,7 +66,8 @@ def test_rounds_cost_what_the_session_added(tmp_path: Path) -> None:
 
 def test_scores_measure_the_run(tmp_path: Path) -> None:
     scores = run_scores(RUN, read_transcript(two_rounds(tmp_path)))
-    assert scores["accepted"] == 1.0 and scores["cost_usd"] == 2.0 and scores["tool_errors"] == 1.0
+    assert scores["accepted"] == scores["deployed"] == 1.0
+    assert scores["cost_usd"] == 2.0 and scores["tool_errors"] == 1.0
     assert scores["turns"] == 2.0 and scores["commits"] == 2.0 and scores["minutes"] == 1.0
 
 
@@ -82,4 +83,9 @@ def test_subagent_work_is_nested_under_its_agent() -> None:
 def test_a_run_without_langfuse_keys_is_not_traced(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     for key in tracing.LANGFUSE_KEYS:
         monkeypatch.delenv(key, raising=False)
-    trace_lab_run(two_rounds(tmp_path), "game", "stamp", "base", "none", 0)
+    trace_lab_run(two_rounds(tmp_path), "game", "stamp", "base", "rejected", 0)
+
+
+def test_an_unknown_outcome_fails() -> None:
+    with pytest.raises(ValueError, match="outcome"):
+        LabRun("game", "stamp", "base", "claude", 0)

@@ -20,7 +20,10 @@ TRACER_NAME = "retro-speedlab-lab"
 TRACE_NAME = "lab run"
 CHAIN = "chain"
 ERROR_LEVEL = "ERROR"
-NO_VERDICT = "none"
+REJECTED = "rejected"
+DEPLOYED = "deployed"
+OUTCOMES = frozenset({REJECTED, "notes", DEPLOYED})
+BOOLEAN_SCORES = frozenset({"accepted", DEPLOYED})
 LOG_LEVEL = "INFO"
 MAX_TEXT = 4000
 NANOSECONDS = 1_000_000_000
@@ -35,7 +38,6 @@ USAGE = "langfuse.observation.usage_details"
 TRACE_NAME_KEY = "langfuse.trace.name"
 TRACE_TAGS = "langfuse.trace.tags"
 TRACE_METADATA = "langfuse.trace.metadata"
-ACCEPTED = "accepted"
 
 
 @dataclass(slots=True, frozen=True)
@@ -43,8 +45,12 @@ class LabRun:
     game: str
     stamp: str
     base: str
-    verdict: str
+    outcome: str
     commits: int
+
+    def __post_init__(self) -> None:
+        if self.outcome not in OUTCOMES:
+            raise ValueError(f"unknown lab run outcome {self.outcome!r}, expected one of {sorted(OUTCOMES)}")
 
 
 def nanoseconds(moment: datetime) -> int:
@@ -101,7 +107,7 @@ def export_run(tracer: Tracer, run: LabRun, rounds: list[Round]) -> str:
         start_time=nanoseconds(rounds[0].start),
         attributes={
             TRACE_NAME_KEY: TRACE_NAME,
-            TRACE_TAGS: [run.game, ACCEPTED if run.verdict != NO_VERDICT else "rejected"],
+            TRACE_TAGS: [run.game, run.outcome],
             TRACE_METADATA: encoded({"stamp": run.stamp, "base": run.base, "commits": run.commits}),
             TYPE: AGENT,
             INPUT: encoded({"game": run.game, "base": run.base}),
@@ -125,7 +131,8 @@ def export_run(tracer: Tracer, run: LabRun, rounds: list[Round]) -> str:
 def run_scores(run: LabRun, rounds: list[Round]) -> dict[str, float]:
     steps = [step for lab_round in rounds for step in lab_round.steps]
     return {
-        ACCEPTED: float(run.verdict != NO_VERDICT),
+        "accepted": float(run.outcome != REJECTED),
+        DEPLOYED: float(run.outcome == DEPLOYED),
         "cost_usd": sum(lab_round.cost for lab_round in rounds),
         "commits": float(run.commits),
         "minutes": (rounds[-1].end - rounds[0].start).total_seconds() / SECONDS_PER_MINUTE,
@@ -138,7 +145,7 @@ def run_scores(run: LabRun, rounds: list[Round]) -> dict[str, float]:
 def trace_run(langfuse: Langfuse, tracer: Tracer, run: LabRun, rounds: list[Round]) -> str:
     trace_id = export_run(tracer, run, rounds)
     for name, value in run_scores(run, rounds).items():
-        data_type = "BOOLEAN" if name == ACCEPTED else "NUMERIC"
+        data_type = "BOOLEAN" if name in BOOLEAN_SCORES else "NUMERIC"
         langfuse.create_score(name=name, value=value, trace_id=trace_id, data_type=data_type)
     return trace_id
 
@@ -147,8 +154,9 @@ app = typer.Typer()
 
 
 @app.command()
-def trace_lab_run(log: Path, game: str, stamp: str, base: str, verdict: str, commits: int) -> None:
+def trace_lab_run(log: Path, game: str, stamp: str, base: str, outcome: str, commits: int) -> None:
     setup_logging(LOG_LEVEL)
+    run = LabRun(game, stamp, base, outcome, commits)
     missing = [key for key in LANGFUSE_KEYS if key not in os.environ]
     if missing:
         logger.warning(f"The lab run {stamp} is not traced: {', '.join(missing)} not set")
@@ -164,9 +172,7 @@ def trace_lab_run(log: Path, game: str, stamp: str, base: str, verdict: str, com
         tracer_provider=provider,
         should_export_span=exports_every_span,
     )
-    trace_id = trace_run(
-        langfuse, provider.get_tracer(TRACER_NAME), LabRun(game, stamp, base, verdict, commits), rounds
-    )
+    trace_id = trace_run(langfuse, provider.get_tracer(TRACER_NAME), run, rounds)
     langfuse.shutdown()
     logger.info(f"The lab run {stamp} is traced: {langfuse.get_trace_url(trace_id=trace_id)}")
 
