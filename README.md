@@ -94,7 +94,9 @@ and frames it does not need are shaved off. A segment gets
 `speedrun.segment_seconds` per round and twice as long with each retry. Random
 numbers live in the savestates, so the search plans against the real RNG and can
 wait frames to change it. A segment without a way out is marked stuck in
-`cache/tas/stuck.json` and the way into it is searched again; going back drops
+`cache/tas/stuck.json` (in practice since the state's first failed search
+without a find, across the other levels' turns, `cache/tas/failures.json`) and
+the way into it is searched again; going back drops
 every checkpoint in a row down to the last piece, and that level gets no new
 checkpoint in the state it went back from until a piece leaves it, also after a
 restart (`cache/tas/barred.json`).

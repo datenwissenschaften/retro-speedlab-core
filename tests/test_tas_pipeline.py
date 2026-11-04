@@ -31,7 +31,16 @@ from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Part, Rou
 from datenwissenschaften.tas.run import BACKTRACK_SEARCHES
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import UNBOUNDED, Checkpoint, Crossing, shave
-from datenwissenschaften.tas.stuck import FAILURES_FILE, STUCK_FILE, Stuck, bar, cleared, load_failures, load_stuck
+from datenwissenschaften.tas.stuck import (
+    FAILURES_FILE,
+    STUCK_FILE,
+    Stuck,
+    bar,
+    cleared,
+    failed,
+    load_failures,
+    load_stuck,
+)
 from datenwissenschaften.tas.turns import Turn, load_turn, save_turn
 
 BOSS_FRAMES = 3
@@ -511,6 +520,31 @@ def test_a_practised_level_keeps_its_pieces_until_three_turns_failed_and_a_find_
     assert [len(segments) for segments in kept] == [1] * (3 * patience - 1) + [0]
     cleared(tas.output / FAILURES_FILE, "Survive")
     assert load_failures(tas.output / FAILURES_FILE) == {}
+
+
+def test_a_practised_state_stays_stuck_since_its_first_failed_search_after_other_levels_had_their_turn(
+    tmp_path: Path, monkeypatch
+):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    first = Leg("Level 1", runner.power_on(), "Boss")
+    second = Leg("Level 2", Start("Boss", bytes([3])), "Exit")
+    patience = 3
+
+    tas.stuck(first, [], Start("Survive", bytes([0])), patience)
+    since = load_stuck(tas.stuck_file).since
+    tas.stuck(second, [], Start("Boss", bytes([3])), patience)
+    tas.stuck(first, [], Start("Survive", bytes([0])), patience)
+
+    assert load_stuck(tas.stuck_file) == Stuck("Survive", since, 2)
+
+
+def test_failure_counts_saved_before_they_kept_their_first_failure_still_count(tmp_path: Path):
+    path = tmp_path / FAILURES_FILE
+    path.write_text('{"Level11": 18}')
+
+    assert failed(path, "Level11").searches == 19
+    assert load_failures(path)["Level11"].searches == 19
 
 
 def test_the_lab_hint_leads_out_of_a_state_before_any_search(tmp_path: Path, monkeypatch):
