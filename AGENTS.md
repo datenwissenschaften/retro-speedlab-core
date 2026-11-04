@@ -72,6 +72,7 @@ All code must pass:
 
 - `ruff check`
 - `ruff format`
+- `pyright` (strict, configured in `pyproject.toml`)
 
 ---
 
@@ -434,4 +435,5 @@ Before considering work complete, verify:
 - Uses `loguru`
 - Passes `ruff check`
 - Passes `ruff format`
+- Passes `pyright` in strict mode
 - Leaves the codebase cleaner than it was found

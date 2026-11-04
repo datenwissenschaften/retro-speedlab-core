@@ -33,7 +33,7 @@ def video_chunks(video: Path) -> Iterator[np.ndarray]:
 
 
 def rising_levels(log_probs: np.ndarray) -> np.ndarray:
-    levels = np.arange(log_probs.shape[1])
+    levels = np.arange(int(log_probs.shape[1]))
     best, back = log_probs[0].copy(), np.zeros(log_probs.shape, dtype=int)
     for frame in range(1, len(log_probs)):
         prefix = np.maximum.accumulate(best)

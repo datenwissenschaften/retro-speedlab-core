@@ -8,6 +8,7 @@ from loguru import logger
 from datenwissenschaften.ram import RamInfo
 from datenwissenschaften.reference.trace import LEVEL_GAP_FRAMES, Step, route_rows
 from datenwissenschaften.route.position import Position
+from datenwissenschaften.states.levels import current_level
 from datenwissenschaften.tas.paths import atomic_write
 from datenwissenschaften.tas.routes import Part, PartProgress, Route, Routes, finished
 from datenwissenschaften.tas.runner import SegmentRunner, Start
@@ -33,7 +34,7 @@ def loader_in(runner: SegmentRunner, route: Route) -> LevelLoader | None:
             state, before = runner.snapshot(), runner.ram
             runner.press(np.asarray(buttons, dtype=np.int8))
             if changed_level(before, runner.ram):
-                return LevelLoader(state, int(runner.ram.level()) - int(before.level()))
+                return LevelLoader(state, current_level(runner.ram) - current_level(before))
     return None
 
 

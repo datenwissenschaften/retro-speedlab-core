@@ -52,6 +52,7 @@ dev = [
     "ruff==0.15.20",
     "pytest (>=9.1.1,<10.0.0)",
     "pytest-cov (>=7.1.0,<8.0.0)",
+    "pyright==1.1.408",
 ]
 
 [tool.ruff]
@@ -60,6 +61,13 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+
+[tool.pyright]
+include = ["src"]
+typeCheckingMode = "strict"
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
 
 [tool.coverage.run]
 source = ["src/datenwissenschaften"]

@@ -26,7 +26,7 @@ class LabStatus:
     agents: dict[str, AgentStatus]
     duel: DuelResult | None
     team: list[Member]
-    handoffs: list[dict[str, str]]
+    handoffs: list[dict[str, str | None]]
 
 
 def agent_status(agent: str, lab: LabMarker) -> AgentStatus:
@@ -36,7 +36,7 @@ def agent_status(agent: str, lab: LabMarker) -> AgentStatus:
     return AgentStatus(actions, branch_changes(worktree, lab.base), newest_hunk(worktree, lab.base))
 
 
-def lab_team(lab: LabMarker) -> tuple[list[Member], list[dict[str, str]]]:
+def lab_team(lab: LabMarker) -> tuple[list[Member], list[dict[str, str | None]]]:
     if TEAM_AGENT not in lab.agents:
         return [], []
     branch = lab.agents[TEAM_AGENT]

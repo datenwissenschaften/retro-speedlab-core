@@ -63,6 +63,8 @@ class Screen:
             with self.changed:
                 self.changed.wait_for(lambda: self.pending is not None)
                 cut, self.pending, self.busy = self.pending, None, True
+            if cut is None:
+                raise RuntimeError("The screen woke without a cut to show")
             self._present(cut)
             with self.changed:
                 self.busy = False

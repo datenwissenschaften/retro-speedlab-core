@@ -1,9 +1,11 @@
 from dataclasses import dataclass
 
 import numpy as np
+from numpy.typing import NDArray
 
 from datenwissenschaften.environment.recording import restore_emulator_state
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper, lost_life, phases, state_class
+from datenwissenschaften.ram import RamInfo
 
 CELL_PIXELS = 8
 TIME_BUCKET_FRAMES = 30
@@ -28,7 +30,7 @@ class Outcome:
 
 
 class SegmentRunner:
-    def __init__(self, wrapper: StateMachineGymWrapper) -> None:
+    def __init__(self, wrapper: StateMachineGymWrapper[RamInfo]) -> None:
         self.wrapper = wrapper
         self.emulator = wrapper.env
         self.order = phases(type(wrapper))
@@ -56,14 +58,15 @@ class SegmentRunner:
         ram = self.wrapper.read_ram()
         machine = self.wrapper.state_machine
         reward, terminated, truncated = machine.step(ram)
-        won = machine.current_state._won()
+        won = machine.current_state.won()
         alive = won or not (terminated or truncated or lost_life(self.ram, ram))
         self.ram = ram
         return alive, won, reward
 
     def decide(self, action: int) -> Outcome:
         machine = self.wrapper.state_machine
-        pressed, alive, won, reward = [], True, False, 0.0
+        pressed: list[NDArray[np.int8]] = []
+        alive, won, reward = True, False, 0.0
         for buttons in self.wrapper.current_action_table()[action]:
             pressed.append(buttons)
             alive, won, frame_reward = self.press(buttons)

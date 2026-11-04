@@ -80,7 +80,7 @@ def replay_route(runner: SegmentRunner, route: list[Segment], samples: Samples) 
     seen: dict[int, Archive] = defaultdict(dict)
     runner.power_on()
     frames = [np.asarray(segment.pressed, dtype=np.int8) for segment in route]
-    for played, buttons in enumerate(np.concatenate(frames) if frames else []):
+    for played, buttons in enumerate(buttons for pressed in frames for buttons in pressed):
         press(runner, buttons, samples)
         remember(runner, seen[current_level(runner)], played)
     return seen

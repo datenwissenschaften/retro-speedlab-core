@@ -57,7 +57,7 @@ def shown_file(path: str, worktree: Path) -> str | None:
 def log_events(log: Path) -> list[Any]:
     if not log.is_file():
         return []
-    events = []
+    events: list[Any] = []
     for line in log.read_bytes().splitlines():
         try:
             events.append(msgspec.json.decode(line))
@@ -94,7 +94,7 @@ def codex_actions(key: int, event: dict[str, Any], worktree: Path) -> dict[str, 
         return {}
     item = event["item"]
     kind = CODEX_ITEMS[item["type"]] if item["type"] in CODEX_ITEMS else WORKING
-    changes = item["changes"] if item["type"] == "file_change" else []
+    changes: list[Any] = item["changes"] if item["type"] == "file_change" else []
     files = [file for change in changes if (file := shown_file(change["path"], worktree)) is not None]
     return {item["id"]: Action(kind, files[0] if files else None)}
 

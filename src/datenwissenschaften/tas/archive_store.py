@@ -1,7 +1,7 @@
 import os
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import msgspec
 import numpy as np
@@ -33,7 +33,7 @@ class StoredArchive(msgspec.Struct, array_like=True):
 
 
 def hashable(value: Any) -> Any:
-    return tuple(hashable(item) for item in value) if isinstance(value, list) else value
+    return tuple(hashable(item) for item in cast(list[Any], value)) if isinstance(value, list) else value
 
 
 def stored_cell(key: CellKey, cell: Cell) -> StoredCell:

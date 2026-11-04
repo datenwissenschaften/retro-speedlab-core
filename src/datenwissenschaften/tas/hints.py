@@ -2,6 +2,7 @@ from pathlib import Path
 
 import msgspec
 import numpy as np
+from numpy.typing import NDArray
 
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import Crossing, replay
@@ -32,7 +33,7 @@ def load_hints(path: Path) -> list[Hint]:
 def pressed(runner: SegmentRunner, hint: Hint) -> np.ndarray:
     names = list(runner.emulator.buttons)
     idle = np.zeros_like(runner.wrapper.current_action_table()[0][0], dtype=np.int8)
-    frames = []
+    frames: list[NDArray[np.int8]] = []
     for press in hint.presses:
         buttons = idle.copy()
         for name in press.buttons:

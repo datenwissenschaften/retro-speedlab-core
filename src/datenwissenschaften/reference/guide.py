@@ -29,7 +29,7 @@ def tas_steps(trained: "Trained", settings: RetroSpeedlabConfig) -> tuple[list[S
     areas = np.where(allowed, np.concatenate([reading.areas for reading in readings])[playing], -np.inf).argmax(1)
     coordinates = np.concatenate([reading.coordinates for reading in readings])[playing]
     steps = [
-        (int(frame), trained.areas[area], int(x), int(y))
+        (int(frame), trained.areas[int(area)], int(x), int(y))
         for frame, area, (x, y), known in zip(frames, areas, coordinates, allowed.any(1), strict=True)
         if known
     ]

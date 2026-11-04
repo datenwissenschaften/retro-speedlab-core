@@ -22,7 +22,7 @@ def agent_role(definition: Path) -> tuple[str, str]:
 
 
 def agent_roles(worktree: Path) -> dict[str, str]:
-    roles = {}
+    roles: dict[str, str] = {}
     for definition in sorted((worktree / AGENTS_DIR).glob("*.md")):
         try:
             name, role = agent_role(definition)

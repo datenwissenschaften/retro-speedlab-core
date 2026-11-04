@@ -61,16 +61,15 @@ class Exploration:
 
     def act(self, step: Step, action: int) -> Step:
         outcome = self.runner.decide(action)
-        moved = Step(
-            Trail(step.trail, outcome.pressed), step.frames + len(outcome.pressed), step.score + outcome.reward, False
-        )
+        trail = Trail(step.trail, outcome.pressed)
+        moved = Step(trail, step.frames + len(outcome.pressed), step.score + outcome.reward, False)
         if self.live is not None:
             best = self.crossings[0].frames if self.crossings else None
             self.live.step(self.runner, len(self.archive), best, len(outcome.pressed))
         if moved.frames >= self.limit():
             return replace(moved, ended=True)
         if leaves(self.runner, self.start, outcome.state, outcome.won):
-            if (crossing := confirmed(self.runner, moved.trail.frames(), outcome.won)) is not None:
+            if (crossing := confirmed(self.runner, trail.frames(), outcome.won)) is not None:
                 self.crossings = fastest_distinct([*self.crossings, crossing])
             return replace(moved, ended=True)
         return replace(moved, ended=not outcome.alive or outcome.state != self.start.state)

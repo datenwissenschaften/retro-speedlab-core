@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import stable_retro as retro
 
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
+from datenwissenschaften.ram import RamInfo
 from datenwissenschaften.reference.paths import route_path
 from datenwissenschaften.roms import import_roms
 from datenwissenschaften.route.route_map import RouteMap
@@ -13,8 +14,8 @@ SESSION_STAMP = "%Y%m%dT%H%M%S"
 
 
 def make_environment(
-    wrapper_cls: type[StateMachineGymWrapper], config: RetroSpeedlabConfig, worker: int
-) -> StateMachineGymWrapper:
+    wrapper_cls: type[StateMachineGymWrapper[RamInfo]], config: RetroSpeedlabConfig, worker: int
+) -> StateMachineGymWrapper[RamInfo]:
     import_roms(config.paths.roms_path, config.paths.integrations_dir)
     env = retro.make(
         config.training.game,

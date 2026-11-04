@@ -48,7 +48,9 @@ class PolicyEnv(gymnasium.Env[np.ndarray, np.int64]):
             self.start, self.novelty = start, RamNovelty(self.runner.memory())
         return start
 
-    def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[np.ndarray, dict]:
+    def reset(
+        self, *, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> tuple[np.ndarray, dict[str, Any]]:
         super().reset(seed=seed)
         self.begin()
         self.pressed = []

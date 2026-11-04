@@ -54,7 +54,7 @@ def finished(segments: list[Segment], until: str | None) -> bool:
 
 def relabelled(runner: SegmentRunner, start: Start, segments: list[Segment]) -> list[Segment]:
     runner.restore(start)
-    kept = []
+    kept: list[Segment] = []
     for segment in segments:
         for buttons in segment.pressed:
             runner.press(np.asarray(buttons, dtype=np.int8))
@@ -132,7 +132,7 @@ class Routes:
     def view(self, name: str, segments: list[Segment]) -> list[Segment]:
         if name == FULL_RUN:
             return segments
-        stitched = []
+        stitched: list[Segment] = []
         for part in self.parts:
             if part.name in self.routes and self.loaded(part):
                 return stitched

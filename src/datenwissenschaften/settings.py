@@ -80,7 +80,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
     config_path = config_path.expanduser().resolve()
     if not config_path.is_file():
         raise RuntimeError(f"Configuration file not found: {config_path}")
-    document = Box(yaml.safe_load(config_path.read_text(encoding="utf-8")), box_dots=False)
+    document: Any = Box(yaml.safe_load(config_path.read_text(encoding="utf-8")), box_dots=False)
     base_dir = config_path.parent
     ui = document.ui
     return RetroSpeedlabConfig(
@@ -114,7 +114,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
     )
 
 
-def _game(speedrun: Box) -> GameSettings:
+def _game(speedrun: Any) -> GameSettings:
     source = speedrun.speedrun_com
     return GameSettings(
         id=_text(speedrun.id, "speedrun.id"),

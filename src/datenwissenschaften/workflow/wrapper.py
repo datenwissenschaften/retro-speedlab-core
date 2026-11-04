@@ -1,9 +1,10 @@
 from importlib import import_module
 
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
+from datenwissenschaften.ram import RamInfo
 
 
-def wrapper_class(reference: str) -> type[StateMachineGymWrapper]:
+def wrapper_class(reference: str) -> type[StateMachineGymWrapper[RamInfo]]:
     module, separator, name = reference.partition(":")
     if not separator:
         raise ValueError(

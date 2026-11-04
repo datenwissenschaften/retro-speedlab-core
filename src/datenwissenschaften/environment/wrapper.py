@@ -1,6 +1,7 @@
-from typing import Generic, TypeVar
+from typing import Any, ClassVar, Generic, TypeVar
 
 import numpy as np
+from numpy.typing import NDArray
 from stable_retro import RetroEnv
 
 from datenwissenschaften.environment.levels import Levels, level_map
@@ -21,7 +22,7 @@ def state_class(state_classes: tuple[type[State[T]], ...], state_name: str) -> t
     raise ValueError(f"Unknown state: {state_name}")
 
 
-def phases(wrapper_cls: type["StateMachineGymWrapper"]) -> tuple[str, ...]:
+def phases(wrapper_cls: type["StateMachineGymWrapper[RamInfo]"]) -> tuple[str, ...]:
     classes = (wrapper_cls.start_state_cls, *wrapper_cls.state_classes)
     return tuple(dict.fromkeys(state_cls.__name__ for state_cls in classes))
 
@@ -32,10 +33,10 @@ def lost_life(before: RamInfo, after: RamInfo) -> bool:
 
 
 class StateMachineGymWrapper(Generic[T]):
-    start_state_cls: type[State[T]]
-    state_classes: tuple[type[State[T]], ...]
+    start_state_cls: ClassVar[type[State[Any]]]
+    state_classes: ClassVar[tuple[type[State[Any]], ...]]
     ram_info_cls: type[T]
-    action_table: np.ndarray
+    action_table: NDArray[np.int8]
     levels: Levels
     level_address: int | None
     level_count: int
@@ -48,7 +49,7 @@ class StateMachineGymWrapper(Generic[T]):
         self.routes = routes
         self.state_machine = StateMachine[T](self.start_state_cls)
 
-    def current_action_table(self) -> np.ndarray:
+    def current_action_table(self) -> NDArray[np.int8]:
         return self.action_table
 
     def read_ram(self) -> T:

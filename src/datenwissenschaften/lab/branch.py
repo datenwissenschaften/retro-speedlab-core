@@ -69,7 +69,8 @@ def branch_changes(worktree: Path, base: str) -> BranchChanges | None:
 
 
 def first_hunk(diff: list[str], worktree: Path) -> tuple[str, list[str]] | None:
-    file, lines = None, []
+    file: str | None = None
+    lines: list[str] = []
     for line in diff:
         if lines and line.startswith((FILE_HEADER, HUNK_HEADER)):
             break

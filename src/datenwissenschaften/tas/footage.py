@@ -23,7 +23,8 @@ COMPARE_VIDEO = "compare.mp4"
 
 
 def movie_field(first: str, frame_rate: float, segments: list[Segment]) -> dict[str, Any]:
-    played, origin, cuts = 0, first, []
+    played, origin = 0, first
+    cuts: list[dict[str, Any]] = []
     for segment in segments:
         frames = len(segment.pressed)
         cuts.append({"state": origin, "reached": segment.state, "start_frame": played, "frames": frames})

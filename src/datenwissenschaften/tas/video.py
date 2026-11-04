@@ -59,13 +59,14 @@ def render(recording: Path) -> None:
     )
     try:
         frame, _ = env.reset()
-        emulator = env.unwrapped
-        restore_emulator_state(emulator, movie.get_state())
+        restore_emulator_state(env, movie.get_state())
         height, width, _ = frame.shape
         encoder = subprocess.Popen(
-            encoder_command(width, height, emulator.em.get_screen_rate(), recording), stdin=subprocess.PIPE
+            encoder_command(width, height, env.em.get_screen_rate(), recording), stdin=subprocess.PIPE
         )
-        for buttons in recorded_buttons(movie, emulator.num_buttons):
+        if encoder.stdin is None:
+            raise RuntimeError("ffmpeg opened no input pipe")
+        for buttons in recorded_buttons(movie, env.num_buttons):
             frame, *_ = env.step(buttons)
             encoder.stdin.write(frame.tobytes())
         encoder.stdin.close()

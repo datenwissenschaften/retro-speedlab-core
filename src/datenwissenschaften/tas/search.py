@@ -30,7 +30,8 @@ class Trail:
     pressed: np.ndarray
 
     def frames(self) -> np.ndarray:
-        chunks, trail = [], self
+        chunks: list[np.ndarray] = []
+        trail: Trail | None = self
         while trail is not None:
             chunks.append(trail.pressed)
             trail = trail.parent
@@ -93,6 +94,8 @@ def checkpoint_of(archive: dict[CellKey, Cell]) -> Checkpoint | None:
     if not reached:
         return None
     cell = max(reached, key=lambda cell: (cell.score, -cell.frames))
+    if cell.trail is None:
+        raise RuntimeError("The checkpoint cell keeps no trail")
     return Checkpoint(cell.start, cell.trail.frames(), cell.score)
 
 

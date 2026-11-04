@@ -22,7 +22,7 @@ class WorkerReport(msgspec.Struct, frozen=True):
 
 
 def read_reports(directory: Path) -> list[WorkerReport]:
-    reports = []
+    reports: list[WorkerReport] = []
     for path in sorted(directory.glob(f"*{REPORT_SUFFIX}")):
         try:
             reports.append(msgspec.msgpack.decode(path.read_bytes(), type=WorkerReport))

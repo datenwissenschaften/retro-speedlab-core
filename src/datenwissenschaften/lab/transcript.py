@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import msgspec
 
@@ -131,5 +131,5 @@ def read_transcript(log: Path) -> list[Round]:
         except msgspec.DecodeError:
             continue
         if isinstance(event, dict) and "type" in event:
-            reader.read(event)
+            reader.read(cast(dict[str, Any], event))
     return reader.rounds

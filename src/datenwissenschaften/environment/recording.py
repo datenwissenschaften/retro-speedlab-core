@@ -21,7 +21,7 @@ def restore_emulator_state(emulator: RetroEnv, emulator_state: bytes) -> None:
 
 
 def recorded_buttons(movie: retro.Movie, buttons: int) -> np.ndarray:
-    frames = []
+    frames: list[list[bool]] = []
     while movie.step():
         frames.append([movie.get_key(button, 0) for button in range(buttons)])
     return np.asarray(frames[1:], dtype=np.int8)

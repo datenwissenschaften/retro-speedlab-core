@@ -38,7 +38,8 @@ def course_of(runner: SegmentRunner, game: GameSettings) -> Course:
 def splits(course: Course, segments: list[Segment]) -> list[Split]:
     leaving = {states[-1]: level for level, states in course.levels.items()}
     opened = next((states[0] for states in course.levels.values()), None)
-    found, played, origin, previous = [], 0, course.first, 0.0
+    found: list[Split] = []
+    played, origin, previous = 0, course.first, 0.0
     for segment in segments:
         played += len(segment.pressed)
         seconds = played / course.frame_rate

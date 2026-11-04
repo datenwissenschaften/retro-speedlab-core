@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import cast
 
 import numpy as np
 import torch
@@ -30,7 +31,7 @@ class Reading:
 
 class PositionNet(nn.Module):
     def __init__(self, levels: int, areas: int, height: int, width: int) -> None:
-        super().__init__()
+        super().__init__()  # pyright: ignore[reportUnknownMemberType]
         channels = (3, 32, 64, 128, 128)
         layers: list[nn.Module] = []
         for inputs, outputs in zip(channels, channels[1:], strict=False):
@@ -53,7 +54,7 @@ def device() -> torch.device:
 
 
 def as_input(screens: np.ndarray, gpu: torch.device) -> torch.Tensor:
-    return torch.from_numpy(screens).to(gpu).permute(0, 3, 1, 2).float() / 255
+    return torch.as_tensor(screens).to(gpu).permute(0, 3, 1, 2).float() / 255
 
 
 def jitter(screens: torch.Tensor, spread: float) -> torch.Tensor:
@@ -111,17 +112,16 @@ def train(samples: Samples) -> Trained:
     order = np.random.default_rng(0).permutation(len(labels))
     held, fitted = order[: int(len(order) * VALIDATION_SHARE)], order[int(len(order) * VALIDATION_SHARE) :]
     net = PositionNet(levels, len(known), screens.shape[1], screens.shape[2]).to(gpu)
-    optimizer = torch.optim.Adam(net.parameters(), lr=LEARNING_RATE)
+    optimizer = cast(torch.optim.Optimizer, torch.optim.Adam(net.parameters(), lr=LEARNING_RATE))
     for epoch in range(EPOCHS):
         net.train()
         np.random.default_rng(epoch).shuffle(fitted)
         for start in range(0, len(fitted), BATCH):
             batch = fitted[start : start + BATCH]
-            truth = torch.from_numpy(labels[batch]).to(gpu)
+            truth = torch.as_tensor(labels[batch]).to(gpu)
             optimizer.zero_grad()
-            losses(
-                net, augmented(as_input(screens[batch], gpu)), truth, torch.from_numpy(classes[batch]).to(gpu)
-            ).backward()
+            classified = torch.as_tensor(classes[batch]).to(gpu)
+            torch.autograd.backward(losses(net, augmented(as_input(screens[batch], gpu)), truth, classified))
             optimizer.step()
         logger.info(f"Guide epoch {epoch + 1}/{EPOCHS}: {evaluate(net, screens[held], labels[held], classes[held])}")
     return Trained(net, known, allowed_areas(labels, classes, levels, len(known)))

@@ -1,4 +1,4 @@
-from dataclasses import field, fields
+from dataclasses import field, fields, is_dataclass
 from typing import Any, Self, final
 
 from datenwissenschaften.route.position import Position
@@ -18,6 +18,8 @@ class RamInfo:
     @classmethod
     @final
     def ram_map(cls) -> dict[str, tuple[int, int]]:
+        if not is_dataclass(cls):
+            raise TypeError(f"{cls.__name__} must be a dataclass to map its RAM")
         return {f.name: (int(f.metadata["address"]), int(f.metadata["length"])) for f in fields(cls)}
 
     @classmethod

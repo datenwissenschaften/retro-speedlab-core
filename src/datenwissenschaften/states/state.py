@@ -35,6 +35,9 @@ class State(ABC, Generic[T]):
     def _truncated(self) -> bool:
         return False
 
+    def won(self) -> bool:
+        return self._won()
+
     def _won(self) -> bool:
         return False
 

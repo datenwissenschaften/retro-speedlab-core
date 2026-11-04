@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import wandb
 from loguru import logger
+from numpy.typing import NDArray
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.policies import ActorCriticPolicy
@@ -36,10 +37,16 @@ POLICY_JOB = "policy"
 SPAWN = "spawn"
 
 
+def linear(layer: nn.Module) -> nn.Linear:
+    if not isinstance(layer, nn.Linear):
+        raise TypeError(f"The policy head is a {type(layer).__name__}, not a linear layer")
+    return layer
+
+
 def policy_weights(policy: ActorCriticPolicy) -> Weights:
     hidden = [layer for layer in policy.mlp_extractor.policy_net if isinstance(layer, nn.Linear)]
     weights: Weights = {}
-    for index, layer in enumerate([*hidden, policy.action_net]):
+    for index, layer in enumerate([*hidden, linear(policy.action_net)]):
         weights[f"{WEIGHT}{index}"] = layer.weight.detach().cpu().numpy()
         weights[f"{BIAS}{index}"] = layer.bias.detach().cpu().numpy()
     return weights
@@ -47,7 +54,7 @@ def policy_weights(policy: ActorCriticPolicy) -> Weights:
 
 def export_policy(policy: ActorCriticPolicy, path: Path) -> None:
     buffer = io.BytesIO()
-    np.savez(buffer, **policy_weights(policy))
+    np.savez(buffer, allow_pickle=True, **policy_weights(policy))
     atomic_write(path, buffer.getvalue())
 
 
@@ -76,8 +83,10 @@ class RoundCallback(BaseCallback):
         self.exits = 0
 
     def _on_step(self) -> bool:
-        self.rewards += float(np.sum(self.locals["rewards"]))
-        self.episodes += int(np.sum(self.locals["dones"]))
+        rewards: NDArray[np.float32] = self.locals["rewards"]
+        dones: NDArray[np.bool_] = self.locals["dones"]
+        self.rewards += float(np.sum(rewards))
+        self.episodes += int(np.sum(dones))
         for info in self.locals["infos"]:
             if EXIT in info:
                 self.exits += 1
@@ -91,7 +100,10 @@ class RoundCallback(BaseCallback):
     def _on_rollout_start(self) -> None:
         if self.episodes == 0:
             return
-        export_policy(self.model.policy, self.output / POLICY_FILE)
+        policy = self.model.policy
+        if not isinstance(policy, ActorCriticPolicy):
+            raise TypeError(f"The policy is a {type(policy).__name__}, not an actor-critic policy")
+        export_policy(policy, self.output / POLICY_FILE)
         self.rounds += 1
         reward = self.rewards / self.episodes
         trained = {f"policy/{name.split('/')[-1]}": value for name, value in self.logger.name_to_value.items()}
@@ -105,9 +117,16 @@ class RoundCallback(BaseCallback):
         self.rewards, self.episodes, self.exits = 0.0, 0, 0
 
 
+def speedrun_alive() -> bool:
+    speedrun = multiprocessing.parent_process()
+    if speedrun is None:
+        raise RuntimeError("The policy trains only in a process the speedrun started")
+    return speedrun.is_alive()
+
+
 def wait_for_start(output: Path) -> bool:
     while not (output / POLICY_START_FILE).is_file():
-        if not multiprocessing.parent_process().is_alive():
+        if not speedrun_alive():
             return False
         time.sleep(WAIT_SECONDS)
     return True
@@ -124,7 +143,7 @@ def train_policy_forever(wrapper: str, config: Path) -> None:
     env = SubprocVecEnv([make] * settings.speedrun.policy_emulators, start_method=SPAWN)
     model = policy_model(env, gpu())
     callback = RoundCallback(output, start_experiment(settings, POLICY_JOB))
-    while multiprocessing.parent_process().is_alive():
-        model.learn(ROLLOUT_DECISIONS * env.num_envs, callback=callback, reset_num_timesteps=False)
+    while speedrun_alive():
+        model.learn(ROLLOUT_DECISIONS * env.num_envs, callback=callback, reset_num_timesteps=False)  # pyright: ignore[reportUnknownMemberType]
     env.close()
     logger.warning("The speedrun has stopped, so the policy stops with it")

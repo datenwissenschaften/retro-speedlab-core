@@ -70,7 +70,9 @@ def record_piece(runner: SegmentRunner, start: Start, pressed: np.ndarray, movie
 
 def verified_segments(runner: SegmentRunner, start: Start, segments: list[Segment], movie: Path) -> Replay:
     machine = runner.wrapper.state_machine
-    verified, played, samples, ends = 0, 0, [], []
+    verified, played = 0, 0
+    samples: list[dict[str, int | None]] = []
+    ends: list[bytes] = []
     with recording(runner, movie, start):
         for segment in segments:
             for buttons in np.asarray(segment.pressed, dtype=np.int8):
@@ -80,7 +82,7 @@ def verified_segments(runner: SegmentRunner, start: Start, segments: list[Segmen
                 if played % MEMORY_EVERY == 0:
                     samples.append(memory_sample(ram))
                 played += 1
-            if machine.state_name != segment.state and not (segment.won and machine.current_state._won()):
+            if machine.state_name != segment.state and not (segment.won and machine.current_state.won()):
                 break
             verified += 1
             ends.append(runner.snapshot())

@@ -41,6 +41,8 @@ def shown_task(description: str) -> str:
 
 def step(tool_use: dict[str, Any], worktree: Path) -> str:
     action = claude_action(tool_use, worktree)
+    if action is None:
+        raise ValueError(f"The block {tool_use['type']} is no tool use")
     site = shown_site(tool_use["input"]["url"]) if "url" in tool_use["input"] else None
     target = action.file if action.file is not None else site
     return action.kind.capitalize() if target is None else f"{action.kind.capitalize()} {target}"
@@ -53,7 +55,7 @@ class Team:
         self.members = {LEAD: Member(LEAD, LEAD_ROLE, WORKING, None, None)}
         self.calls: dict[str, str] = {}
         self.running: dict[str, str] = {}
-        self.handoffs: list[dict[str, str]] = []
+        self.handoffs: list[dict[str, str | None]] = []
         self.now: str | None = None
 
     def read(self, event: dict[str, Any]) -> None:
@@ -105,7 +107,7 @@ class Team:
         return [*self.members.values(), *(member for member in waiting if member.name not in self.members)]
 
 
-def team_status(events: list[Any], worktree: Path) -> tuple[list[Member], list[dict[str, str]]]:
+def team_status(events: list[Any], worktree: Path) -> tuple[list[Member], list[dict[str, str | None]]]:
     team = Team(agent_roles(worktree), worktree)
     for event in events:
         try:

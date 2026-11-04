@@ -27,6 +27,7 @@ jobs:
         run: |
           curl -sSL https://install.python-poetry.org | python3 -
           echo "$HOME/.local/bin" >> $GITHUB_PATH
+          $HOME/.local/bin/poetry config virtualenvs.in-project true
 
       - name: Install dependencies
         run: poetry install
@@ -34,13 +35,18 @@ jobs:
       - name: Install the vision extra for CPU
         run: |
           vision=$(python3 -c "import tomllib; print(*tomllib.load(open('pyproject.toml', 'rb'))['project']['optional-dependencies']['vision'])")
-          poetry run pip install --index-url https://download.pytorch.org/whl/cpu $vision
+          torch=$(printf '%s\n' $vision | grep '^torch==')
+          poetry run pip install --index-url https://download.pytorch.org/whl/cpu $torch
+          poetry run pip install $vision
 
       - name: Lint (ruff check)
         run: poetry run ruff check .
 
       - name: Format check (ruff format)
         run: poetry run ruff format --check .
+
+      - name: Type check (pyright)
+        run: poetry run pyright
 
       - name: Test (pytest)
         run: poetry run pytest -q --cov --cov-report=term-missing --cov-report=xml
