@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from datenwissenschaften.policy.prior import PolicyPrior
+from datenwissenschaften.route.route_map import RouteMap
 from datenwissenschaften.tas import search
 from datenwissenschaften.tas.archives import Archives
 from datenwissenschaften.tas.explore import search_segment
@@ -34,7 +35,9 @@ NO_PREFERENCES = Preferences(ActionPrior(Path("no-prior.msgpack")), PolicyPrior(
 class LineRunner:
     def __init__(self) -> None:
         self.x = 0
-        self.wrapper = SimpleNamespace(action_table=np.zeros((3, 2, 1), dtype=np.int8), state_machine=self)
+        self.wrapper = SimpleNamespace(
+            action_table=np.zeros((3, 2, 1), dtype=np.int8), state_machine=self, routes=RouteMap(Path("no-route.json"))
+        )
 
     @property
     def state_name(self) -> str:

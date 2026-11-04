@@ -109,20 +109,21 @@ def test_a_beaten_part_tells_the_route_map_how_many_frames_each_place_is_from_it
     assert json.loads(path.read_text(encoding="utf-8")) == [[0, 0, 0, 2, 0]]
 
 
-def test_an_unbeaten_part_reports_how_far_it_got_but_stays_out_of_the_route_map(tmp_path: Path):
+def test_an_unbeaten_part_reports_how_far_it_got_and_leaves_the_route_map_as_it_was(tmp_path: Path):
     runner, _ = level_runner(tmp_path)
     routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Survive", "Survive", "Boss")])
     routes.save(
         Leg("Survive", Start("Survive", bytes([0])), "Boss"), [Segment("Survive", [[1, 0]] * 2, bytes([2]), False)]
     )
     path = tmp_path / "route.json"
+    path.write_text("[[0, 0, 0, 2, 0]]", encoding="utf-8")
 
     write_practice_route(runner, routes, path, practised(runner, routes))
 
     assert practised(runner, routes) == {
         "Survive": PartProgress("Survive", 1, 2, False, False, {"lives": 3, "score": 5})
     }
-    assert json.loads(path.read_text(encoding="utf-8")) == []
+    assert json.loads(path.read_text(encoding="utf-8")) == [[0, 0, 0, 2, 0]]
 
 
 def test_a_part_whose_start_is_not_where_the_part_before_ends_was_loaded(tmp_path: Path):

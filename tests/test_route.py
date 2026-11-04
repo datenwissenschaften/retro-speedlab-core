@@ -1,5 +1,8 @@
 import json
+import os
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import numpy as np
 
@@ -7,6 +10,12 @@ from datenwissenschaften.reference.trace import rising_levels
 from datenwissenschaften.reference.trace import write_route as write_steps
 from datenwissenschaften.route.position import Position
 from datenwissenschaften.route.route_map import RouteMap
+from datenwissenschaften.tas.archives import Archive
+from datenwissenschaften.tas.exploration import Exploration
+from datenwissenschaften.tas.novelty import RamNovelty
+from datenwissenschaften.tas.preferences import Preferences
+from datenwissenschaften.tas.runner import SegmentRunner, Start, route_cell
+from datenwissenschaften.tas.search import Cell
 
 
 def at(x: int, y: int) -> Position:
@@ -47,3 +56,24 @@ def test_the_levels_read_from_a_video_only_go_up():
     log_probs[np.arange(len(read)), read] = np.log(0.8)
 
     assert rising_levels(log_probs).tolist() == [0, 0, 1, 1, 1, 1, 1, 2, 2]
+
+
+def test_a_positioned_cell_key_names_its_route_cell_and_other_keys_none():
+    assert route_cell(("Play", 1, 5, 3, 0, False, (2, 1))) == (1, 2, 1)
+    assert route_cell(("Play", 2, 4, 1, 1, 0, 7)) is None
+    assert route_cell(("Play", 12)) is None
+
+
+def test_archived_cells_take_their_distance_from_the_newest_route_map(tmp_path: Path):
+    path = tmp_path / "reference" / "route.json"
+    write_route(path, [[1, 0, 0, 0, 5]])
+    runner = SimpleNamespace(wrapper=SimpleNamespace(routes=RouteMap(path)), restore=lambda start: None)
+    key = ("Play", 1, 1, 1, 0, False, ())
+    start = Start("Play", b"")
+    archive = Archive({key: Cell(start, None, 0, 0, None, 0.0, 0)}, cast(RamNovelty, None))
+    exploration = Exploration(cast(SegmentRunner, runner), start, 100, 0.0, None, cast(Preferences, None), archive)
+
+    assert [cell.remaining for cell in exploration.cells()] == [5]
+    path.write_text(json.dumps([[1, 0, 0, 0, 2]]), encoding="utf-8")
+    os.utime(path, ns=(path.stat().st_atime_ns, path.stat().st_mtime_ns + 1_000_000_000))
+    assert [cell.remaining for cell in exploration.cells()] == [2]

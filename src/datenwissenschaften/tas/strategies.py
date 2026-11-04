@@ -26,7 +26,7 @@ def next_action(exploration: Exploration, rng: random.Random, action: int) -> in
 
 
 def walk(exploration: Exploration, rng: random.Random) -> None:
-    cell = choose(list(exploration.archive.values()), rng)
+    cell = choose(exploration.cells(), rng)
     exploration.runner.restore(cell.start)
     step, action = step_of(cell), rng.randrange(actions_of(exploration))
     last, decisions, still = exploration.runner.key(step.frames), 0, 0
@@ -52,7 +52,7 @@ def held(exploration: Exploration, step: Step, action: int, hold: int) -> Step:
 
 
 def frontier(exploration: Exploration, rng: random.Random) -> None:
-    cell = choose(list(exploration.archive.values()), rng)
+    cell = choose(exploration.cells(), rng)
     budget = min(exploration.deadline, time.monotonic() + FRONTIER_SECONDS)
     layer = deque([(cell.start, step_of(cell), FRONTIER_DEPTH)])
     while layer:

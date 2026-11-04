@@ -1,10 +1,11 @@
 import time
 from dataclasses import dataclass, replace
 
+from datenwissenschaften.route.route_map import left_in
 from datenwissenschaften.tas.archives import Archive
 from datenwissenschaften.tas.live import WorkerLive
 from datenwissenschaften.tas.preferences import Preferences
-from datenwissenschaften.tas.runner import CellKey, SegmentRunner, Start
+from datenwissenschaften.tas.runner import CellKey, SegmentRunner, Start, route_cell
 from datenwissenschaften.tas.search import (
     BEAM,
     MAX_CELLS,
@@ -52,6 +53,17 @@ class Exploration:
         self.novelty = archive.novelty
         self.archive: dict[CellKey, Cell] = archive.cells
         self.crossings: list[Crossing] = []
+        self.guided = False
+        self.guided_by: int | None = None
+
+    def cells(self) -> list[Cell]:
+        routes = self.runner.wrapper.routes
+        route = routes.reload()
+        if not self.guided or routes.loaded != self.guided_by:
+            for key, cell in self.archive.items():
+                cell.remaining = left_in(route, route_cell(key))
+            self.guided, self.guided_by = True, routes.loaded
+        return list(self.archive.values())
 
     def running(self) -> bool:
         return time.monotonic() < self.deadline

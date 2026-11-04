@@ -4,7 +4,7 @@ import msgspec
 
 from datenwissenschaften.settings import RetroSpeedlabConfig
 from datenwissenschaften.tas.feed import SpeedrunFeed
-from datenwissenschaften.tas.footage import movie_field, render_movie
+from datenwissenschaften.tas.footage import MOVIE_MEMORY, movie_field, render_movie
 from datenwissenschaften.tas.movie import verified_segments
 from datenwissenschaften.tas.paths import tas_dir
 from datenwissenschaften.tas.routes import Part, Routes
@@ -52,7 +52,7 @@ class Reel:
         segments = self.routes.segments(part.name)
         start = Start(part.entry_state, self.routes.routes[part.name].entry)
         movie = self.directory / str(number) / ROUTE_MOVIE
-        verified_segments(self.runner, start, segments, movie)
+        replay = verified_segments(self.runner, start, segments, movie)
         field = movie_field(start.state, self.feed.course.frame_rate, segments)
         shown = {**field, "part": part.name, "number": number, "video": level_video(number)}
-        return Cut(key, (movie.read_bytes(),), shown, {})
+        return Cut(key, (movie.read_bytes(),), shown, {MOVIE_MEMORY: replay.memory})

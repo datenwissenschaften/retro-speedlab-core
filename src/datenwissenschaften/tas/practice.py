@@ -105,5 +105,7 @@ def write_practice_route(runner: SegmentRunner, routes: Routes, path: Path, done
             route = routes.routes[part.name]
             first = steps[-1][0] + LEVEL_GAP_FRAMES + 1 if steps else 0
             steps += part_steps(runner, Start(part.entry_state, route.entry), route, first)
+    if not steps:
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write(path, json.dumps(route_rows(steps)).encode())

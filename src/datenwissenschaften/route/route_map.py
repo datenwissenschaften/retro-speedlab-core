@@ -22,17 +22,23 @@ def changed_at(path: Path) -> int | None:
     return path.stat().st_mtime_ns if path.is_file() else None
 
 
+def left_in(route: Remaining, cell: Cell | None) -> int | None:
+    return route[cell] if cell is not None and cell in route else None
+
+
 class RouteMap:
     def __init__(self, path: Path) -> None:
         self.path = path
         self.route: Remaining = {}
         self.loaded: int | None = None
 
-    def remaining(self, position: Position | None) -> int | None:
-        if position is None:
-            return None
+    def reload(self) -> Remaining:
         changed = changed_at(self.path)
         if changed != self.loaded:
             self.route, self.loaded = ({} if changed is None else load_route(self.path)), changed
-        cell = cell_of(position)
-        return self.route[cell] if cell in self.route else None
+        return self.route
+
+    def remaining(self, position: Position | None) -> int | None:
+        if position is None:
+            return None
+        return left_in(self.reload(), cell_of(position))

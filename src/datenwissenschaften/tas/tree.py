@@ -72,7 +72,7 @@ def simulate(exploration: Exploration, root: Node, rng: random.Random) -> bool:
 
 
 def tree(exploration: Exploration, rng: random.Random) -> None:
-    cell = choose(list(exploration.archive.values()), rng)
+    cell = choose(exploration.cells(), rng)
     root = Node(cell.start, step_of(cell), 0, 0.0, {})
     budget = min(exploration.deadline, time.monotonic() + TREE_SECONDS)
     for _ in range(TREE_SIMULATIONS):
