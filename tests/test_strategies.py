@@ -149,3 +149,18 @@ def test_a_kept_archive_holds_the_best_scored_and_the_rarest_places():
     assert len(kept) == KEPT_CELLS
     assert rare.keys() <= kept.keys()
     assert KEPT_CELLS - 1 in kept
+
+
+def test_a_map_saved_as_one_file_by_the_last_release_is_still_read_and_then_moved(tmp_path: Path):
+    explored = exploration()
+    root = explored.archive[next(iter(explored.archive))]
+    single = tmp_path / f"{archives_module.archive_key(START, UNBOUNDED)}.msgpack"
+    archives_module.save_archive(single, START.state, {("spot",): replace(root, frames=4)}, explored.novelty)
+    archives = Archives(tmp_path, 2)
+
+    resumed = archives.resumed(LineRunner(), START, UNBOUNDED)
+    archives.keep(START, UNBOUNDED, resumed)
+
+    assert {key: cell.frames for key, cell in resumed.cells.items()} == {("spot",): 4}
+    assert not single.exists()
+    assert Archives(tmp_path, 2).resumed(LineRunner(), START, UNBOUNDED).cells.keys() == {("spot",)}

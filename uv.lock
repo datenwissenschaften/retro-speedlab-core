@@ -230,7 +230,7 @@ wheels = [
 
 [[package]]
 name = "datenwissenschaften"
-version = "3.0.94"
+version = "3.0.95"
 source = { editable = "." }
 dependencies = [
     { name = "cachetools" },

@@ -66,7 +66,8 @@ class Archives:
         key = archive_key(start, bound)
         if key in self.kept:
             return self.kept[key]
-        saved = sorted((self.directory / key).glob(f"*{ARCHIVE_SUFFIX}"))
+        single = self.directory / f"{key}{ARCHIVE_SUFFIX}"
+        saved = [*sorted((self.directory / key).glob(f"*{ARCHIVE_SUFFIX}")), *([single] if single.is_file() else [])]
         if saved:
             return merged([Archive(*load_archive(path)) for path in saved])
         return fresh_archive(runner, start)
@@ -78,6 +79,7 @@ class Archives:
         folder = self.directory / key
         folder.mkdir(exist_ok=True)
         save_archive(folder / f"{os.getpid()}{ARCHIVE_SUFFIX}", start.state, kept.cells, kept.novelty)
+        (self.directory / f"{key}{ARCHIVE_SUFFIX}").unlink(missing_ok=True)
         for path in newest(folder.glob(f"*{ARCHIVE_SUFFIX}"))[self.files :]:
             path.unlink(missing_ok=True)
         for folder in newest(path for path in self.directory.iterdir() if path.is_dir())[KEPT_ARCHIVES:]:
