@@ -44,6 +44,7 @@ from datenwissenschaften.tas.stuck import (
     load_barred,
     load_stuck,
     mark_stuck,
+    save_stuck,
     unbar,
 )
 from datenwissenschaften.tas.turns import TURN_FILE, Turn, save_turn, turn_of
@@ -207,10 +208,11 @@ class Tas:
         return segments
 
     def stuck(self, leg: Leg, segments: list[Segment], start: Start, patience: int | None) -> list[Segment]:
-        searches = mark_stuck(self.stuck_file, start.state).searches
+        if patience is None:
+            searches = mark_stuck(self.stuck_file, start.state).searches
+        else:
+            searches = save_stuck(self.stuck_file, failed(self.output / FAILURES_FILE, start.state)).searches
         self.feed.event("stuck", start.state, None)
-        if patience is not None:
-            searches = failed(self.output / FAILURES_FILE, start.state)
         every = BACKTRACK_SEARCHES if patience is None else patience * PRACTICE_BACKTRACK_TURNS
         if searches % every:
             logger.warning(f"No way out of {start.state} after {searches} searches; searching again")

@@ -9,7 +9,6 @@ STUCK_FILE = "stuck.json"
 FAILURES_FILE = "failures.json"
 BARRED_FILE = "barred.json"
 
-Failures = dict[str, int]
 Barred = dict[str, str]
 
 
@@ -19,27 +18,41 @@ class Stuck(msgspec.Struct, frozen=True):
     searches: int
 
 
+Failures = dict[str, Stuck]
+
+
 def load_stuck(path: Path) -> Stuck | None:
     return msgspec.json.decode(path.read_bytes(), type=Stuck) if path.is_file() else None
 
 
-def mark_stuck(path: Path, state: str) -> Stuck:
-    previous = load_stuck(path)
+def stuck_again(previous: Stuck | None, state: str) -> Stuck:
     if previous is not None and previous.state == state:
-        stuck = Stuck(state, previous.since, previous.searches + 1)
-    else:
-        stuck = Stuck(state, datetime.now(UTC).isoformat(), 1)
+        return Stuck(state, previous.since, previous.searches + 1)
+    return Stuck(state, datetime.now(UTC).isoformat(), 1)
+
+
+def save_stuck(path: Path, stuck: Stuck) -> Stuck:
     atomic_write(path, msgspec.json.encode(stuck))
     return stuck
 
 
+def mark_stuck(path: Path, state: str) -> Stuck:
+    return save_stuck(path, stuck_again(load_stuck(path), state))
+
+
 def load_failures(path: Path) -> Failures:
-    return msgspec.json.decode(path.read_bytes(), type=Failures) if path.is_file() else {}
+    if not path.is_file():
+        return {}
+    failures = msgspec.json.decode(path.read_bytes(), type=dict[str, Stuck | int])
+    return {
+        state: Stuck(state, datetime.now(UTC).isoformat(), failure) if isinstance(failure, int) else failure
+        for state, failure in failures.items()
+    }
 
 
-def failed(path: Path, state: str) -> int:
+def failed(path: Path, state: str) -> Stuck:
     failures = load_failures(path)
-    failures[state] = failures.get(state, 0) + 1
+    failures[state] = stuck_again(failures.get(state), state)
     atomic_write(path, msgspec.json.encode(failures))
     return failures[state]
 
