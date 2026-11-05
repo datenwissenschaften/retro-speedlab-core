@@ -1,17 +1,21 @@
 import json
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
 import cv2
+import msgspec
 import numpy as np
 import pytest
 from fakes import FakeRam, FakeWrapper, SavingEmulator, fake_routes, write_config
 
 from datenwissenschaften.reference import guide, play, samples
+from datenwissenschaften.reference.explored import STARTS_PER_CELL, explored_starts
 from datenwissenschaften.reference.paths import TRACE_FILE, reference_dir, route_path, tas_route_path
 from datenwissenschaften.route.position import Position
 from datenwissenschaften.settings import load_config
+from datenwissenschaften.tas.archive_store import StoredArchive, StoredCell
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.routes import Leg, Part, Routes
 from datenwissenschaften.tas.runner import SegmentRunner, Start
@@ -70,7 +74,7 @@ def test_samples_label_every_screen_with_its_place_and_level(tmp_path: Path, mon
 
     runner = placed_runner(tmp_path)
 
-    collected = samples.collect_samples(runner, [(runner.power_on(), route_taken())], [], 0)
+    collected = samples.collect_samples(runner, [(runner.power_on(), route_taken())], [], [], 0)
 
     assert len(collected.labels) >= 20 and len(collected.screens) == len(collected.labels)
     assert collected.screens[0].shape == (SCREEN[0] // 2, SCREEN[1] // 2, 3)
@@ -86,12 +90,44 @@ def test_samples_of_a_later_level_start_where_the_loader_brought_it_and_carry_th
         LevelledWrapper(SavingEmulator(tmp_path / "recordings", LEVELLED_SCRIPT), fake_routes(tmp_path))
     )
 
-    collected = samples.collect_samples(runner, [(runner.power_on(), route_taken())], [Start("Survive", bytes([3]))], 0)
+    collected = samples.collect_samples(
+        runner, [(runner.power_on(), route_taken())], [Start("Survive", bytes([3]))], [], 0
+    )
 
     placed = [label for label in collected.labels if label[0] >= 0]
     assert sum(label[3] == 1 for label in placed) >= 20
     assert all(label[0] == label[3] * AREAS_PER_LEVEL for label in placed)
     assert collected.labels[-1] == (AREAS_PER_LEVEL, 5, 0, 1)
+
+
+def test_places_the_search_explored_add_screens_of_their_level(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(samples, "SAMPLES_PER_LEVEL", 1)
+    runner = SegmentRunner(
+        LevelledWrapper(SavingEmulator(tmp_path / "recordings", LEVELLED_SCRIPT), fake_routes(tmp_path))
+    )
+
+    collected = samples.collect_samples(runner, [], [], [Start("Survive", bytes([4]))], 0)
+
+    assert (AREAS_PER_LEVEL, 5, 0, 1) in collected.labels
+
+
+def stored_cell(key: list[object], state: int) -> StoredCell:
+    return StoredCell(key, bytes([state]), None, 0, 0, 0, None, 0.0, 0)
+
+
+def test_the_guide_starts_from_a_few_archived_cells_per_route_cell(tmp_path: Path):
+    near = [stored_cell(["Boss", 3, 4, 6, 0, False, []], state) for state in range(3)]
+    other = stored_cell(["Boss", 3, 40, 6, 0, False, []], 7)
+    unplaced = stored_cell(["Boss", 9], 8)
+    (tmp_path / "key").mkdir()
+    archive = StoredArchive("Boss", b"", 0, [*near, other, unplaced])
+    (tmp_path / "key" / "1.msgpack").write_bytes(msgspec.msgpack.encode(archive))
+
+    starts = explored_starts(tmp_path, random.Random(0))
+
+    assert len(starts) == STARTS_PER_CELL + 1
+    assert {start.state for start in starts} == {"Boss"}
+    assert Start("Boss", bytes([7])) in starts and Start("Boss", bytes([8])) not in starts
 
 
 def write_video(path: Path, levels: int) -> None:

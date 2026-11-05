@@ -8,15 +8,13 @@ from datenwissenschaften.settings import load_config
 from datenwissenschaften.tas.archives import Archives
 from datenwissenschaften.tas.explore import search_segment
 from datenwissenschaften.tas.live import WorkerLive
-from datenwissenschaften.tas.paths import tas_dir
+from datenwissenschaften.tas.paths import archives_dir, tas_dir
 from datenwissenschaften.tas.preferences import Preferences
 from datenwissenschaften.tas.prior import PRIOR_FILE, ActionPrior
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.search import Crossing, Searched, shave
 from datenwissenschaften.tas.strategies import WALK
 from datenwissenschaften.workflow.wrapper import wrapper_class
-
-ARCHIVES_DIR = "archives"
 
 
 @cache
@@ -33,7 +31,7 @@ def worker_preferences(config: Path) -> Preferences:
 @cache
 def worker_archives(config: Path) -> Archives:
     settings = load_config(config)
-    return Archives(tas_dir(settings) / ARCHIVES_DIR, settings.speedrun.workers)
+    return Archives(archives_dir(settings), settings.speedrun.workers)
 
 
 def explore(

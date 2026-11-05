@@ -6,10 +6,15 @@ from datenwissenschaften.settings import RetroSpeedlabConfig
 TAS_DIR = "tas"
 TAS_MOVIE = "tas.bk2"
 PROGRESS_FILE = "progress.msgpack"
+ARCHIVES_DIR = "archives"
 
 
 def tas_dir(settings: RetroSpeedlabConfig) -> Path:
     return settings.paths.cache_dir / TAS_DIR
+
+
+def archives_dir(settings: RetroSpeedlabConfig) -> Path:
+    return tas_dir(settings) / ARCHIVES_DIR
 
 
 def atomic_write(path: Path, content: bytes) -> None:

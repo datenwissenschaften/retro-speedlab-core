@@ -1,14 +1,17 @@
+import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
 from loguru import logger
 
+from datenwissenschaften.reference.explored import explored_starts
 from datenwissenschaften.reference.paths import TRACE_FILE, reference_dir, tas_route_path, video_path
 from datenwissenschaften.reference.play import Span, dark_screens, level_spans
 from datenwissenschaften.reference.samples import Trail, collect_samples
 from datenwissenschaften.reference.trace import Timed, timed_rows, video_chunks, write_route
 from datenwissenschaften.settings import RetroSpeedlabConfig
+from datenwissenschaften.tas.paths import archives_dir
 from datenwissenschaften.tas.practice import LevelLoader, level_start
 from datenwissenschaften.tas.routes import Routes
 from datenwissenschaften.tas.runner import SegmentRunner, Start
@@ -91,8 +94,11 @@ def ensure_guide(
         return
     from datenwissenschaften.reference.model import train
 
-    samples = collect_samples(runner, trails(routes), starts, SEED)
+    explored = explored_starts(archives_dir(settings), random.Random(SEED))
+    samples = collect_samples(runner, trails(routes), starts, explored, SEED)
     guided = tas_steps(train(samples, runner.wrapper.level_count), settings)
+    for level, steps in enumerate(guided, 1):
+        logger.info(f"The TAS map of level {level} holds {len(steps)} video frames in {len(timed_rows(steps))} cells")
     missing = [level for level, steps in enumerate(guided, 1) if not steps]
     if missing:
         logger.error(f"The TAS map misses levels {missing}; the search keeps its own route only")

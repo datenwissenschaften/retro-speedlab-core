@@ -104,9 +104,10 @@ dropped down to the last piece. Going back drops every checkpoint in a row down
 to the last piece as well, and either way that level gets no new checkpoint in
 the state it went back from until a piece leaves that state (finding the way
 back into it is not enough), also after a restart (`cache/tas/barred.json`).
-A checkpoint is the reached cell with the fewest frames left on the route map,
-when the map knows the start and that cell is at least 60 frames closer to the
-exit; otherwise it is the cell with the most reward.
+A checkpoint is the reached cell with the fewest frames left on the route map:
+from a start on the map that cell must be at least 60 frames closer to the
+exit, from a start off the map any reached map cell will do; otherwise it is
+the cell with the most reward.
 
 After every segment the whole movie is replayed from power-on; segments that do
 not reproduce are searched again. `cache/tas/progress.msgpack` lets a run
@@ -142,10 +143,13 @@ many frames the level's route still needed from there to its exit, and is
 rewritten after every level's turn. `cache/reference/tas_route.json` holds the
 same for every level of the TASVideos run. The long dark score screens between
 levels split the TAS video into its levels; a small CNN, trained on screens of
-the stored routes and of each level started by the level loader, places the
+the stored routes, of each level started by the level loader and of short
+random rollouts from up to 2 saved states per 16 px cell of the search's
+archives (`cache/tas/archives`, so also where the search is stuck), places the
 snake within the known level, and only frames that look like a screen it
 trained on count. The frames left run to the level's score screen. The map is
-built once, when the file is missing, and only when every level has cells. The
+built once, when the file is missing, and only when every level has cells; the
+log names each level's video frames and cells. The
 search weights cells on either route by the fewer frames left to the exit.
 
 ## PPO policy

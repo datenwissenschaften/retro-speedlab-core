@@ -10,9 +10,10 @@ from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.runner import CellKey, SegmentRunner, Start
 from datenwissenschaften.tas.search import KEEP_ACTION, Cell, choose
 
-SAMPLES_PER_LEVEL = 6000
+SAMPLES_PER_LEVEL = 5000
 SAMPLE_EVERY_FRAMES = 3
 WALK_DECISIONS = 40
+ROLLOUT_DECISIONS = 6
 START_EVERY_FRAMES = 30
 SIDE_CROP = 8
 SCALE = 2
@@ -76,16 +77,11 @@ def replay(runner: SegmentRunner, trail: Trail, samples: Samples, seen: dict[int
         remember(runner, seen[current_level(runner)], played)
 
 
-def walk(runner: SegmentRunner, archive: Archive, samples: Samples, rng: random.Random) -> None:
-    cell = choose(list(archive.values()), rng) if archive else None
-    frames = 0
-    if cell is None:
-        runner.power_on()
-    else:
-        runner.restore(cell.start)
-        frames = cell.frames
+def roll(
+    runner: SegmentRunner, archive: Archive, samples: Samples, rng: random.Random, frames: int, decisions: int
+) -> None:
     choice = rng.random()
-    for _ in range(WALK_DECISIONS):
+    for _ in range(decisions):
         if runner.ram.position() is None:
             pressed = boot_frames(runner)
         else:
@@ -96,6 +92,25 @@ def walk(runner: SegmentRunner, archive: Archive, samples: Samples, rng: random.
             return
         frames += len(pressed)
         remember(runner, archive, frames)
+
+
+def walk(runner: SegmentRunner, archive: Archive, samples: Samples, rng: random.Random) -> None:
+    cell = choose(list(archive.values()), rng) if archive else None
+    if cell is None:
+        runner.power_on()
+    else:
+        runner.restore(cell.start)
+    roll(runner, archive, samples, rng, 0 if cell is None else cell.frames, WALK_DECISIONS)
+
+
+def roll_out(
+    runner: SegmentRunner, explored: list[Start], samples: Samples, seen: dict[int, Archive], rng: random.Random
+) -> None:
+    before = len(samples.labels)
+    for start in explored:
+        runner.restore(start)
+        roll(runner, seen[current_level(runner)], samples, rng, 0, ROLLOUT_DECISIONS)
+    logger.info(f"{len(explored)} places the search explored add {len(samples.labels) - before} training screens")
 
 
 def explore_level(runner: SegmentRunner, level: int, archive: Archive, samples: Samples, rng: random.Random) -> None:
@@ -111,10 +126,13 @@ def entered(runner: SegmentRunner, start: Start, archive: Archive) -> Archive:
     return archive
 
 
-def collect_samples(runner: SegmentRunner, trails: list[Trail], starts: list[Start], seed: int) -> Samples:
+def collect_samples(
+    runner: SegmentRunner, trails: list[Trail], starts: list[Start], explored: list[Start], seed: int
+) -> Samples:
     samples, rng, seen = Samples([], [], 0), random.Random(seed), defaultdict[int, Archive](dict)
     for trail in trails:
         replay(runner, trail, samples, seen)
+    roll_out(runner, explored, samples, seen, rng)
     explore_level(runner, 0, seen[0], samples, rng)
     for level, start in enumerate(starts, 1):
         explore_level(runner, level, entered(runner, start, seen[level]), samples, rng)
