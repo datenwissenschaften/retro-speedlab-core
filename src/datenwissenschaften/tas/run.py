@@ -32,7 +32,7 @@ from datenwissenschaften.tas.report import course_of
 from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Routes, finished, load_progress, parts_of
 from datenwissenschaften.tas.runner import SegmentRunner, Start
 from datenwissenschaften.tas.screen import Screen
-from datenwissenschaften.tas.search import UNBOUNDED, Checkpoint, Crossing
+from datenwissenschaften.tas.search import ROUTE_CHECKPOINT, UNBOUNDED, Checkpoint, Crossing
 from datenwissenschaften.tas.searcher import Searcher
 from datenwissenschaften.tas.shown import SHOWN_FILE, worth_showing
 from datenwissenschaften.tas.stuck import (
@@ -223,11 +223,18 @@ class Tas:
             return mark_stuck(self.stuck_file, state).searches
         return save_stuck(self.stuck_file, failed(self.output / FAILURES_FILE, state)).searches
 
+    def closer(self, start: Start, found: Checkpoint) -> bool:
+        if found.remaining is None:
+            return False
+        self.runner.restore(start)
+        before = self.runner.remaining()
+        return before is None or found.remaining <= before - ROUTE_CHECKPOINT
+
     def checkpoint(
         self, leg: Leg, segments: list[Segment], start: Start, found: Checkpoint, patience: int | None
     ) -> list[Segment]:
         searches = self.searched(start.state, patience)
-        spent = searches >= turn_searches(patience) and not found.guided
+        spent = searches >= turn_searches(patience) and not self.closer(start, found)
         if start.state == self.barred.get(leg.name) or spent:
             return self.wait_or_go_back(leg, segments, start, searches, patience)
         self.feed.event("checkpoint", start.state, found.frames)

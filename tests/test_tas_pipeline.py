@@ -474,6 +474,20 @@ def test_checkpoints_on_the_tas_route_go_on_after_the_first_turn(tmp_path: Path,
     assert tas.barred == {}
 
 
+def test_a_route_checkpoint_no_closer_than_its_start_stops_after_the_first_turn(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    level = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 1.0, 300)
+    monkeypatch.setattr(searcher.Searcher, "best", lambda self, start, bound, rounds: level)
+    monkeypatch.setattr(SegmentRunner, "remaining", lambda self: 300)
+    leg = Leg("Level 1", runner.power_on(), "Exit")
+    patience = 1 + BACKTRACK_SEARCHES
+
+    tas.extend(leg, [], patience)
+
+    assert [event.kind for event in tas.feed.journal.journal.events] == ["checkpoint"] * (patience - 1) + ["stuck"]
+
+
 def test_a_barred_state_stays_barred_when_the_search_finds_its_way_back_into_it(tmp_path: Path):
     barred = tmp_path / "barred.json"
     bar(barred, "Level 2", "Ledge")
