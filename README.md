@@ -153,7 +153,7 @@ after 128 decisions. `speedrun.policy_emulators` environments play in parallel i
 `SubprocVecEnv`. After every round of 1024 decisions per emulator the policy network (two tanh
 layers of 256) is exported to `cache/tas/policy.npz`, which the search workers read with numpy,
 the shortest episode that left the state is kept for the search to replay, and the round's
-reward, exits and losses go to Weights & Biases.
+reward, exits, entropy and value fit go to Weights & Biases.
 
 ## Workflows and the lab
 
@@ -180,9 +180,13 @@ runs locally with `flyte run --local`.
 The search and the policy each log one [Weights & Biases](https://wandb.ai) run per release
 (project `retro-speedlab`, grouped by `ui.release`, jobs `search` and `policy`):
 
-- **search:** `run/seconds`, `run/pieces`, every level's split as `levels/<level>`, and running counts of
-  `search/found`, `search/improved`, `search/checkpoint` and `search/stuck` with their frames;
-- **policy:** reward, exits, episodes and loss per PPO round.
+- **search:** the run from power-on as `run/seconds`, `run/pieces`, `run/levels_beaten` and the state it
+  ends in, `run/reached`; every level's split as `levels/<level>`; running counts of `search/found`,
+  `search/improved`, `search/checkpoint`, `search/stuck` and `search/lab`; the frames the trimming saved,
+  `search/frames_saved`; and with every value `search/hours_since_progress`, the hours since a piece was
+  found or made faster;
+- **policy:** per PPO round `policy/reward`, `policy/exits`, `policy/episodes`, `policy/exit_rate`,
+  `policy/entropy` and `policy/explained_variance`.
 
 Without `WANDB_API_KEY` the runs are disabled and logged as not tracked.
 
