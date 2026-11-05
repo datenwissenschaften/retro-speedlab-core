@@ -227,10 +227,12 @@ class Tas:
         self, leg: Leg, segments: list[Segment], start: Start, found: Checkpoint, patience: int | None
     ) -> list[Segment]:
         searches = self.searched(start.state, patience)
-        if start.state == self.barred.get(leg.name) or searches >= turn_searches(patience):
+        spent = searches >= turn_searches(patience) and not found.guided
+        if start.state == self.barred.get(leg.name) or spent:
             return self.wait_or_go_back(leg, segments, start, searches, patience)
         self.feed.event("checkpoint", start.state, found.frames)
-        logger.info(f"Checkpoint in {start.state} after {found.frames} frames, {found.gain:.1f} reward on")
+        on = f"{found.remaining} TAS frames before the exit" if found.guided else f"{found.gain:.1f} reward on"
+        logger.info(f"Checkpoint in {start.state} after {found.frames} frames, {on}")
         return self.keep(leg, [*segments, checkpoint_segment(found)], start.state)
 
     def stuck(self, leg: Leg, segments: list[Segment], start: Start, patience: int | None) -> list[Segment]:

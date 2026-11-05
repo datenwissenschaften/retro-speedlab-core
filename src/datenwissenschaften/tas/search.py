@@ -73,10 +73,15 @@ class Checkpoint:
     end: Start
     pressed: np.ndarray
     gain: float
+    remaining: int | None
 
     @property
     def frames(self) -> int:
         return len(self.pressed)
+
+    @property
+    def guided(self) -> bool:
+        return self.remaining is not None
 
 
 @dataclass(slots=True, frozen=True)
@@ -85,9 +90,15 @@ class Searched:
     checkpoint: Checkpoint | None
 
 
+def progress(checkpoint: Checkpoint) -> tuple[int, float, int]:
+    if checkpoint.remaining is None:
+        return 0, checkpoint.gain, -checkpoint.frames
+    return 1, -checkpoint.remaining, -checkpoint.frames
+
+
 def farthest(checkpoints: list[Checkpoint | None]) -> Checkpoint | None:
     found = [checkpoint for checkpoint in checkpoints if checkpoint is not None]
-    return max(found, key=lambda checkpoint: (checkpoint.gain, -checkpoint.frames), default=None)
+    return max(found, key=progress, default=None)
 
 
 def on_route(archive: dict[CellKey, Cell]) -> Cell | None:
@@ -106,12 +117,13 @@ def by_reward(archive: dict[CellKey, Cell]) -> Cell | None:
 
 
 def checkpoint_of(archive: dict[CellKey, Cell]) -> Checkpoint | None:
-    cell = on_route(archive) or by_reward(archive)
+    guided = on_route(archive)
+    cell = guided or by_reward(archive)
     if cell is None:
         return None
     if cell.trail is None:
         raise RuntimeError("The checkpoint cell keeps no trail")
-    return Checkpoint(cell.start, cell.trail.frames(), cell.score)
+    return Checkpoint(cell.start, cell.trail.frames(), cell.score, None if guided is None else cell.remaining)
 
 
 def fastest_distinct(crossings: list[Crossing]) -> list[Crossing]:

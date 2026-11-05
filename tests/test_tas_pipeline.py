@@ -263,7 +263,7 @@ def test_a_checkpoint_is_kept_as_a_piece_and_the_search_goes_on_from_it(tmp_path
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
     found = searcher.Searcher.best
-    checkpoint = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 1.0)
+    checkpoint = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 1.0, None)
     calls: list[int] = []
 
     def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Crossing | Checkpoint | None:
@@ -317,7 +317,7 @@ def test_no_checkpoint_comes_back_in_a_state_the_search_just_left_one_behind(tmp
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
     found = searcher.Searcher.best
-    useless = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 20.0)
+    useless = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 20.0, None)
     calls: list[int] = []
 
     def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Crossing | Checkpoint | None:
@@ -337,7 +337,7 @@ def test_a_level_keeps_its_barred_state_when_another_level_goes_back_later(tmp_p
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
     found = searcher.Searcher.best
-    useless = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 20.0)
+    useless = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 20.0, None)
     calls: list[int] = []
 
     def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Crossing | Checkpoint | None:
@@ -444,7 +444,7 @@ def test_a_checkpoint_chain_without_a_way_out_is_dropped_after_one_turn_and_its_
 ):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
-    checkpoint = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 1.0)
+    checkpoint = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 1.0, None)
     monkeypatch.setattr(searcher.Searcher, "best", lambda self, start, bound, rounds: checkpoint)
     leg = Leg("Level 1", runner.power_on(), "Exit")
     patience = 1 + BACKTRACK_SEARCHES
@@ -457,6 +457,21 @@ def test_a_checkpoint_chain_without_a_way_out_is_dropped_after_one_turn_and_its_
         patience + 1
     )
     assert tas.barred == {"Level 1": "Survive"}
+
+
+def test_checkpoints_on_the_tas_route_go_on_after_the_first_turn(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    guided = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 1.0, 300)
+    monkeypatch.setattr(searcher.Searcher, "best", lambda self, start, bound, rounds: guided)
+    leg = Leg("Level 1", runner.power_on(), "Exit")
+    patience = 1 + BACKTRACK_SEARCHES
+
+    tas.extend(leg, [], patience)
+
+    assert [event.kind for event in tas.feed.journal.journal.events] == ["checkpoint"] * patience
+    assert tas.routes.segments(leg.name) and all(piece.state == "Survive" for piece in tas.routes.segments(leg.name))
+    assert tas.barred == {}
 
 
 def test_a_barred_state_stays_barred_when_the_search_finds_its_way_back_into_it(tmp_path: Path):

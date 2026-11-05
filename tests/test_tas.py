@@ -126,8 +126,10 @@ def test_without_enough_reward_there_is_no_checkpoint(tmp_path: Path):
     archives = Archives(tmp_path, 2)
     assert search_segment(LineRunner(), START, 2, 7, 0.2, None, NO_PREFERENCES, archives).checkpoint is None
     assert farthest([None, None]) is None
-    near, far = (Checkpoint(START, np.zeros((frames, 1), np.int8), gain) for frames, gain in ((4, 3.0), (2, 1.0)))
+    near, far = (Checkpoint(START, np.zeros((frames, 1), np.int8), gain, None) for frames, gain in ((4, 3.0), (2, 1.0)))
     assert farthest([far, None, near]) is near
+    guided, closer = (Checkpoint(START, np.zeros((2, 1), np.int8), 0.0, left) for left in (900, 400))
+    assert farthest([near, guided, closer]) is closer
 
 
 def test_shaving_drops_every_frame_the_crossing_does_not_need():

@@ -107,7 +107,9 @@ back into it is not enough), also after a restart (`cache/tas/barred.json`).
 A checkpoint is the reached cell with the fewest frames left on the route map:
 from a start on the map that cell must be at least 60 frames closer to the
 exit, from a start off the map any reached map cell will do; otherwise it is
-the cell with the most reward.
+the cell with the most reward. A checkpoint on the map always moves closer to
+the exit, so it is also kept after the first turn; of several workers'
+checkpoints the one closest to the exit on the map wins, then the most reward.
 
 After every segment the whole movie is replayed from power-on; segments that do
 not reproduce are searched again. `cache/tas/progress.msgpack` lets a run
