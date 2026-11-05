@@ -177,8 +177,6 @@ class Tas:
                 logger.info(f"{leg.name} rests after {turn.searches} searches; the next level takes its turn")
                 return segments
             turn = turn.searched()
-            if patience is not None:
-                save_turn(self.turn_file, turn)
             start = self.start(leg, segments, len(segments))
             if patience is not None:
                 self.resume_stuck(start.state)
@@ -189,6 +187,8 @@ class Tas:
                 found = self.searcher.best(start, UNBOUNDED, SEARCH_ROUNDS)
             else:
                 segments, found = hint
+            if patience is not None:
+                save_turn(self.turn_file, turn)
             if isinstance(found, Checkpoint) and (
                 start.state == self.barred.get(leg.name) or checkpoints_in_a_row(leg, segments) >= MAX_CHECKPOINTS
             ):
