@@ -402,6 +402,22 @@ def test_a_turn_cut_by_a_restart_goes_on_with_the_searches_it_has_left(
     assert load_turn(tas.turn_file) == ended
 
 
+def test_a_search_cut_by_a_restart_is_not_counted_so_the_level_searches_it_again(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    save_turn(tas.turn_file, Turn(FULL_RUN, 2))
+
+    def restarted(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(searcher.Searcher, "best", restarted)
+
+    with pytest.raises(KeyboardInterrupt):
+        tas.extend(Leg(FULL_RUN, runner.power_on(), "Exit"), [], 3)
+
+    assert load_turn(tas.turn_file) == Turn(FULL_RUN, 2)
+
+
 def test_a_level_keeps_its_turn_while_its_searches_find_pieces(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
