@@ -8,6 +8,7 @@ MOVIE_DIR = "movie"
 VIDEO_FILE = "video"
 ROUTE_FILE = "route.json"
 TAS_ROUTE_FILE = "tas_route.json"
+RAM_ROUTE_FILE = "tas_ram_route.json"
 TRACE_FILE = "trace.json"
 
 
@@ -23,8 +24,12 @@ def tas_route_path(settings: RetroSpeedlabConfig) -> Path:
     return reference_dir(settings) / TAS_ROUTE_FILE
 
 
+def ram_route_path(settings: RetroSpeedlabConfig) -> Path:
+    return settings.paths.game_dir / RAM_ROUTE_FILE
+
+
 def route_paths(settings: RetroSpeedlabConfig) -> tuple[Path, ...]:
-    return route_path(settings), tas_route_path(settings)
+    return route_path(settings), tas_route_path(settings), ram_route_path(settings)
 
 
 def video_path(settings: RetroSpeedlabConfig) -> Path:

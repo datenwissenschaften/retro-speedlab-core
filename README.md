@@ -149,8 +149,10 @@ archives (`cache/tas/archives`, so also where the search is stuck), places the
 snake within the known level, and only frames that look like a screen it
 trained on count. The frames left run to the level's score screen. The map is
 built once, when the file is missing, and only when every level has cells; the
-log names each level's video frames and cells. The
-search weights cells on either route by the fewer frames left to the exit.
+log names each level's video frames and cells. A game package may also ship
+`tas_ram_route.json` next to its `config.yaml`: the same rows taken from the RAM
+of a TAS replayed in the emulator it was recorded on, exact for every frame. The
+search weights cells on any of these routes by the fewest frames left to the exit.
 
 ## PPO policy
 

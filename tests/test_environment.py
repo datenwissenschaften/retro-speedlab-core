@@ -91,7 +91,9 @@ def test_factory_starts_the_game_at_power_on_with_every_button(tmp_path: Path, m
     assert env.env.initial_state == env.env.em.get_state()
     assert re.fullmatch(r"PowerOn-\d{8}T\d{6}-0", env.env.statename)
     reference = config.paths.cache_dir / "reference"
-    assert env.routes.paths == (reference / "route.json", reference / "tas_route.json")
+    ram_route = config.paths.game_dir / "tas_ram_route.json"
+    assert env.routes.paths == (reference / "route.json", reference / "tas_route.json", ram_route)
+    assert config.paths.game_dir == tmp_path.resolve()
 
 
 class RecordedMovie:
