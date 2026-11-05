@@ -46,7 +46,8 @@ class SpeedrunFeed:
         seconds = frames(segments) / self.course.frame_rate
         firsts = self.journal.track(found, seconds)
         levels = {f"levels/{split.level}": split.level_seconds for split in found}
-        self.experiment.log({"run/seconds": seconds, "run/pieces": len(segments), **levels})
+        reached = {"run/reached": segments[-1].state} if segments else {}
+        self.experiment.log({"run/seconds": seconds, "run/pieces": len(segments), **reached, **levels})
         summary = report(self.course, segments, found, firsts, searching, load_stuck(self.stuck))
         with self.lock:
             self.summary, self.searching = summary, searching
