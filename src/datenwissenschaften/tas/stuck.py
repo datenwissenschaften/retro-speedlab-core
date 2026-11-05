@@ -65,9 +65,10 @@ def bar(path: Path, leg: str, state: str) -> None:
     atomic_write(path, msgspec.json.encode({**load_barred(path), leg: state}))
 
 
-def unbar(path: Path, leg: str) -> None:
+def unbar(path: Path, leg: str, state: str) -> None:
     barred = load_barred(path)
-    if barred.pop(leg, None) is not None:
+    if leg in barred and barred[leg] == state:
+        del barred[leg]
         atomic_write(path, msgspec.json.encode(barred))
 
 

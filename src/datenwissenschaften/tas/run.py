@@ -58,7 +58,6 @@ LOG_FILE = "search.log"
 SEARCH_ROUNDS = 2
 BACKTRACK_SEARCHES = 3
 PRACTICE_BACKTRACK_TURNS = 3
-MAX_CHECKPOINTS = 5
 IMPROVE_ROUNDS = 1
 
 MAIN_WORKER = 0
@@ -77,6 +76,14 @@ def segment_of(crossing: Crossing) -> Segment:
 
 def checkpoint_segment(checkpoint: Checkpoint) -> Segment:
     return Segment(checkpoint.end.state, checkpoint.pressed.tolist(), checkpoint.end.emulator_state, False)
+
+
+def turn_searches(patience: int | None) -> int:
+    return BACKTRACK_SEARCHES if patience is None else patience
+
+
+def backtrack_searches(patience: int | None) -> int:
+    return BACKTRACK_SEARCHES if patience is None else patience * PRACTICE_BACKTRACK_TURNS
 
 
 def checkpoints_in_a_row(leg: Leg, segments: list[Segment]) -> int:
@@ -189,22 +196,14 @@ class Tas:
                 segments, found = hint
             if patience is not None:
                 save_turn(self.turn_file, turn)
-            if isinstance(found, Checkpoint) and (
-                start.state == self.barred.get(leg.name) or checkpoints_in_a_row(leg, segments) >= MAX_CHECKPOINTS
-            ):
-                found = None
-            if found is not None:
-                cleared(self.output / FAILURES_FILE, start.state)
             if isinstance(found, Checkpoint):
-                self.feed.event("checkpoint", start.state, found.frames)
-                self.stuck_file.unlink(missing_ok=True)
-                segments = self.keep(leg, [*segments, checkpoint_segment(found)], start.state)
-                logger.info(f"Checkpoint in {start.state} after {found.frames} frames, {found.gain:.1f} reward on")
+                segments = self.checkpoint(leg, segments, start, found, patience)
                 continue
             if found is None:
                 segments = self.stuck(leg, segments, start, patience)
                 continue
-            unbar(self.barred_file, leg.name)
+            cleared(self.output / FAILURES_FILE, start.state)
+            unbar(self.barred_file, leg.name, start.state)
             turn = turn.found()
             if patience is not None:
                 save_turn(self.turn_file, turn)
@@ -219,20 +218,39 @@ class Tas:
         self.feed.show(self.routes.view(leg.name, segments), segments[-1].state)
         return segments
 
-    def stuck(self, leg: Leg, segments: list[Segment], start: Start, patience: int | None) -> list[Segment]:
+    def searched(self, state: str, patience: int | None) -> int:
         if patience is None:
-            searches = mark_stuck(self.stuck_file, start.state).searches
-        else:
-            searches = save_stuck(self.stuck_file, failed(self.output / FAILURES_FILE, start.state)).searches
+            return mark_stuck(self.stuck_file, state).searches
+        return save_stuck(self.stuck_file, failed(self.output / FAILURES_FILE, state)).searches
+
+    def checkpoint(
+        self, leg: Leg, segments: list[Segment], start: Start, found: Checkpoint, patience: int | None
+    ) -> list[Segment]:
+        searches = self.searched(start.state, patience)
+        if start.state == self.barred.get(leg.name) or searches >= turn_searches(patience):
+            return self.wait_or_go_back(leg, segments, start, searches, patience)
+        self.feed.event("checkpoint", start.state, found.frames)
+        logger.info(f"Checkpoint in {start.state} after {found.frames} frames, {found.gain:.1f} reward on")
+        return self.keep(leg, [*segments, checkpoint_segment(found)], start.state)
+
+    def stuck(self, leg: Leg, segments: list[Segment], start: Start, patience: int | None) -> list[Segment]:
+        return self.wait_or_go_back(leg, segments, start, self.searched(start.state, patience), patience)
+
+    def wait_or_go_back(
+        self, leg: Leg, segments: list[Segment], start: Start, searches: int, patience: int | None
+    ) -> list[Segment]:
         self.feed.event("stuck", start.state, None)
-        every = BACKTRACK_SEARCHES if patience is None else patience * PRACTICE_BACKTRACK_TURNS
-        if searches % every:
+        chain = checkpoints_in_a_row(leg, segments)
+        if chain and searches >= turn_searches(patience):
+            logger.warning(f"No way out of {start.state} after {searches} searches; its {chain} checkpoints go")
+        elif searches % backtrack_searches(patience):
             logger.warning(f"No way out of {start.state} after {searches} searches; searching again")
             return segments
-        logger.warning(f"No way out of {start.state} after {searches} searches; searching the way into it again")
+        else:
+            logger.warning(f"No way out of {start.state} after {searches} searches; searching the way into it again")
         if segments and segments[-1].state == start.state:
             bar(self.barred_file, leg.name, start.state)
-        kept = segments[: len(segments) - max(1, checkpoints_in_a_row(leg, segments))]
+        kept = segments[: len(segments) - max(1, chain)]
         return self.keep(leg, kept, self.start(leg, kept, len(kept)).state)
 
     def improve(self, leg: Leg, segments: list[Segment]) -> list[Segment]:

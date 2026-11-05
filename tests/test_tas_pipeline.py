@@ -38,8 +38,10 @@ from datenwissenschaften.tas.stuck import (
     bar,
     cleared,
     failed,
+    load_barred,
     load_failures,
     load_stuck,
+    unbar,
 )
 from datenwissenschaften.tas.turns import Turn, load_turn, save_turn
 
@@ -437,25 +439,34 @@ def test_a_level_keeps_its_turn_while_its_searches_find_pieces(tmp_path: Path, m
     assert searched == ["Survive", "Boss"]
 
 
-def test_a_level_that_failed_three_turns_goes_back_a_piece_and_keeps_it_dropped(tmp_path: Path, monkeypatch):
+def test_a_checkpoint_chain_without_a_way_out_is_dropped_after_one_turn_and_its_state_barred(
+    tmp_path: Path, monkeypatch
+):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
     checkpoint = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 1.0)
-    calls: list[int] = []
-
-    def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Checkpoint | None:
-        calls.append(bound)
-        return checkpoint if len(calls) == 1 else None
-
-    monkeypatch.setattr(searcher.Searcher, "best", best)
+    monkeypatch.setattr(searcher.Searcher, "best", lambda self, start, bound, rounds: checkpoint)
     leg = Leg("Level 1", runner.power_on(), "Exit")
-
     patience = 1 + BACKTRACK_SEARCHES
-    first = tas.extend(leg, [], patience)
-    later = [tas.extend(leg, tas.routes.segments(leg.name), patience) for _ in range(run.PRACTICE_BACKTRACK_TURNS)]
 
-    assert len(first) == 1 and [len(segments) for segments in later[:-1]] == [1, 1]
-    assert later[-1] == [] and tas.routes.segments(leg.name) == []
+    first = tas.extend(leg, [], patience)
+    later = tas.extend(leg, tas.routes.segments(leg.name), patience)
+
+    assert first == [] and later == [] and tas.routes.segments(leg.name) == []
+    assert [event.kind for event in tas.feed.journal.journal.events] == ["checkpoint"] * (patience - 1) + ["stuck"] * (
+        patience + 1
+    )
+    assert tas.barred == {"Level 1": "Survive"}
+
+
+def test_a_barred_state_stays_barred_when_the_search_finds_its_way_back_into_it(tmp_path: Path):
+    barred = tmp_path / "barred.json"
+    bar(barred, "Level 2", "Ledge")
+
+    unbar(barred, "Level 2", "Level2")
+    assert load_barred(barred) == {"Level 2": "Ledge"}
+    unbar(barred, "Level 2", "Ledge")
+    assert load_barred(barred) == {}
 
 
 def test_worker_processes_compute_with_one_math_thread_each(monkeypatch):
@@ -527,7 +538,7 @@ def test_a_practised_level_keeps_its_pieces_until_three_turns_failed_and_a_find_
 ):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
-    leg = Leg("Level 1", runner.power_on(), "Exit")
+    leg = Leg("Level 1", Start("Boss", bytes([3])), "Exit")
     piece = [Segment("Survive", [[0, 0]], bytes([1]), False)]
     patience = 3
 
