@@ -131,9 +131,15 @@ game package.
 ## Route memory
 
 `cache/reference/route.json` lists, per 16 px cell of every beaten level, how
-many frames the level's route still needed from there to its exit. The search
-weights cells on the route by how close they are to the exit, and the file is
-rewritten after every level's turn.
+many frames the level's route still needed from there to its exit, and is
+rewritten after every level's turn. `cache/reference/tas_route.json` holds the
+same for every level of the TASVideos run. The long dark score screens between
+levels split the TAS video into its levels; a small CNN, trained on screens of
+the stored routes and of each level started by the level loader, places the
+snake within the known level, and only frames that look like a screen it
+trained on count. The frames left run to the level's score screen. The map is
+built once, when the file is missing, and only when every level has cells. The
+search weights cells on either route by the fewer frames left to the exit.
 
 ## PPO policy
 

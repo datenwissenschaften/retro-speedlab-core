@@ -19,6 +19,7 @@ SCALE = 2
 NOT_PLAYING = -1
 
 Archive = dict[CellKey, Cell]
+Trail = tuple[Start, list[Segment]]
 
 
 @dataclass(slots=True)
@@ -34,8 +35,8 @@ def small_screen(screen: np.ndarray, side_crop: int) -> np.ndarray:
 
 
 def current_level(runner: SegmentRunner) -> int:
-    address = runner.wrapper.level_address
-    return 0 if address is None else int(runner.emulator.get_ram()[address])
+    level = runner.ram.level()
+    return 0 if level is None else level
 
 
 def press(runner: SegmentRunner, buttons: np.ndarray, samples: Samples) -> bool:
@@ -50,17 +51,8 @@ def press(runner: SegmentRunner, buttons: np.ndarray, samples: Samples) -> bool:
     return alive
 
 
-def hold_level(runner: SegmentRunner, level: int) -> None:
-    if runner.wrapper.level_address is not None:
-        runner.set_level(level)
-
-
-def press_held(runner: SegmentRunner, frames: np.ndarray, level: int, samples: Samples) -> bool:
-    for buttons in frames:
-        hold_level(runner, level)
-        if not press(runner, buttons, samples):
-            return False
-    return True
+def press_all(runner: SegmentRunner, frames: np.ndarray, samples: Samples) -> bool:
+    return all(press(runner, buttons, samples) for buttons in frames)
 
 
 def boot_frames(runner: SegmentRunner) -> np.ndarray:
@@ -76,17 +68,15 @@ def remember(runner: SegmentRunner, archive: Archive, frames: int) -> None:
         archive[key] = Cell(start, None, frames, 0, None, float(frames), 0)
 
 
-def replay_route(runner: SegmentRunner, route: list[Segment], samples: Samples) -> dict[int, Archive]:
-    seen: dict[int, Archive] = defaultdict(dict)
-    runner.power_on()
-    frames = [np.asarray(segment.pressed, dtype=np.int8) for segment in route]
-    for played, buttons in enumerate(buttons for pressed in frames for buttons in pressed):
-        press(runner, buttons, samples)
+def replay(runner: SegmentRunner, trail: Trail, samples: Samples, seen: dict[int, Archive]) -> None:
+    start, route = trail
+    runner.restore(start)
+    for played, buttons in enumerate(buttons for segment in route for buttons in segment.pressed):
+        press(runner, np.asarray(buttons, dtype=np.int8), samples)
         remember(runner, seen[current_level(runner)], played)
-    return seen
 
 
-def walk(runner: SegmentRunner, level: int, archive: Archive, samples: Samples, rng: random.Random) -> None:
+def walk(runner: SegmentRunner, archive: Archive, samples: Samples, rng: random.Random) -> None:
     cell = choose(list(archive.values()), rng) if archive else None
     frames = 0
     if cell is None:
@@ -102,7 +92,7 @@ def walk(runner: SegmentRunner, level: int, archive: Archive, samples: Samples, 
             actions = runner.wrapper.current_action_table()
             choice = choice if rng.random() < KEEP_ACTION else rng.random()
             pressed = actions[int(choice * len(actions))]
-        if not press_held(runner, pressed, level, samples):
+        if not press_all(runner, pressed, samples):
             return
         frames += len(pressed)
         remember(runner, archive, frames)
@@ -111,13 +101,21 @@ def walk(runner: SegmentRunner, level: int, archive: Archive, samples: Samples, 
 def explore_level(runner: SegmentRunner, level: int, archive: Archive, samples: Samples, rng: random.Random) -> None:
     goal = len(samples.labels) + SAMPLES_PER_LEVEL
     while len(samples.labels) < goal:
-        walk(runner, level, archive, samples, rng)
+        walk(runner, archive, samples, rng)
     logger.info(f"Level {level}: {len(archive)} places seen")
 
 
-def collect_samples(runner: SegmentRunner, route: list[Segment], seed: int) -> Samples:
-    samples, rng = Samples([], [], 0), random.Random(seed)
-    seen = replay_route(runner, route, samples)
-    for level in range(runner.wrapper.level_count):
-        explore_level(runner, level, seen[level], samples, rng)
+def entered(runner: SegmentRunner, start: Start, archive: Archive) -> Archive:
+    runner.restore(start)
+    remember(runner, archive, 0)
+    return archive
+
+
+def collect_samples(runner: SegmentRunner, trails: list[Trail], starts: list[Start], seed: int) -> Samples:
+    samples, rng, seen = Samples([], [], 0), random.Random(seed), defaultdict[int, Archive](dict)
+    for trail in trails:
+        replay(runner, trail, samples, seen)
+    explore_level(runner, 0, seen[0], samples, rng)
+    for level, start in enumerate(starts, 1):
+        explore_level(runner, level, entered(runner, start, seen[level]), samples, rng)
     return samples

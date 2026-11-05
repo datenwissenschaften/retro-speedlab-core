@@ -54,7 +54,7 @@ class Exploration:
         self.archive: dict[CellKey, Cell] = archive.cells
         self.crossings: list[Crossing] = []
         self.guided = False
-        self.guided_by: int | None = None
+        self.guided_by: tuple[int | None, ...] = ()
 
     def cells(self) -> list[Cell]:
         routes = self.runner.wrapper.routes

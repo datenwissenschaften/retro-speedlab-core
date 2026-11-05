@@ -135,7 +135,7 @@ def saving_environment(tmp_path: Path) -> FakeWrapper:
 
 
 def fake_routes(tmp_path: Path) -> RouteMap:
-    return RouteMap(tmp_path / "reference" / "route.json")
+    return RouteMap((tmp_path / "reference" / "route.json",))
 
 
 def write_config(tmp_path: Path) -> Path:

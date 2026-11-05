@@ -14,6 +14,7 @@ CHUNK_FRAMES = 2048
 LEVEL_GAP_FRAMES = 60
 
 Step = tuple[int, int, int, int]
+Timed = tuple[Step, int]
 
 
 def video_chunks(video: Path) -> Iterator[np.ndarray]:
@@ -32,20 +33,6 @@ def video_chunks(video: Path) -> Iterator[np.ndarray]:
         yield np.stack(chunk)
 
 
-def rising_levels(log_probs: np.ndarray) -> np.ndarray:
-    levels = np.arange(int(log_probs.shape[1]))
-    best, back = log_probs[0].copy(), np.zeros(log_probs.shape, dtype=int)
-    for frame in range(1, len(log_probs)):
-        prefix = np.maximum.accumulate(best)
-        back[frame] = np.maximum.accumulate(np.where(best >= prefix, levels, 0))
-        best = prefix + log_probs[frame]
-    path = np.empty(len(log_probs), dtype=int)
-    path[-1] = int(np.argmax(best))
-    for frame in range(len(log_probs) - 1, 0, -1):
-        path[frame - 1] = back[frame, path[frame]]
-    return path
-
-
 def stretches(steps: list[Step]) -> list[list[Step]]:
     found: list[list[Step]] = []
     for step in steps:
@@ -56,17 +43,19 @@ def stretches(steps: list[Step]) -> list[list[Step]]:
     return found
 
 
-def route_rows(steps: list[Step]) -> list[list[int]]:
+def timed_rows(timed: list[Timed]) -> list[list[int]]:
     remaining: dict[Cell, tuple[int, int]] = {}
-    for stretch in stretches(steps):
-        end = stretch[-1][0]
-        for frame, area, x, y in stretch:
-            cell = cell_of(Position(area, x, y, 0, False))
-            if cell not in remaining or end - frame < remaining[cell][1]:
-                remaining[cell] = (frame, end - frame)
+    for (frame, area, x, y), end in timed:
+        cell = cell_of(Position(area, x, y, 0, False))
+        if cell not in remaining or end - frame < remaining[cell][1]:
+            remaining[cell] = (frame, end - frame)
     return [[*cell, frame, left] for cell, (frame, left) in sorted(remaining.items())]
 
 
-def write_route(steps: list[Step], route: Path, trace: Path) -> None:
+def route_rows(steps: list[Step]) -> list[list[int]]:
+    return timed_rows([(step, stretch[-1][0]) for stretch in stretches(steps) for step in stretch])
+
+
+def write_route(steps: list[Step], rows: list[list[int]], route: Path, trace: Path) -> None:
     atomic_write(trace, json.dumps(steps).encode())
-    atomic_write(route, json.dumps(route_rows(steps)).encode())
+    atomic_write(route, json.dumps(rows).encode())

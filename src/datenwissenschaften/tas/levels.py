@@ -123,8 +123,8 @@ def speedrun_forever(wrapper: str, config: Path) -> None:
         start_policy(wrapper, config)
     with worker_pool(settings.speedrun.workers) as pool:
         tas = tas_run(wrapper, config, pool)
-        ensure_guide(settings, tas.runner, tas.routes.stitched())
         loader = ensure_loader(tas.output / LOADER_FILE, tas.runner, tas.routes)
+        ensure_guide(settings, tas.runner, tas.routes, loader)
         reel = Reel(settings, tas.feed, tas.runner, tas.routes)
         turn_to_changed_level(tas)
         LevelTrainer(tas, tas.routes, tas.runner.power_on(), loader, reel).forever()

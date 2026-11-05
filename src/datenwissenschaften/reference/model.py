@@ -7,7 +7,8 @@ from loguru import logger
 from torch import nn
 
 from datenwissenschaften.gpu import gpu
-from datenwissenschaften.reference.samples import Samples
+from datenwissenschaften.reference.familiar import nearest
+from datenwissenschaften.reference.samples import NOT_PLAYING, Samples
 
 EPOCHS = 12
 BATCH = 256
@@ -17,20 +18,22 @@ SHIFT_PIXELS = 4
 COLOUR_JITTER = 0.2
 COLOUR_OFFSET = 0.12
 NOISE = 0.03
-COORDINATE_SCALE = 256.0
-PLAYING = 0.5
+PAGE = 256
+REACH_QUANTILE = 0.99
+
+Place = tuple[int, int]
+Split = tuple[torch.Tensor, torch.Tensor]
 
 
 @dataclass(slots=True, frozen=True)
 class Reading:
-    playing: np.ndarray
-    levels: np.ndarray
-    areas: np.ndarray
+    places: np.ndarray
     coordinates: np.ndarray
+    embeddings: torch.Tensor
 
 
 class PositionNet(nn.Module):
-    def __init__(self, levels: int, areas: int, height: int, width: int) -> None:
+    def __init__(self, places: int, height: int, width: int) -> None:
         super().__init__()  # pyright: ignore[reportUnknownMemberType]
         channels = (3, 32, 64, 128, 128)
         layers: list[nn.Module] = []
@@ -39,14 +42,12 @@ class PositionNet(nn.Module):
         self.features = nn.Sequential(*layers, nn.Flatten())
         flat = self.features(torch.zeros(1, 3, height, width)).shape[1]
         self.body = nn.Sequential(nn.Linear(flat, 512), nn.ReLU(), nn.Dropout(0.2))
-        self.playing = nn.Linear(512, 1)
-        self.level = nn.Linear(512, levels)
-        self.area = nn.Linear(512, areas)
+        self.place = nn.Linear(512, places)
         self.coordinates = nn.Linear(512, 2)
 
-    def forward(self, screens: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, screens: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         body = self.body(self.features(screens))
-        return self.playing(body).squeeze(1), self.level(body), self.area(body), self.coordinates(body)
+        return self.place(body), self.coordinates(body), nn.functional.normalize(body, dim=1)
 
 
 def device() -> torch.device:
@@ -71,76 +72,86 @@ def augmented(screens: torch.Tensor) -> torch.Tensor:
 @dataclass(slots=True, frozen=True)
 class Trained:
     net: PositionNet
-    areas: list[int]
+    places: list[Place]
     allowed: np.ndarray
+    seen: torch.Tensor
+    reach: float
 
 
-def losses(net: PositionNet, screens: torch.Tensor, labels: torch.Tensor, classes: torch.Tensor) -> torch.Tensor:
-    playing, levels, areas, coordinates = net(screens)
-    inside = labels[:, 0] >= 0
-    loss = nn.functional.binary_cross_entropy_with_logits(playing, inside.float())
-    if inside.any():
-        loss = loss + nn.functional.cross_entropy(levels[inside], labels[inside, 3].long())
-        loss = loss + nn.functional.cross_entropy(areas[inside], classes[inside])
-        loss = loss + nn.functional.smooth_l1_loss(coordinates[inside], labels[inside, 1:3] / COORDINATE_SCALE)
-    return loss
+def in_page(labels: np.ndarray) -> np.ndarray:
+    return np.stack([labels[:, 1], labels[:, 2] % PAGE], 1)
 
 
-def evaluate(net: PositionNet, screens: np.ndarray, labels: np.ndarray, classes: np.ndarray) -> str:
+def place_of(label: np.ndarray) -> Place:
+    return int(label[0]), int(label[2]) // PAGE
+
+
+def losses(net: PositionNet, screens: torch.Tensor, coordinates: torch.Tensor, classes: torch.Tensor) -> torch.Tensor:
+    places, predicted, _ = net(screens)
+    return nn.functional.cross_entropy(places, classes) + nn.functional.smooth_l1_loss(predicted, coordinates / PAGE)
+
+
+def evaluate(net: PositionNet, screens: np.ndarray, coordinates: np.ndarray, classes: np.ndarray) -> str:
     reading = read_positions(net, screens)
-    inside = labels[:, 0] >= 0
-    seen = (reading.playing == inside).mean()
-    level = (reading.levels[inside].argmax(1) == labels[inside, 3]).mean()
-    area = (reading.areas[inside].argmax(1) == classes[inside]).mean()
-    error = np.abs(reading.coordinates[inside] - labels[inside, 1:3]).mean(0).round(1)
-    return f"in play {seen:.3f}, level {level:.3f}, area {area:.3f}, mean error x/y {error.tolist()}"
+    place = (reading.places.argmax(1) == classes).mean()
+    error = np.median(np.abs(reading.coordinates - coordinates), 0).tolist()
+    return f"place {place:.3f}, median error x/y {error}"
 
 
-def allowed_areas(labels: np.ndarray, classes: np.ndarray, levels: int, areas: int) -> np.ndarray:
-    allowed = np.zeros((levels, areas), dtype=bool)
-    inside = labels[:, 0] >= 0
-    allowed[labels[inside, 3].astype(int), classes[inside]] = True
+def allowed_places(levels: np.ndarray, classes: np.ndarray, level_count: int, places: int) -> np.ndarray:
+    allowed = np.zeros((level_count, places), dtype=bool)
+    allowed[levels, classes] = True
     return allowed
 
 
-def train(samples: Samples) -> Trained:
+def split(count: int) -> tuple[torch.Tensor, torch.Tensor]:
+    order = torch.as_tensor(np.random.default_rng(0).permutation(count), device=device())
+    return order[: int(count * VALIDATION_SHARE)], order[int(count * VALIDATION_SHARE) :]
+
+
+def fit(net: PositionNet, screens: np.ndarray, coordinates: np.ndarray, classes: np.ndarray, parts: Split) -> None:
     gpu = device()
-    screens, labels = np.stack(samples.screens), np.asarray(samples.labels, dtype=np.float32)
-    known = sorted({int(area) for area in labels[:, 0] if area >= 0})
-    classes = np.asarray([known.index(int(area)) if area >= 0 else 0 for area in labels[:, 0]])
-    levels = int(labels[:, 3].max()) + 1
-    order = np.random.default_rng(0).permutation(len(labels))
-    held, fitted = order[: int(len(order) * VALIDATION_SHARE)], order[int(len(order) * VALIDATION_SHARE) :]
-    net = PositionNet(levels, len(known), screens.shape[1], screens.shape[2]).to(gpu)
+    held, fitted = (part.cpu().numpy() for part in parts)
     optimizer = cast(torch.optim.Optimizer, torch.optim.Adam(net.parameters(), lr=LEARNING_RATE))
     for epoch in range(EPOCHS):
         net.train()
         np.random.default_rng(epoch).shuffle(fitted)
         for start in range(0, len(fitted), BATCH):
             batch = fitted[start : start + BATCH]
-            truth = torch.as_tensor(labels[batch]).to(gpu)
             optimizer.zero_grad()
+            truth = torch.as_tensor(coordinates[batch], dtype=torch.float32).to(gpu)
             classified = torch.as_tensor(classes[batch]).to(gpu)
             torch.autograd.backward(losses(net, augmented(as_input(screens[batch], gpu)), truth, classified))
             optimizer.step()
-        logger.info(f"Guide epoch {epoch + 1}/{EPOCHS}: {evaluate(net, screens[held], labels[held], classes[held])}")
-    return Trained(net, known, allowed_areas(labels, classes, levels, len(known)))
+        logger.info(
+            f"Guide epoch {epoch + 1}/{EPOCHS}: {evaluate(net, screens[held], coordinates[held], classes[held])}"
+        )
+
+
+def train(samples: Samples, level_count: int) -> Trained:
+    playing = [index for index, label in enumerate(samples.labels) if label[0] != NOT_PLAYING]
+    screens, labels = np.stack([samples.screens[index] for index in playing]), np.asarray(samples.labels)[playing]
+    known = sorted({place_of(label) for label in labels})
+    classes, coordinates = np.asarray([known.index(place_of(label)) for label in labels]), in_page(labels)
+    net = PositionNet(len(known), screens.shape[1], screens.shape[2]).to(device())
+    held, fitted = split(len(labels))
+    fit(net, screens, coordinates, classes, (held, fitted))
+    seen = read_positions(net, screens).embeddings
+    reach = float(np.quantile(nearest(seen[held], seen[fitted]), REACH_QUANTILE))
+    logger.info(f"The guide trusts video screens within {reach:.3f} of a screen it trained on")
+    return Trained(net, known, allowed_places(labels[:, 3], classes, level_count, len(known)), seen, reach)
 
 
 def read_positions(net: PositionNet, screens: np.ndarray) -> Reading:
-    gpu = device()
     net.eval()
-    readings: list[tuple[torch.Tensor, ...]] = []
+    readings: list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = []
     with torch.no_grad():
         for start in range(0, len(screens), BATCH):
-            playing, levels, areas, coordinates = net(as_input(screens[start : start + BATCH], gpu))
-            readings.append(
-                (
-                    torch.sigmoid(playing) > PLAYING,
-                    torch.log_softmax(levels, 1),
-                    torch.log_softmax(areas, 1),
-                    coordinates * COORDINATE_SCALE,
-                )
-            )
-    playing, levels, areas, coordinates = (torch.cat(parts).cpu().numpy() for parts in zip(*readings, strict=True))
-    return Reading(playing, levels, areas, np.rint(coordinates).astype(int))
+            places, coordinates, embeddings = net(as_input(screens[start : start + BATCH], device()))
+            readings.append((torch.log_softmax(places, 1), coordinates * PAGE, embeddings))
+    places, coordinates, embeddings = (torch.cat(parts) for parts in zip(*readings, strict=True))
+    return Reading(places.cpu().numpy(), np.rint(coordinates.cpu().numpy()).astype(int), embeddings)
+
+
+def familiar(trained: Trained, reading: Reading) -> np.ndarray:
+    return nearest(reading.embeddings, trained.seen) <= trained.reach

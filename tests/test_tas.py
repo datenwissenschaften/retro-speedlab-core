@@ -38,7 +38,9 @@ class LineRunner:
     def __init__(self) -> None:
         self.x = 0
         self.wrapper = SimpleNamespace(
-            action_table=np.zeros((3, 2, 1), dtype=np.int8), state_machine=self, routes=RouteMap(Path("no-route.json"))
+            action_table=np.zeros((3, 2, 1), dtype=np.int8),
+            state_machine=self,
+            routes=RouteMap((Path("no-route.json"),)),
         )
 
     @property
