@@ -74,5 +74,13 @@ def load_archive(path: Path) -> tuple[dict[CellKey, Cell], RamNovelty]:
     return {hashable(cell.key): loaded_cell(stored.state, cell) for cell in stored.cells}, novelty
 
 
+def modified(path: Path) -> float | None:
+    try:
+        return path.stat().st_mtime
+    except FileNotFoundError:
+        return None
+
+
 def newest(paths: Iterable[Path]) -> list[Path]:
-    return sorted(paths, key=lambda path: path.stat().st_mtime, reverse=True)
+    times = {path: time for path in paths if (time := modified(path)) is not None}
+    return sorted(times, key=lambda path: times[path], reverse=True)
