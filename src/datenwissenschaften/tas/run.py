@@ -43,6 +43,7 @@ from datenwissenschaften.tas.stuck import (
     cleared,
     failed,
     load_barred,
+    load_failures,
     load_stuck,
     mark_stuck,
     save_stuck,
@@ -144,6 +145,13 @@ class Tas:
         if stuck is not None and stuck.state != state:
             self.stuck_file.unlink()
 
+    def resume_stuck(self, state: str) -> None:
+        failures = load_failures(self.output / FAILURES_FILE)
+        if state in failures:
+            save_stuck(self.stuck_file, failures[state])
+        else:
+            self.stuck_file.unlink(missing_ok=True)
+
     def keep(self, leg: Leg, segments: list[Segment], searching: str) -> list[Segment]:
         self.routes.save(leg, segments)
         self.feed.show(self.routes.view(leg.name, segments), searching)
@@ -172,6 +180,8 @@ class Tas:
             if patience is not None:
                 save_turn(self.turn_file, turn)
             start = self.start(leg, segments, len(segments))
+            if patience is not None:
+                self.resume_stuck(start.state)
             save_policy_start(self.output / POLICY_START_FILE, start)
             self.feed.show(self.routes.view(leg.name, segments), start.state)
             hint = self.hint(leg, segments, start)
