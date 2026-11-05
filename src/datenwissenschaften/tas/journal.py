@@ -81,6 +81,11 @@ class JournalStore:
                 self.journal.progressed = event.at
             self._save()
 
+    def progressed(self) -> datetime | None:
+        with self.lock:
+            progressed = self.journal.progressed
+        return None if progressed is None else datetime.fromisoformat(progressed)
+
     def track(self, splits: list[Split], seconds: float) -> dict[str, float]:
         with self.lock:
             for split in splits:

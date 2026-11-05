@@ -35,6 +35,8 @@ WAIT_SECONDS = 30.0
 POLICY_LOG = "policy.log"
 POLICY_JOB = "policy"
 SPAWN = "spawn"
+ENTROPY_LOSS = "train/entropy_loss"
+EXPLAINED_VARIANCE = "train/explained_variance"
 
 
 def linear(layer: nn.Module) -> nn.Linear:
@@ -106,15 +108,26 @@ class RoundCallback(BaseCallback):
         export_policy(policy, self.output / POLICY_FILE)
         self.rounds += 1
         reward = self.rewards / self.episodes
-        trained = {f"policy/{name.split('/')[-1]}": value for name, value in self.logger.name_to_value.items()}
         self.experiment.log(
-            {"policy/reward": reward, "policy/exits": self.exits, "policy/episodes": self.episodes, **trained}
+            {
+                "policy/reward": reward,
+                "policy/exits": self.exits,
+                "policy/episodes": self.episodes,
+                "policy/exit_rate": self.exits / self.episodes,
+                **self.learning(),
+            }
         )
         logger.info(
             f"Policy round {self.rounds}: reward {reward:.2f} per episode, {self.exits} exits in "
             f"{self.episodes} episodes"
         )
         self.rewards, self.episodes, self.exits = 0.0, 0, 0
+
+    def learning(self) -> dict[str, float]:
+        learned = self.logger.name_to_value
+        if ENTROPY_LOSS not in learned or EXPLAINED_VARIANCE not in learned:
+            return {}
+        return {"policy/entropy": -learned[ENTROPY_LOSS], "policy/explained_variance": learned[EXPLAINED_VARIANCE]}
 
 
 def speedrun_alive() -> bool:

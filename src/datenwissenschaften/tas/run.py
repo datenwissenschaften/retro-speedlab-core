@@ -252,6 +252,7 @@ class Tas:
             return segments
         logger.info(f"Segment {index} of {leg.name} into {crossing.end.state} is {saved} frames faster")
         self.feed.event("improved", crossing.end.state, crossing.frames)
+        self.feed.stats.trimmed(saved)
         self.compare.queue(compare_cut(self.runner, self.output, start, segments[index], crossing))
         return self.keep(leg, self.verified(leg, shorter), shorter[-1].state)
 
