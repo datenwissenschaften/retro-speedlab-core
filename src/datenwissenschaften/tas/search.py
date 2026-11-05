@@ -92,14 +92,12 @@ def farthest(checkpoints: list[Checkpoint | None]) -> Checkpoint | None:
 
 def on_route(archive: dict[CellKey, Cell]) -> Cell | None:
     starts = [cell.remaining for cell in archive.values() if cell.trail is None and cell.remaining is not None]
-    if not starts:
-        return None
-    closer = [
-        cell
-        for cell in archive.values()
-        if cell.trail is not None and cell.remaining is not None and cell.remaining <= starts[0] - ROUTE_CHECKPOINT
-    ]
-    return min(closer, key=lambda cell: (cell.remaining, cell.frames), default=None)
+    cells = archive.values()
+    mapped = [(cell.remaining, cell) for cell in cells if cell.trail is not None and cell.remaining is not None]
+    limit = starts[0] - ROUTE_CHECKPOINT if starts else None
+    closer = [(left, cell) for left, cell in mapped if limit is None or left <= limit]
+    best = min(closer, key=lambda pair: (pair[0], pair[1].frames), default=None)
+    return None if best is None else best[1]
 
 
 def by_reward(archive: dict[CellKey, Cell]) -> Cell | None:

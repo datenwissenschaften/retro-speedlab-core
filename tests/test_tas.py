@@ -116,8 +116,10 @@ def test_a_checkpoint_follows_the_route_map_where_it_knows_the_cells():
     mapped = {"start": cell(0, 1000, 0.0), "rewarded": rewarded, "closer": closer, "near": cell(3, 960, 2.0)}
 
     assert search.checkpoint_of(mapped).frames == closer.frames
-    assert search.checkpoint_of({**mapped, "start": cell(0, None, 0.0)}).frames == rewarded.frames
+    assert search.checkpoint_of({**mapped, "start": cell(0, None, 0.0)}).frames == closer.frames
     assert search.checkpoint_of({**mapped, "closer": cell(6, 950, 1.0)}).frames == rewarded.frames
+    unmapped = {"start": cell(0, None, 0.0), "rewarded": rewarded, "plain": cell(4, None, 1.0)}
+    assert search.checkpoint_of(unmapped).frames == rewarded.frames
 
 
 def test_without_enough_reward_there_is_no_checkpoint(tmp_path: Path):
