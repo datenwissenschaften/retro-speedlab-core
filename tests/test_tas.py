@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -6,6 +7,7 @@ import numpy as np
 from datenwissenschaften.policy.prior import PolicyPrior
 from datenwissenschaften.route.route_map import RouteMap
 from datenwissenschaften.tas import search
+from datenwissenschaften.tas.archive_store import newest
 from datenwissenschaften.tas.archives import Archives
 from datenwissenschaften.tas.explore import search_segment
 from datenwissenschaften.tas.movie import Segment
@@ -162,3 +164,12 @@ def test_an_ending_holds_only_while_the_idle_player_lives_and_stays_in_it():
     assert holds(idle_runner(True, "Goal"), "Goal", idle)
     assert not holds(idle_runner(True, "Walk"), "Goal", idle)
     assert not holds(idle_runner(False, "Goal"), "Goal", idle)
+
+
+def test_newest_skips_a_map_folder_another_worker_removed_after_listing(tmp_path: Path) -> None:
+    older, newer, removed = tmp_path / "older", tmp_path / "newer", tmp_path / "removed"
+    older.mkdir()
+    newer.mkdir()
+    os.utime(older, (1, 1))
+    os.utime(newer, (2, 2))
+    assert newest([older, removed, newer]) == [newer, older]
