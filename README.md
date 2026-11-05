@@ -104,6 +104,9 @@ dropped down to the last piece. Going back drops every checkpoint in a row down
 to the last piece as well, and either way that level gets no new checkpoint in
 the state it went back from until a piece leaves that state (finding the way
 back into it is not enough), also after a restart (`cache/tas/barred.json`).
+A checkpoint is the reached cell with the fewest frames left on the route map,
+when the map knows the start and that cell is at least 60 frames closer to the
+exit; otherwise it is the cell with the most reward.
 
 After every segment the whole movie is replayed from power-on; segments that do
 not reproduce are searched again. `cache/tas/progress.msgpack` lets a run

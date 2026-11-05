@@ -106,6 +106,20 @@ def test_a_search_that_cannot_leave_returns_the_point_with_the_most_reward_as_a_
     assert searched.checkpoint.pressed.ravel().tolist() == [1] * (GOAL_X - 2)
 
 
+def test_a_checkpoint_follows_the_route_map_where_it_knows_the_cells():
+    def cell(frames: int, remaining: int | None, score: float) -> search.Cell:
+        trail = None if frames == 0 else search.Trail(None, np.ones((frames, 1), np.int8))
+        return search.Cell(START, trail, frames, 0, remaining, score, 0)
+
+    rewarded = cell(9, None, 50.0)
+    closer = cell(6, 900, 1.0)
+    mapped = {"start": cell(0, 1000, 0.0), "rewarded": rewarded, "closer": closer, "near": cell(3, 960, 2.0)}
+
+    assert search.checkpoint_of(mapped).frames == closer.frames
+    assert search.checkpoint_of({**mapped, "start": cell(0, None, 0.0)}).frames == rewarded.frames
+    assert search.checkpoint_of({**mapped, "closer": cell(6, 950, 1.0)}).frames == rewarded.frames
+
+
 def test_without_enough_reward_there_is_no_checkpoint(tmp_path: Path):
     archives = Archives(tmp_path, 2)
     assert search_segment(LineRunner(), START, 2, 7, 0.2, None, NO_PREFERENCES, archives).checkpoint is None

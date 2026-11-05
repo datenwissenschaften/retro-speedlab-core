@@ -20,6 +20,7 @@ EXPLOIT = 0.5
 LEADING_SHARE = 10
 UNBOUNDED = sys.maxsize
 CHECKPOINT_GAIN = 10.0
+ROUTE_CHECKPOINT = 60
 NOVELTY_GAIN = 2.0
 NOVELTY_HALF = 8
 
@@ -89,11 +90,27 @@ def farthest(checkpoints: list[Checkpoint | None]) -> Checkpoint | None:
     return max(found, key=lambda checkpoint: (checkpoint.gain, -checkpoint.frames), default=None)
 
 
-def checkpoint_of(archive: dict[CellKey, Cell]) -> Checkpoint | None:
-    reached = [cell for cell in archive.values() if cell.trail is not None and cell.score >= CHECKPOINT_GAIN]
-    if not reached:
+def on_route(archive: dict[CellKey, Cell]) -> Cell | None:
+    starts = [cell.remaining for cell in archive.values() if cell.trail is None and cell.remaining is not None]
+    if not starts:
         return None
-    cell = max(reached, key=lambda cell: (cell.score, -cell.frames))
+    closer = [
+        cell
+        for cell in archive.values()
+        if cell.trail is not None and cell.remaining is not None and cell.remaining <= starts[0] - ROUTE_CHECKPOINT
+    ]
+    return min(closer, key=lambda cell: (cell.remaining, cell.frames), default=None)
+
+
+def by_reward(archive: dict[CellKey, Cell]) -> Cell | None:
+    reached = [cell for cell in archive.values() if cell.trail is not None and cell.score >= CHECKPOINT_GAIN]
+    return max(reached, key=lambda cell: (cell.score, -cell.frames), default=None)
+
+
+def checkpoint_of(archive: dict[CellKey, Cell]) -> Checkpoint | None:
+    cell = on_route(archive) or by_reward(archive)
+    if cell is None:
+        return None
     if cell.trail is None:
         raise RuntimeError("The checkpoint cell keeps no trail")
     return Checkpoint(cell.start, cell.trail.frames(), cell.score)
