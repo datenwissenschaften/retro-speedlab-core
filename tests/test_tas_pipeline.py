@@ -539,6 +539,28 @@ def test_a_practised_state_stays_stuck_since_its_first_failed_search_after_other
     assert load_stuck(tas.stuck_file) == Stuck("Survive", since, 2)
 
 
+def test_a_practised_level_shows_its_own_stuck_state_from_the_start_of_its_turn(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    first = Leg("Level 1", runner.power_on(), "Boss")
+    second = Leg("Level 2", Start("Boss", bytes([3])), "Exit")
+    patience = 3
+    tas.stuck(first, [], first.entry, patience)
+    since = load_stuck(tas.stuck_file).since
+    tas.stuck(second, [], second.entry, patience)
+    shown: list[Stuck | None] = []
+    monkeypatch.setattr(
+        searcher.Searcher, "best", lambda self, start, bound, rounds: shown.append(load_stuck(tas.stuck_file))
+    )
+
+    tas.extend(first, [], patience)
+    cleared(tas.output / FAILURES_FILE, first.entry.state)
+    tas.extend(Leg("Level 1 again", runner.power_on(), "Boss"), [], 1)
+
+    assert shown[0] == Stuck(first.entry.state, since, 1)
+    assert shown[-1] is None
+
+
 def test_failure_counts_saved_before_they_kept_their_first_failure_still_count(tmp_path: Path):
     path = tmp_path / FAILURES_FILE
     path.write_text('{"Level11": 18}')
