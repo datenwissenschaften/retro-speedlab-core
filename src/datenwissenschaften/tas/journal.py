@@ -100,7 +100,12 @@ class JournalStore:
         with self.lock:
             journal = self.journal
             return msgspec.to_builtins(
-                {"events": journal.events, "history": journal.history, "milestones": journal.milestones}
+                {
+                    "events": journal.events,
+                    "history": journal.history,
+                    "milestones": journal.milestones,
+                    "progressed": journal.progressed,
+                }
             )
 
     def _split(self, split: Split) -> None:
