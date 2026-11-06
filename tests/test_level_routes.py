@@ -16,12 +16,10 @@ from datenwissenschaften.speedrun.routes import (
     parts_of,
 )
 from datenwissenschaften.speedrun.runner import Start
-from datenwissenschaften.speedrun.turns import Turn, load_turn, save_turn
 
 COURSE = SimpleNamespace(first="Menu", levels={"Level 1": ("Play", "Heavy"), "Level 2": ("Level2", "Boss2")})
 POWER_ON = Start("Menu", b"on")
 NO_REEL = SimpleNamespace(show=lambda: None)
-LOADER = levels.LevelLoader(b"loader", 2)
 RUN = [
     Segment("Play", [[1]] * 3, b"play", False),
     Segment("Heavy", [[1]] * 4, b"heavy", False),
@@ -125,7 +123,7 @@ def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_th
             raise OneRound
         return segments
 
-    trainer = LevelTrainer(trainer_tas(tmp_path, calls, extend, improve), kept, POWER_ON, None, NO_REEL)
+    trainer = LevelTrainer(trainer_tas(tmp_path, calls, extend, improve), kept, POWER_ON, NO_REEL)
     with pytest.raises(OneRound):
         trainer.forever()
 
@@ -145,16 +143,13 @@ def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_th
     assert load_progress(tmp_path / "progress.msgpack") == []
 
 
-def test_unbeaten_levels_take_turns_and_a_level_without_its_part_before_starts_from_the_level_loader(
+def test_levels_are_beaten_one_after_the_other_each_from_where_the_level_before_ends(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
     monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path, done: None)
     monkeypatch.setattr(levels, "write_prior", lambda runner, kept, path: None)
     monkeypatch.setattr(levels, "practised", pieces)
-    monkeypatch.setattr(
-        levels, "level_start", lambda runner, loader, level, state: Start(state, f"cheat {level}".encode())
-    )
     kept = routes(tmp_path)
     kept.split(RUN[:1], POWER_ON)
     calls: list = []
@@ -162,28 +157,23 @@ def test_unbeaten_levels_take_turns_and_a_level_without_its_part_before_starts_f
 
     def extend(leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
         calls.append((leg.name, leg.entry, patience))
-        if leg.name == "Level 2" or len(calls) > 2:
-            kept.save(leg, beats[leg.name])
+        kept.save(leg, beats[leg.name])
         return segments
 
     def improve(leg: Leg, segments: list[Segment]) -> list[Segment]:
         raise OneRound
 
-    trainer = LevelTrainer(
-        trainer_tas(tmp_path, [], extend, improve), kept, POWER_ON, levels.LevelLoader(b"loader", 2), NO_REEL
-    )
+    trainer = LevelTrainer(trainer_tas(tmp_path, [], extend, improve), kept, POWER_ON, NO_REEL)
     with pytest.raises(OneRound):
         trainer.forever()
 
-    patience = levels.PRACTICE_SEARCHES
     assert calls == [
-        ("Level 1", Start("Play", b"play"), patience),
-        ("Level 2", Start("Level2", b"cheat 1"), patience),
-        ("Level 1", Start("Play", b"play"), patience),
+        ("Level 1", Start("Play", b"play"), None),
+        ("Level 2", Start("Level2", b"level2"), None),
     ]
 
 
-def test_an_unbeaten_level_loaded_before_the_level_before_it_was_beaten_starts_where_that_level_now_ends(
+def test_a_level_is_searched_until_it_is_beaten_before_the_next_one_starts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
@@ -191,87 +181,17 @@ def test_an_unbeaten_level_loaded_before_the_level_before_it_was_beaten_starts_w
     monkeypatch.setattr(levels, "write_prior", lambda runner, kept, path: None)
     monkeypatch.setattr(levels, "practised", pieces)
     kept = routes(tmp_path)
-    kept.split(RUN[:3], POWER_ON)
-    kept.save(Leg("Level 2", Start("Level2", b"cheat 1"), None), [Segment("Level2", [[1]], b"dead end", False)])
-    calls: list = []
-
-    def extend(leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
-        calls.append((leg.name, leg.entry))
-        raise OneRound
-
-    trainer = LevelTrainer(
-        trainer_tas(tmp_path, [], extend, None), kept, POWER_ON, levels.LevelLoader(b"loader", 2), NO_REEL
-    )
-    with pytest.raises(OneRound):
-        trainer.forever()
-
-    assert calls == [("Level 2", Start("Level2", b"level2"))]
-
-
-@pytest.mark.parametrize(
-    ("turn", "first"),
-    [
-        (Turn("Level 2", 1), "Level 2"),
-        (Turn("Level 1", levels.PRACTICE_SEARCHES), "Level 2"),
-        (Turn("Level 1", levels.PRACTICE_SEARCHES, 1), "Level 1"),
-        (None, "Level 1"),
-    ],
-)
-def test_after_a_restart_the_levels_take_turns_from_the_turn_that_was_running(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, turn: Turn | None, first: str
-):
-    monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
-    monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path, done: None)
-    monkeypatch.setattr(levels, "write_prior", lambda runner, kept, path: None)
-    monkeypatch.setattr(levels, "practised", pieces)
-    monkeypatch.setattr(levels, "level_start", lambda runner, loader, level, state: Start(state, b"cheat"))
-    kept = routes(tmp_path)
     kept.split(RUN[:1], POWER_ON)
-    if turn is not None:
-        save_turn(tmp_path / "turn.json", turn)
-    practised: list[str] = []
+    searched: list[str] = []
 
     def extend(leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
-        practised.append(leg.name)
-        raise OneRound
+        searched.append(leg.name)
+        if len(searched) == 3:
+            raise OneRound
+        return segments
 
-    trainer = LevelTrainer(
-        trainer_tas(tmp_path, [], extend, None), kept, POWER_ON, levels.LevelLoader(b"loader", 2), NO_REEL
-    )
+    trainer = LevelTrainer(trainer_tas(tmp_path, [], extend, None), kept, POWER_ON, NO_REEL)
     with pytest.raises(OneRound):
         trainer.beat_levels()
 
-    assert practised == [first]
-
-
-def test_after_the_game_package_changes_the_states_of_a_level_that_level_takes_the_next_turn(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
-    monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path, done: None)
-    monkeypatch.setattr(levels, "write_prior", lambda runner, kept, path: None)
-    monkeypatch.setattr(levels, "practised", pieces)
-    monkeypatch.setattr(levels, "level_start", lambda runner, loader, level, state: Start(state, b"cheat"))
-    kept = routes(tmp_path)
-    kept.split(RUN[:1], POWER_ON)
-    tas = trainer_tas(tmp_path, [], None, None)
-    practised: list[str] = []
-
-    def extend(leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
-        practised.append(leg.name)
-        raise OneRound
-
-    tas.extend = extend
-    tas.feed.course = COURSE
-    levels.turn_to_changed_level(tas)
-    save_turn(tas.turn_file, Turn("Level 1", 1))
-    levels.turn_to_changed_level(tas)
-    assert load_turn(tas.turn_file) == Turn("Level 1", 1)
-    tas.feed.course = SimpleNamespace(first="Menu", levels={**COURSE.levels, "Level 2": ("Level2", "Bridge2", "Boss2")})
-    levels.turn_to_changed_level(tas)
-
-    trainer = LevelTrainer(tas, kept, POWER_ON, levels.LevelLoader(b"loader", 2), NO_REEL)
-    with pytest.raises(OneRound):
-        trainer.beat_levels()
-
-    assert practised == ["Level 2"]
+    assert searched == ["Level 1", "Level 1", "Level 1"]

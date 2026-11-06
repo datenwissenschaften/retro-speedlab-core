@@ -12,9 +12,8 @@ this repository turns it into a speedrun.
 
 - **Power-on start like a real speedrun**: every movie boots the game at its
   title screen; levels are states of one full-game run
-- **Every level practised on its own**: the engine keeps the frame before the
-  first level change a route makes and loads any level from it; the levels take
-  turns of three searches each
+- **Level by level**: the search stays on the earliest unbeaten level until it is
+  beaten, starting where the route of the level before it ends, then moves on
 - **Three search modes per segment** on many emulator processes: Go-Explore
   walks, a breadth-first frontier search over short input combinations and a
   Monte Carlo tree search
@@ -142,7 +141,7 @@ game package.
 
 `cache/reference/route.json` lists, per 16 px cell of every beaten level, how
 many frames the level's route still needed from there to its exit, and is
-rewritten after every level's turn. A row may end in what the run had there, in
+rewritten whenever a level's route changes. A row may end in what the run had there, in
 the game's `dynamics()` order (Snake Rattle 'n Roll: weight, pieces on the scale,
 speed); such a row counts only for a snake that has at least as much, so the map
 leads over nibbleys and power-ups too. The search weights cells on the route by
@@ -180,11 +179,10 @@ once five new reports landed in `agent/reports/` since its last review; the
 stream shows its lessons as `metadata.critic`. Then it starts a lab run
 (`agent/daily.sh` of the game package) once no level stored a piece, the movie
 did not improve and no lab run ended for `agent.stall_minutes` minutes, as the
-journal records them; a checkpoint is no piece, and a level
-resting after its turn does not call the lab, since the next level may move. Claude Code works
+journal records them; a checkpoint is no piece. Claude Code works
 for `agent.minutes` minutes on its own git worktree of the game package, and its
 branch ships only when its checks pass and the current movie still replays with
-it (`tas.run verify`). The lead session delegates to the subagents defined in the
+it (`speedrun.run verify`). The lead session delegates to the subagents defined in the
 game package's `.claude/agents/`; the stream shows each member's role, state and
 latest step and every hand-off with its short task, the lead's latest actions
 (only the kind of action and the source files it touches), its commit subjects

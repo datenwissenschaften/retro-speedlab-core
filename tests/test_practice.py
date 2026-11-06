@@ -8,15 +8,8 @@ from fakes import FakeRam, FakeWrapper, SavingEmulator, fake_routes
 
 from datenwissenschaften.route.position import Position
 from datenwissenschaften.speedrun.movie import Segment
-from datenwissenschaften.speedrun.practice import (
-    LevelLoader,
-    ensure_loader,
-    level_start,
-    loader_in,
-    practised,
-    write_practice_route,
-)
-from datenwissenschaften.speedrun.routes import Leg, Part, PartProgress, Route, Routes
+from datenwissenschaften.speedrun.practice import practised, write_practice_route
+from datenwissenschaften.speedrun.routes import Leg, Part, PartProgress, Routes
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.states.levels import level_states
 
@@ -69,30 +62,6 @@ def level_runner(tmp_path: Path) -> tuple[SegmentRunner, list[tuple[int, int]]]:
     pokes: list[tuple[int, int]] = []
     emulator.data.memory = SimpleNamespace(assign=lambda address, kind, value: pokes.append((address, value)))
     return SegmentRunner(LevelWrapper(emulator, fake_routes(tmp_path))), pokes
-
-
-def test_the_frame_before_a_route_changes_the_level_loads_any_level(tmp_path: Path):
-    runner, pokes = level_runner(tmp_path)
-    route = Route(bytes([0]), [Segment("Survive", [[1, 0]] * 4, b"", False)])
-
-    loader = loader_in(runner, route)
-
-    assert loader == LevelLoader(bytes([1]), 1)
-    assert level_start(runner, loader, 1, "Level2") == Start("Level2", bytes([2]))
-    assert pokes == [(LEVEL_ADDRESS, 0)]
-    with pytest.raises(RuntimeError, match="level 4 into no play"):
-        level_start(runner, loader, 4, "Level5")
-
-
-def test_the_loader_is_found_once_and_kept(tmp_path: Path):
-    runner, _ = level_runner(tmp_path)
-    routes = SimpleNamespace(routes={"old": Route(bytes([0]), [Segment("Survive", [[1, 0]] * 4, b"", False)])})
-    path = tmp_path / "loader.msgpack"
-
-    found = ensure_loader(path, runner, routes)
-
-    assert ensure_loader(path, runner, SimpleNamespace(routes={})) == found == LevelLoader(bytes([1]), 1)
-    assert ensure_loader(tmp_path / "none.msgpack", runner, SimpleNamespace(routes={})) is None
 
 
 def test_a_beaten_part_tells_the_route_map_how_many_frames_each_place_is_from_its_end(tmp_path: Path):
