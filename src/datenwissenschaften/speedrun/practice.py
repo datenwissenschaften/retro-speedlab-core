@@ -9,11 +9,13 @@ from datenwissenschaften.speedrun.routes import Part, PartProgress, Route, Route
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 
 
-def part_steps(runner: SegmentRunner, entry: Start, route: Route, first: int) -> list[Step]:
-    runner.restore(entry)
+def part_steps(runner: SegmentRunner, part: Part, route: Route, first: int) -> list[Step]:
+    runner.restore(Start(part.entry_state, route.entry))
     steps: list[Step] = []
     for frame, buttons in enumerate((buttons for segment in route.segments for buttons in segment.pressed), first):
         runner.press(np.asarray(buttons, dtype=np.int8))
+        if runner.wrapper.state_machine.state_name == part.exit:
+            break
         position = runner.ram.position()
         if position is not None:
             steps.append((frame, position.area, position.x, position.y))
@@ -43,7 +45,7 @@ def write_practice_route(runner: SegmentRunner, routes: Routes, path: Path, done
         if part.name in done and done[part.name].beaten:
             route = routes.routes[part.name]
             first = steps[-1][0] + LEVEL_GAP_FRAMES + 1 if steps else 0
-            steps += part_steps(runner, Start(part.entry_state, route.entry), route, first)
+            steps += part_steps(runner, part, route, first)
     if not steps:
         return
     path.parent.mkdir(parents=True, exist_ok=True)

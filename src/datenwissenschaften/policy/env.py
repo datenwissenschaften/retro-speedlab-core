@@ -14,9 +14,9 @@ from datenwissenschaften.speedrun.runner import Start
 from datenwissenschaften.speedrun.search import leaves
 from datenwissenschaften.speedrun.workers import worker_runner
 
-EPISODE_DECISIONS = 128
+EPISODE_DECISIONS = 512
 NOVELTY_REWARD = 0.01
-EXIT_REWARD = 10.0
+EXIT_REWARD = 100.0
 DEATH_PENALTY = 1.0
 POLICY_MODE = "policy"
 EXIT = "exit"

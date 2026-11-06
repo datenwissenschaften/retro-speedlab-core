@@ -75,7 +75,7 @@ def test_a_beaten_part_tells_the_route_map_how_many_frames_each_place_is_from_it
     write_practice_route(runner, routes, path, practised(runner, routes))
 
     assert practised(runner, routes) == {"Survive": PartProgress("Boss", 1, 3, True, False, {"lives": 3, "score": 6})}
-    assert json.loads(path.read_text(encoding="utf-8")) == [[0, 0, 0, 2, 0]]
+    assert json.loads(path.read_text(encoding="utf-8")) == [[0, 0, 0, 0, 0]]
 
 
 def test_an_unbeaten_part_reports_how_far_it_got_and_leaves_the_route_map_as_it_was(tmp_path: Path):
