@@ -13,6 +13,7 @@ from datenwissenschaften.speedrun.runner import CellKey, SegmentRunner, Start
 from datenwissenschaften.speedrun.search import Cell
 
 KEPT_ARCHIVES = 12
+ARCHIVES_IN_MEMORY = 2
 KEPT_CELLS = 1000
 SCORED_CELLS = KEPT_CELLS // 2
 
@@ -60,7 +61,7 @@ class Archives:
     def __init__(self, directory: Path, files: int) -> None:
         self.directory = directory
         self.files = files
-        self.kept: LRUCache[ArchiveKey, Archive] = LRUCache(maxsize=KEPT_ARCHIVES)
+        self.kept: LRUCache[ArchiveKey, Archive] = LRUCache(maxsize=ARCHIVES_IN_MEMORY)
         directory.mkdir(parents=True, exist_ok=True)
 
     def resumed(self, runner: SegmentRunner, start: Start, bound: int) -> Archive:
@@ -69,7 +70,10 @@ class Archives:
             return self.kept[key]
         single = self.directory / f"{key}{ARCHIVE_SUFFIX}"
         saved = [*sorted((self.directory / key).glob(f"*{ARCHIVE_SUFFIX}")), *([single] if single.is_file() else [])]
-        return merged([fresh_archive(runner, start), *(Archive(*load_archive(path)) for path in saved)])
+        archive = fresh_archive(runner, start)
+        for path in saved:
+            archive = merged([archive, Archive(*load_archive(path))])
+        return archive
 
     def keep(self, start: Start, bound: int, archive: Archive) -> None:
         key = archive_key(start, bound)

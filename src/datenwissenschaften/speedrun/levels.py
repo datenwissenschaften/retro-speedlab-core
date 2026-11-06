@@ -1,4 +1,5 @@
 import multiprocessing
+from multiprocessing.process import BaseProcess
 from pathlib import Path
 
 from loguru import logger
@@ -68,7 +69,7 @@ class LevelTrainer:
             self.full_run()
 
 
-def start_policy(wrapper: str, config: Path) -> None:
+def start_policy(wrapper: str, config: Path) -> BaseProcess:
     from datenwissenschaften.policy.trainer import train_policy_forever
 
     trainer = multiprocessing.get_context("spawn").Process(
@@ -76,15 +77,27 @@ def start_policy(wrapper: str, config: Path) -> None:
     )
     trainer.start()
     logger.info(f"The policy trains with PPO in process {trainer.pid}")
+    return trainer
 
 
-def speedrun_forever(wrapper: str, config: Path) -> None:
+def search_forever(wrapper: str, config: Path) -> None:
     settings = load_config(config)
-    ensure_reference(settings)
-    if settings.speedrun.policy:
-        start_policy(wrapper, config)
     with worker_pool(settings.speedrun.workers) as pool:
         tas = tas_run(wrapper, config, pool)
         reel = Reel(settings, tas.feed, tas.runner, tas.routes)
         matching = ReferenceMatching(wrapper, config, pool, tas.feed)
         LevelTrainer(tas, tas.routes, tas.runner.power_on(), reel, matching).forever()
+
+
+def speedrun_forever(wrapper: str, config: Path) -> None:
+    settings = load_config(config)
+    ensure_reference(settings)
+    if not settings.speedrun.policy:
+        search_forever(wrapper, config)
+        return
+    trainer = start_policy(wrapper, config)
+    try:
+        search_forever(wrapper, config)
+    finally:
+        logger.info("The search stopped, so the policy stops too")
+        trainer.terminate()
