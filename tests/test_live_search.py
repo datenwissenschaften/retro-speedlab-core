@@ -321,6 +321,10 @@ def test_the_feed_publishes_how_much_of_the_reference_video_each_level_matched(t
     feed.show([Segment("Play", [[0, 1]] * 60, b"", False)], "Play")
     before = published[-1]["reference_progress"]
 
-    feed.referenced([{"level": 0, "matched": 40, "frames": 300}])
+    feed.referenced([{"level": 0, "matched": 40, "frames": 300}, {"level": 7, "matched": 0, "frames": 90}])
 
-    assert before == [] and published[-1]["reference_progress"] == [{"level": 0, "matched": 40, "frames": 300}]
+    assert before == {}
+    assert published[-1]["reference_progress"] == {
+        next(iter(course(tmp_path).levels)): {"matched": 40, "frames": 300},
+        "Level 8": {"matched": 0, "frames": 90},
+    }
