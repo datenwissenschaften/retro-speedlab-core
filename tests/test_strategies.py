@@ -17,7 +17,7 @@ from datenwissenschaften.tas.novelty import RamNovelty
 from datenwissenschaften.tas.prior import ActionPrior, learned_table
 from datenwissenschaften.tas.routes import Leg, Part, Routes
 from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.tas.search import UNBOUNDED
+from datenwissenschaften.tas.search import UNBOUNDED, Trail
 from datenwissenschaften.tas.strategies import frontier
 from datenwissenschaften.tas.tree import tree
 
@@ -141,14 +141,27 @@ def test_each_search_process_keeps_its_own_file_and_a_restart_merges_them(tmp_pa
 def test_a_kept_archive_holds_the_best_scored_and_the_rarest_places():
     explored = exploration()
     root = explored.archive[next(iter(explored.archive))]
-    scored = {index: replace(root, score=float(index), novelty=0) for index in range(KEPT_CELLS)}
-    rare = {f"rare{index}": replace(root, score=-1.0, novelty=100) for index in range(5)}
+    place = replace(root, trail=Trail(None, np.zeros((1, 1), dtype=np.int8)))
+    scored = {index: replace(place, score=float(index), novelty=0) for index in range(KEPT_CELLS)}
+    rare = {f"rare{index}": replace(place, score=-1.0, novelty=100) for index in range(5)}
 
     kept = pruned(Archive({**scored, **rare}, explored.novelty)).cells
 
     assert len(kept) == KEPT_CELLS
     assert rare.keys() <= kept.keys()
     assert KEPT_CELLS - 1 in kept
+
+
+def test_a_kept_archive_keeps_its_start_however_many_places_score_higher():
+    explored = exploration()
+    key, root = next(iter(explored.archive.items()))
+    place = replace(root, trail=Trail(None, np.zeros((1, 1), dtype=np.int8)), visits=0)
+    better = {index: replace(place, score=float(index + 1), novelty=index) for index in range(2 * KEPT_CELLS)}
+
+    kept = pruned(Archive({key: replace(root, visits=50), **better}, explored.novelty)).cells
+
+    assert len(kept) == KEPT_CELLS
+    assert kept[key].trail is None
 
 
 def test_a_map_saved_as_one_file_by_the_last_release_is_still_read_and_then_moved(tmp_path: Path):
