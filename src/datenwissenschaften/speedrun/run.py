@@ -325,7 +325,8 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
         course, journal, output / LIVE_DIR, output / STUCK_FILE, settings.paths.lab_run_marker, experiment, catalog
     )
     lab_running = settings.paths.lab_run_marker.exists()
-    publishing = threading.Thread(target=publish_every, args=(feed, threading.Event(), lab_running), name="speedrun-feed")
+    stopped = threading.Event()
+    publishing = threading.Thread(target=publish_every, args=(feed, stopped, lab_running), name="speedrun-feed")
     publishing.daemon = True
     publishing.start()
     movie, compare = screen(settings, feed, "movie", render_movie), screen(settings, feed, "compare", render_compare)
