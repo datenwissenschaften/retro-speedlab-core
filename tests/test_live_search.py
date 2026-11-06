@@ -215,7 +215,7 @@ def test_the_feed_publishes_the_movie_with_the_live_search_and_notices_a_lab_run
     feed.begin(SearchRound("Level2", 0, 2, STARTED, 120.0, None))
     searching = published[-1]
     marker.write_text("{}", encoding="utf-8")
-    feed.publish_every(SimpleNamespace(wait=lambda seconds: len(published) > 2))
+    feed_module.publish_every(feed, SimpleNamespace(wait=lambda seconds: len(published) > 2), False)
     feed.end()
     feed.shown("movie", {"version": "abc", "frames": 120})
     feed.shown("compare", {"version": "def"})
@@ -303,3 +303,24 @@ def test_the_feed_publishes_how_far_every_level_got_in_seconds(tmp_path: Path, m
             "seconds": 1.5,
         }
     }
+
+
+def test_the_feed_publishes_how_much_of_the_reference_video_each_level_matched(tmp_path: Path, monkeypatch):
+    published: list[dict] = []
+    monkeypatch.setattr(feed_module, "publish_metadata", lambda section, values: published.append(values))
+    journal = JournalStore(tmp_path / "journal.json")
+    feed = SpeedrunFeed(
+        course(tmp_path),
+        journal,
+        tmp_path / "live",
+        tmp_path / "stuck.json",
+        tmp_path / ".lab-run",
+        NO_EXPERIMENT,
+        fake_catalog(tmp_path),
+    )
+    feed.show([Segment("Play", [[0, 1]] * 60, b"", False)], "Play")
+    before = published[-1]["reference_progress"]
+
+    feed.referenced([{"level": 0, "matched": 40, "frames": 300}])
+
+    assert before == [] and published[-1]["reference_progress"] == [{"level": 0, "matched": 40, "frames": 300}]

@@ -142,14 +142,14 @@ def test_a_level_is_the_play_between_two_long_dark_screens_and_short_fades_stay_
         [np.ones(200), np.zeros(50), np.ones(30), np.zeros(50), np.ones(200), np.zeros(40), np.ones(200)]
     )
 
-    assert play.level_spans(dark.astype(bool), 2) == [(200, 330), (530, 570)]
+    assert play.level_spans(dark.astype(bool), 2, 60) == [(200, 330), (530, 570)]
 
 
 def test_a_video_whose_dark_screens_frame_other_levels_than_the_game_has_fails():
     dark = np.concatenate([np.zeros(300), np.ones(200), np.zeros(300)]).astype(bool)
 
     with pytest.raises(RuntimeError, match="0 levels"):
-        play.level_spans(dark, 1)
+        play.level_spans(dark, 1, 60)
 
 
 def test_a_score_screen_is_dark_but_a_dim_level_is_not():

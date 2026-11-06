@@ -46,7 +46,7 @@ class SpeedrunFeed:
         self.screened: dict[str, dict[str, Any] | None] = {"movie": None, "compare": None}
         self.practice: dict[str, dict[str, Any]] = {}
         self.reel: dict[str, dict[str, Any]] = {}
-        self.lab_running = lab_marker.exists()
+        self.reference: list[dict[str, int]] = []
         live.mkdir(parents=True, exist_ok=True)
 
     def show(self, segments: list[Segment], searching: str) -> None:
@@ -74,13 +74,15 @@ class SpeedrunFeed:
             self.reel = {name: video for name, video in self.reel.items() if name != level}
 
     def practised(self, progress: dict[str, PartProgress]) -> None:
-        practice = {level: self.level_progress(part) for level, part in progress.items()}
+        practice = {level: level_progress(part, self.course.frame_rate) for level, part in progress.items()}
         with self.lock:
             self.practice = practice
         self.publish()
 
-    def level_progress(self, part: PartProgress) -> dict[str, Any]:
-        return {**msgspec.to_builtins(part), "seconds": part.frames / self.course.frame_rate}
+    def referenced(self, progress: list[dict[str, int]]) -> None:
+        with self.lock:
+            self.reference = progress
+        self.publish()
 
     def event(self, kind: str, state: str | None, frames: int | None) -> None:
         self.journal.event(kind, state, frames)
@@ -102,22 +104,30 @@ class SpeedrunFeed:
         with self.lock:
             summary, search, screened, practice = self.summary, self.search, self.screened, self.practice
             reel = sorted(self.reel.values(), key=lambda video: video[REEL_ORDER])
+            reference = self.reference
         if not summary:
             return
         reports = [] if search is None else read_reports(self.live)
         now = datetime.now(UTC)
         live = {"search": search_field(search, reports, now), "updated_at": now.isoformat(timespec="seconds")}
-        fields = {**summary, **screened, "practice": practice, "reel": reel, **self.catalog.fields()}
+        fields = {**summary, **screened, "practice": practice, "reel": reel, "reference_progress": reference}
+        fields = {**fields, **self.catalog.fields()}
         publish_metadata(SECTION, {**fields, **self.journal.fields(), **live})
 
-    def notice_lab(self) -> None:
+    def notice_lab(self, was_running: bool) -> bool:
         running = self.lab_marker.exists()
-        if running and not self.lab_running:
+        if running and not was_running:
             stuck = load_stuck(self.stuck)
             self.event("lab", self.searching if stuck is None else stuck.state, None)
-        self.lab_running = running
+        return running
 
-    def publish_every(self, stopped: threading.Event) -> None:
-        while not stopped.wait(PUBLISH_SECONDS):
-            self.notice_lab()
-            self.publish()
+
+def level_progress(part: PartProgress, frame_rate: float) -> dict[str, Any]:
+    return {**msgspec.to_builtins(part), "seconds": part.frames / frame_rate}
+
+
+def publish_every(feed: SpeedrunFeed, stopped: threading.Event, lab_running: bool) -> None:
+    running = lab_running
+    while not stopped.wait(PUBLISH_SECONDS):
+        running = feed.notice_lab(running)
+        feed.publish()

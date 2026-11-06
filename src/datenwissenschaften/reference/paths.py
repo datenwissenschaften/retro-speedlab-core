@@ -5,6 +5,9 @@ from datenwissenschaften.settings import RetroSpeedlabConfig
 REFERENCE_DIR = "reference"
 FRAMES_DIR = "frames"
 VIDEO_FILE = "video"
+MATCHES_FILE = "matches.json"
+SCREENS_FILE = "screens.msgpack"
+THUMBS_FILE = "frames.npz"
 
 
 def reference_dir(settings: RetroSpeedlabConfig) -> Path:

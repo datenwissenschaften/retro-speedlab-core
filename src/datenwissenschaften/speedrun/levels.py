@@ -4,6 +4,7 @@ from pathlib import Path
 from loguru import logger
 
 from datenwissenschaften.reference.fetch import ensure_reference
+from datenwissenschaften.reference.matching import ReferenceMatching
 from datenwissenschaften.route.paths import route_path
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.speedrun.practice import practised, write_practice_route
@@ -15,9 +16,10 @@ from datenwissenschaften.speedrun.runner import Start
 
 
 class LevelTrainer:
-    def __init__(self, tas: Tas, routes: Routes, power_on: Start, reel: Reel) -> None:
+    def __init__(self, tas: Tas, routes: Routes, power_on: Start, reel: Reel, matching: ReferenceMatching) -> None:
         self.tas = tas
         self.reel = reel
+        self.matching = matching
         self.routes = routes
         self.power_on = power_on
         if not routes.path.is_file():
@@ -39,6 +41,7 @@ class LevelTrainer:
         write_prior(self.tas.runner, self.routes, self.tas.output / PRIOR_FILE)
         self.tas.feed.practised(done)
         self.reel.show()
+        self.matching.refresh()
 
     def beat_levels(self) -> None:
         self.share_practice()
@@ -83,4 +86,5 @@ def speedrun_forever(wrapper: str, config: Path) -> None:
     with worker_pool(settings.speedrun.workers) as pool:
         tas = tas_run(wrapper, config, pool)
         reel = Reel(settings, tas.feed, tas.runner, tas.routes)
-        LevelTrainer(tas, tas.routes, tas.runner.power_on(), reel).forever()
+        matching = ReferenceMatching(wrapper, config, pool, tas.feed)
+        LevelTrainer(tas, tas.routes, tas.runner.power_on(), reel, matching).forever()

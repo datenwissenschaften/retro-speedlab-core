@@ -156,6 +156,43 @@ and variables) with [yt-dlp](https://github.com/yt-dlp/yt-dlp) to
 `cache/reference/frames/<seconds>s.png` for the lab. It fails when that run has
 no video. Delete `cache/reference/frames` to fetch the run again.
 
+The video is never read on its own: its frames are compared with screens the
+emulator rendered. At startup and every time the route memory is rewritten (after
+each beaten level and each improve round) one worker of the pool, unless the
+previous matching still runs, renders one frame after every placed cell of the
+search archives (`cache/tas/archives`, one save state per state and cell key) and
+caches the screen with its RAM position, level and `dynamics()` in
+`cache/reference/screens.msgpack`, so only new places are rendered. Video frames
+lose their black border (found from every tenth frame) and are cached in
+`cache/reference/frames.npz`. Both become 32x30 thumbnails. Rows that barely
+change across a level's emulator screens (HUD, borders: below a quarter of the
+median row spread) are left out, and the distance is 1 minus the Pearson
+correlation of the remaining pixels, so brightness and contrast of the capture do
+not count. The video splits into levels at dark score screens of at least 3 s, and
+a frame is compared only with the emulator screens of its level. It counts as
+matched only if its best distance is at most 0.2 and the best screen of a distinct
+place (another area or more than one 16 px cell away) is at least 0.1 further;
+every other frame stays unmatched, also when the level knows no second place.
+`cache/reference/matches.json` holds
+
+```json
+{
+  "levels": [{"level": 0, "frames": 640, "matched": 212,
+              "waypoints": [{"seconds": 31.25, "cell": [3, 4, 9], "state": "Play"}]}],
+  "matches": [{"seconds": 31.25, "state": "Play", "level": 0, "area": 3, "x": 70,
+               "y": 150, "cell": [3, 4, 9], "distance": 0.08}]
+}
+```
+
+where `frames` counts the level's frames that are not dark and the waypoints are
+the matched cells in video order, one per change of cell.
+`cache/reference/video_route.json` is a route memory file
+(`[area, x // 16, y // 16, frame, frames_left, *dynamics]`): per cell and dynamics
+the fewest emulator frames (at the emulator's frame rate) from the frame to the end
+of its level in the video, carrying what the human had there; the route map
+merges it with `route.json`. The stream gets `metadata.speedrun.reference_progress`,
+`[{"level": 0, "matched": 212, "frames": 640}]`, and `search.log` a line per level.
+
 ## Sprites and game knowledge
 
 The engine reads what the NES draws, not what a picture looks like: every

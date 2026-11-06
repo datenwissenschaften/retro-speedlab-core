@@ -16,7 +16,7 @@ from datenwissenschaften.experiments import start_experiment
 from datenwissenschaften.knowledge import knowledge_path, load_knowledge
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, RetroSpeedlabPaths, load_config
-from datenwissenschaften.speedrun.feed import SpeedrunFeed
+from datenwissenschaften.speedrun.feed import SpeedrunFeed, publish_every
 from datenwissenschaften.speedrun.footage import compare_cut, movie_cut, render_compare, render_movie
 from datenwissenschaften.speedrun.hints import Hint, hinted, hints_path, load_hints, pressed
 from datenwissenschaften.speedrun.journal import JOURNAL_FILE, JournalStore
@@ -324,7 +324,10 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
     feed = SpeedrunFeed(
         course, journal, output / LIVE_DIR, output / STUCK_FILE, settings.paths.lab_run_marker, experiment, catalog
     )
-    threading.Thread(target=feed.publish_every, args=(threading.Event(),), name="speedrun-feed", daemon=True).start()
+    lab_running = settings.paths.lab_run_marker.exists()
+    publishing = threading.Thread(target=publish_every, args=(feed, threading.Event(), lab_running), name="speedrun-feed")
+    publishing.daemon = True
+    publishing.start()
     movie, compare = screen(settings, feed, "movie", render_movie), screen(settings, feed, "compare", render_compare)
     searcher = Searcher(wrapper, config, settings, pool, feed)
     routes = Routes(output / ROUTES_FILE, output / PROGRESS_FILE, parts_of(course))

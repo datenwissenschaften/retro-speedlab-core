@@ -20,6 +20,7 @@ from datenwissenschaften.speedrun.runner import Start
 COURSE = SimpleNamespace(first="Menu", levels={"Level 1": ("Play", "Heavy"), "Level 2": ("Level2", "Boss2")})
 POWER_ON = Start("Menu", b"on")
 NO_REEL = SimpleNamespace(show=lambda: None)
+NO_MATCHING = SimpleNamespace(refresh=lambda: None)
 RUN = [
     Segment("Play", [[1]] * 3, b"play", False),
     Segment("Heavy", [[1]] * 4, b"heavy", False),
@@ -123,7 +124,7 @@ def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_th
             raise OneRound
         return segments
 
-    trainer = LevelTrainer(trainer_tas(tmp_path, calls, extend, improve), kept, POWER_ON, NO_REEL)
+    trainer = LevelTrainer(trainer_tas(tmp_path, calls, extend, improve), kept, POWER_ON, NO_REEL, NO_MATCHING)
     with pytest.raises(OneRound):
         trainer.forever()
 
@@ -163,7 +164,7 @@ def test_levels_are_beaten_one_after_the_other_each_from_where_the_level_before_
     def improve(leg: Leg, segments: list[Segment]) -> list[Segment]:
         raise OneRound
 
-    trainer = LevelTrainer(trainer_tas(tmp_path, [], extend, improve), kept, POWER_ON, NO_REEL)
+    trainer = LevelTrainer(trainer_tas(tmp_path, [], extend, improve), kept, POWER_ON, NO_REEL, NO_MATCHING)
     with pytest.raises(OneRound):
         trainer.forever()
 
@@ -190,7 +191,7 @@ def test_a_level_is_searched_until_it_is_beaten_before_the_next_one_starts(
             raise OneRound
         return segments
 
-    trainer = LevelTrainer(trainer_tas(tmp_path, [], extend, None), kept, POWER_ON, NO_REEL)
+    trainer = LevelTrainer(trainer_tas(tmp_path, [], extend, None), kept, POWER_ON, NO_REEL, NO_MATCHING)
     with pytest.raises(OneRound):
         trainer.beat_levels()
 

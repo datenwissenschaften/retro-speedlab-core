@@ -5,7 +5,7 @@ import stable_retro as retro
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.ram import RamInfo
 from datenwissenschaften.roms import import_roms
-from datenwissenschaften.route.paths import route_path
+from datenwissenschaften.route.paths import route_path, video_route_path
 from datenwissenschaften.route.route_map import RouteMap
 from datenwissenschaften.settings import RetroSpeedlabConfig
 
@@ -25,4 +25,4 @@ def make_environment(
     )
     env.initial_state = env.em.get_state()
     env.statename = f"{POWER_ON}-{datetime.now(UTC):{SESSION_STAMP}}-{worker}"
-    return wrapper_cls(env, RouteMap((route_path(config),)))
+    return wrapper_cls(env, RouteMap((route_path(config), video_route_path(config))))
