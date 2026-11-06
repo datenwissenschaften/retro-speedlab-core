@@ -2,8 +2,8 @@ import random
 from dataclasses import dataclass
 
 from datenwissenschaften.policy.prior import PolicyPrior
-from datenwissenschaften.tas.prior import ActionPrior
-from datenwissenschaften.tas.runner import SegmentRunner
+from datenwissenschaften.speedrun.prior import ActionPrior
+from datenwissenschaften.speedrun.runner import SegmentRunner
 
 TABLE_SHARE = 0.3
 POLICY_SHARE = 0.2

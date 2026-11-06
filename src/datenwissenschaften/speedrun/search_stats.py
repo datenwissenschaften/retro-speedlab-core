@@ -3,8 +3,8 @@ from datetime import UTC, datetime
 
 import wandb
 
-from datenwissenschaften.tas.journal import JournalStore, Split
-from datenwissenschaften.tas.movie import Segment
+from datenwissenschaften.speedrun.journal import JournalStore, Split
+from datenwissenschaften.speedrun.movie import Segment
 
 SECONDS_PER_HOUR = 3600
 

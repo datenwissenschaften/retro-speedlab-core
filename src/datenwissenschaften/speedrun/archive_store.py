@@ -6,9 +6,9 @@ from typing import Any, cast
 import msgspec
 import numpy as np
 
-from datenwissenschaften.tas.novelty import BYTE_VALUES, RamNovelty, novelty_of
-from datenwissenschaften.tas.runner import CellKey, Start
-from datenwissenschaften.tas.search import Cell, Trail
+from datenwissenschaften.speedrun.novelty import BYTE_VALUES, RamNovelty, novelty_of
+from datenwissenschaften.speedrun.runner import CellKey, Start
+from datenwissenschaften.speedrun.search import Cell, Trail
 
 ARCHIVE_SUFFIX = ".msgpack"
 

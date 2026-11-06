@@ -15,27 +15,27 @@ from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.experiments import start_experiment
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, RetroSpeedlabPaths, load_config
-from datenwissenschaften.tas.feed import SpeedrunFeed
-from datenwissenschaften.tas.footage import compare_cut, movie_cut, render_compare, render_movie
-from datenwissenschaften.tas.hints import Hint, hinted, hints_path, load_hints, pressed
-from datenwissenschaften.tas.journal import JOURNAL_FILE, JournalStore
-from datenwissenschaften.tas.live import LIVE_DIR
-from datenwissenschaften.tas.movie import Segment, frames, verified_segments
-from datenwissenschaften.tas.paths import PROGRESS_FILE, TAS_MOVIE, tas_dir
-from datenwissenschaften.tas.policy_start import (
+from datenwissenschaften.speedrun.feed import SpeedrunFeed
+from datenwissenschaften.speedrun.footage import compare_cut, movie_cut, render_compare, render_movie
+from datenwissenschaften.speedrun.hints import Hint, hinted, hints_path, load_hints, pressed
+from datenwissenschaften.speedrun.journal import JOURNAL_FILE, JournalStore
+from datenwissenschaften.speedrun.live import LIVE_DIR
+from datenwissenschaften.speedrun.movie import Segment, frames, verified_segments
+from datenwissenschaften.speedrun.paths import PROGRESS_FILE, TAS_MOVIE, tas_dir
+from datenwissenschaften.speedrun.policy_start import (
     POLICY_EXITS_FILE,
     POLICY_START_FILE,
     load_policy_exits,
     save_policy_start,
 )
-from datenwissenschaften.tas.report import course_of
-from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Routes, finished, load_progress, parts_of
-from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.tas.screen import Screen
-from datenwissenschaften.tas.search import ROUTE_CHECKPOINT, UNBOUNDED, Checkpoint, Crossing
-from datenwissenschaften.tas.searcher import Searcher
-from datenwissenschaften.tas.shown import SHOWN_FILE, worth_showing
-from datenwissenschaften.tas.stuck import (
+from datenwissenschaften.speedrun.report import course_of
+from datenwissenschaften.speedrun.routes import FULL_RUN, ROUTES_FILE, Leg, Routes, finished, load_progress, parts_of
+from datenwissenschaften.speedrun.runner import SegmentRunner, Start
+from datenwissenschaften.speedrun.screen import Screen
+from datenwissenschaften.speedrun.search import ROUTE_CHECKPOINT, UNBOUNDED, Checkpoint, Crossing
+from datenwissenschaften.speedrun.searcher import Searcher
+from datenwissenschaften.speedrun.shown import SHOWN_FILE, worth_showing
+from datenwissenschaften.speedrun.stuck import (
     BARRED_FILE,
     FAILURES_FILE,
     STUCK_FILE,
@@ -49,7 +49,7 @@ from datenwissenschaften.tas.stuck import (
     save_stuck,
     unbar,
 )
-from datenwissenschaften.tas.turns import TURN_FILE, Turn, save_turn, turn_of
+from datenwissenschaften.speedrun.turns import TURN_FILE, Turn, save_turn, turn_of
 from datenwissenschaften.ui.relay import relay_key
 from datenwissenschaften.ui.video_upload import VideoUpload
 from datenwissenschaften.workflow.wrapper import wrapper_class

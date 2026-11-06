@@ -3,10 +3,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from datenwissenschaften.tas import levels
-from datenwissenschaften.tas.levels import LevelTrainer
-from datenwissenschaften.tas.movie import Segment
-from datenwissenschaften.tas.routes import (
+from datenwissenschaften.speedrun import levels
+from datenwissenschaften.speedrun.levels import LevelTrainer
+from datenwissenschaften.speedrun.movie import Segment
+from datenwissenschaften.speedrun.routes import (
     FULL_RUN,
     ROUTES_FILE,
     Leg,
@@ -15,8 +15,8 @@ from datenwissenschaften.tas.routes import (
     load_progress,
     parts_of,
 )
-from datenwissenschaften.tas.runner import Start
-from datenwissenschaften.tas.turns import Turn, load_turn, save_turn
+from datenwissenschaften.speedrun.runner import Start
+from datenwissenschaften.speedrun.turns import Turn, load_turn, save_turn
 
 COURSE = SimpleNamespace(first="Menu", levels={"Level 1": ("Play", "Heavy"), "Level 2": ("Level2", "Boss2")})
 POWER_ON = Start("Menu", b"on")

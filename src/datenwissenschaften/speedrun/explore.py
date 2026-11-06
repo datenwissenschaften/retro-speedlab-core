@@ -1,14 +1,14 @@
 import random
 import time
 
-from datenwissenschaften.tas.archives import Archives
-from datenwissenschaften.tas.exploration import Exploration
-from datenwissenschaften.tas.live import WorkerLive
-from datenwissenschaften.tas.preferences import Preferences
-from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.tas.search import Searched
-from datenwissenschaften.tas.strategies import frontier, walk
-from datenwissenschaften.tas.tree import tree
+from datenwissenschaften.speedrun.archives import Archives
+from datenwissenschaften.speedrun.exploration import Exploration
+from datenwissenschaften.speedrun.live import WorkerLive
+from datenwissenschaften.speedrun.preferences import Preferences
+from datenwissenschaften.speedrun.runner import SegmentRunner, Start
+from datenwissenschaften.speedrun.search import Searched
+from datenwissenschaften.speedrun.strategies import frontier, walk
+from datenwissenschaften.speedrun.tree import tree
 
 STRATEGIES = (walk, frontier, tree)
 SHARES = (0.6, 0.2, 0.2)

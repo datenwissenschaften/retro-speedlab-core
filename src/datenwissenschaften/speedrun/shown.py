@@ -2,8 +2,8 @@ from pathlib import Path
 
 import msgspec
 
-from datenwissenschaften.tas.movie import Segment, frames
-from datenwissenschaften.tas.paths import atomic_write
+from datenwissenschaften.speedrun.movie import Segment, frames
+from datenwissenschaften.speedrun.paths import atomic_write
 
 SHOWN_FILE = "shown.json"
 

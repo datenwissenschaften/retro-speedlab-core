@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from datenwissenschaften.tas.movie import Segment
-from datenwissenschaften.tas.shown import SHOWN_FILE, worth_showing
+from datenwissenschaften.speedrun.movie import Segment
+from datenwissenschaften.speedrun.shown import SHOWN_FILE, worth_showing
 
 STATES = ("Play", "Fed", "Heavy", "Won")
 

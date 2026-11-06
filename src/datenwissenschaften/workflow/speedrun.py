@@ -3,9 +3,9 @@ from pathlib import Path
 
 from datenwissenschaften.lab.run import publish_lab_run
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
-from datenwissenschaften.tas.levels import speedrun_forever
-from datenwissenschaften.tas.live import LIVE_DIR
-from datenwissenschaften.tas.paths import tas_dir
+from datenwissenschaften.speedrun.levels import speedrun_forever
+from datenwissenschaften.speedrun.live import LIVE_DIR
+from datenwissenschaften.speedrun.paths import tas_dir
 from datenwissenschaften.ui.relay import LiveRelay, relay_key
 from datenwissenschaften.workflow.environment import speedlab
 

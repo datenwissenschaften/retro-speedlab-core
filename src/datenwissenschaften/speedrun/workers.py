@@ -5,15 +5,15 @@ from pathlib import Path
 from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.policy.prior import POLICY_FILE, PolicyPrior
 from datenwissenschaften.settings import load_config
-from datenwissenschaften.tas.archives import Archives
-from datenwissenschaften.tas.explore import search_segment
-from datenwissenschaften.tas.live import WorkerLive
-from datenwissenschaften.tas.paths import archives_dir, tas_dir
-from datenwissenschaften.tas.preferences import Preferences
-from datenwissenschaften.tas.prior import PRIOR_FILE, ActionPrior
-from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.tas.search import Crossing, Searched, shave
-from datenwissenschaften.tas.strategies import WALK
+from datenwissenschaften.speedrun.archives import Archives
+from datenwissenschaften.speedrun.explore import search_segment
+from datenwissenschaften.speedrun.live import WorkerLive
+from datenwissenschaften.speedrun.paths import archives_dir, tas_dir
+from datenwissenschaften.speedrun.preferences import Preferences
+from datenwissenschaften.speedrun.prior import PRIOR_FILE, ActionPrior
+from datenwissenschaften.speedrun.runner import SegmentRunner, Start
+from datenwissenschaften.speedrun.search import Crossing, Searched, shave
+from datenwissenschaften.speedrun.strategies import WALK
 from datenwissenschaften.workflow.wrapper import wrapper_class
 
 

@@ -4,7 +4,7 @@ import wandb
 from loguru import logger
 
 from datenwissenschaften.settings import RetroSpeedlabConfig
-from datenwissenschaften.tas.paths import tas_dir
+from datenwissenschaften.speedrun.paths import tas_dir
 
 API_KEY = "WANDB_API_KEY"
 PROJECT = "retro-speedlab"

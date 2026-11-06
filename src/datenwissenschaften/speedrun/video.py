@@ -11,7 +11,7 @@ from datenwissenschaften.settings import RetroSpeedlabPaths
 
 CONSTANT_RATE_FACTOR = "26"
 PIXEL_SCALE = 2
-PLAYBACK_MODULE = "datenwissenschaften.tas.video"
+PLAYBACK_MODULE = "datenwissenschaften.speedrun.video"
 ENCODING = (
     "-c:v",
     "libx264",

@@ -4,8 +4,8 @@ import msgspec
 import numpy as np
 from numpy.typing import NDArray
 
-from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.tas.search import Crossing, replay
+from datenwissenschaften.speedrun.runner import SegmentRunner, Start
+from datenwissenschaften.speedrun.search import Crossing, replay
 
 HINTS_FILE = "hints.json"
 

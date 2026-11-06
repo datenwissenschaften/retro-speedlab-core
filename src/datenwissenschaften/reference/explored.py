@@ -5,8 +5,8 @@ from pathlib import Path
 import msgspec
 
 from datenwissenschaften.route.route_map import Cell
-from datenwissenschaften.tas.archive_store import ARCHIVE_SUFFIX, StoredArchive, hashable
-from datenwissenschaften.tas.runner import Start, route_cell
+from datenwissenschaften.speedrun.archive_store import ARCHIVE_SUFFIX, StoredArchive, hashable
+from datenwissenschaften.speedrun.runner import Start, route_cell
 
 STARTS_PER_CELL = 2
 

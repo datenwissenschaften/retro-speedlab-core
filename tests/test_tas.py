@@ -6,16 +6,16 @@ import numpy as np
 
 from datenwissenschaften.policy.prior import PolicyPrior
 from datenwissenschaften.route.route_map import RouteMap
-from datenwissenschaften.tas import search
-from datenwissenschaften.tas.archive_store import newest
-from datenwissenschaften.tas.archives import Archives
-from datenwissenschaften.tas.explore import search_segment
-from datenwissenschaften.tas.movie import Segment
-from datenwissenschaften.tas.preferences import Preferences
-from datenwissenschaften.tas.prior import ActionPrior
-from datenwissenschaften.tas.routes import finished, load_progress, save_progress
-from datenwissenschaften.tas.runner import Outcome, Start
-from datenwissenschaften.tas.search import (
+from datenwissenschaften.speedrun import search
+from datenwissenschaften.speedrun.archive_store import newest
+from datenwissenschaften.speedrun.archives import Archives
+from datenwissenschaften.speedrun.explore import search_segment
+from datenwissenschaften.speedrun.movie import Segment
+from datenwissenschaften.speedrun.preferences import Preferences
+from datenwissenschaften.speedrun.prior import ActionPrior
+from datenwissenschaften.speedrun.routes import finished, load_progress, save_progress
+from datenwissenschaften.speedrun.runner import Outcome, Start
+from datenwissenschaften.speedrun.search import (
     UNBOUNDED,
     Cell,
     Checkpoint,

@@ -11,9 +11,9 @@ from fakes import FakeRam, FakeWrapper, SavingEmulator, fake_routes
 from datenwissenschaften.reference import play, samples, video
 from datenwissenschaften.reference.explored import STARTS_PER_CELL, explored_starts
 from datenwissenschaften.route.position import Position
-from datenwissenschaften.tas.archive_store import StoredArchive, StoredCell
-from datenwissenschaften.tas.movie import Segment
-from datenwissenschaften.tas.runner import SegmentRunner, Start
+from datenwissenschaften.speedrun.archive_store import StoredArchive, StoredCell
+from datenwissenschaften.speedrun.movie import Segment
+from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 
 SCRIPT = [(3, 0), (3, 0), (3, 1), (3, 2), (3, 3), (3, 4)]
 LEVELLED_SCRIPT = [(3, 0), (3, 1), (3, 2), (4, 3), (4, 4), (4, 5)]

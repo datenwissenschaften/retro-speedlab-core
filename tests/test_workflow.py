@@ -7,10 +7,10 @@ import msgspec
 import pytest
 from fakes import FakeWrapper, write_config
 
-from datenwissenschaften.tas.journal import JOURNAL_FILE, Journal, JournalStore
-from datenwissenschaften.tas.routes import ROUTES_FILE
-from datenwissenschaften.tas.run import BACKTRACK_SEARCHES
-from datenwissenschaften.tas.stuck import STUCK_FILE, mark_stuck
+from datenwissenschaften.speedrun.journal import JOURNAL_FILE, Journal, JournalStore
+from datenwissenschaften.speedrun.routes import ROUTES_FILE
+from datenwissenschaften.speedrun.run import BACKTRACK_SEARCHES
+from datenwissenschaften.speedrun.stuck import STUCK_FILE, mark_stuck
 from datenwissenschaften.workflow import lab as lab_module
 from datenwissenschaften.workflow.lab import lab, lab_run_due
 from datenwissenschaften.workflow.wrapper import wrapper_class

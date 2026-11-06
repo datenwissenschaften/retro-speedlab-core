@@ -8,19 +8,19 @@ import numpy as np
 from fakes import saving_environment
 from test_tas import NO_PREFERENCES, START, LineRunner
 
-from datenwissenschaften.tas import archives as archives_module
-from datenwissenschaften.tas import exploration as exploration_module
-from datenwissenschaften.tas import explore
-from datenwissenschaften.tas.archives import KEPT_CELLS, Archive, Archives, fresh_archive, pruned
-from datenwissenschaften.tas.exploration import Exploration, Step
-from datenwissenschaften.tas.movie import Segment
-from datenwissenschaften.tas.novelty import RamNovelty
-from datenwissenschaften.tas.prior import ActionPrior, learned_table
-from datenwissenschaften.tas.routes import Leg, Part, Routes
-from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.tas.search import UNBOUNDED, Trail
-from datenwissenschaften.tas.strategies import frontier
-from datenwissenschaften.tas.tree import tree
+from datenwissenschaften.speedrun import archives as archives_module
+from datenwissenschaften.speedrun import exploration as exploration_module
+from datenwissenschaften.speedrun import explore
+from datenwissenschaften.speedrun.archives import KEPT_CELLS, Archive, Archives, fresh_archive, pruned
+from datenwissenschaften.speedrun.exploration import Exploration, Step
+from datenwissenschaften.speedrun.movie import Segment
+from datenwissenschaften.speedrun.novelty import RamNovelty
+from datenwissenschaften.speedrun.prior import ActionPrior, learned_table
+from datenwissenschaften.speedrun.routes import Leg, Part, Routes
+from datenwissenschaften.speedrun.runner import SegmentRunner, Start
+from datenwissenschaften.speedrun.search import UNBOUNDED, Trail
+from datenwissenschaften.speedrun.strategies import frontier
+from datenwissenschaften.speedrun.tree import tree
 
 
 def test_ram_novelty_counts_the_byte_values_never_seen_before():

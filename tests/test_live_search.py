@@ -8,17 +8,17 @@ import pytest
 from fakes import NO_EXPERIMENT, fake_environment, write_config
 
 from datenwissenschaften.settings import load_config
-from datenwissenschaften.tas import feed as feed_module
-from datenwissenschaften.tas.feed import SpeedrunFeed
-from datenwissenschaften.tas.journal import JournalStore, Split, clock
-from datenwissenschaften.tas.live import WorkerLive, WorkerReport, clear_reports, read_reports
-from datenwissenschaften.tas.live_search import SearchRound, search_field
-from datenwissenschaften.tas.mosaic import compose, shown_tiles, tile
-from datenwissenschaften.tas.movie import Segment
-from datenwissenschaften.tas.report import Course, course_of, report, splits, start_frame
-from datenwissenschaften.tas.routes import PartProgress
-from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.tas.search import Cell, Crossing
+from datenwissenschaften.speedrun import feed as feed_module
+from datenwissenschaften.speedrun.feed import SpeedrunFeed
+from datenwissenschaften.speedrun.journal import JournalStore, Split, clock
+from datenwissenschaften.speedrun.live import WorkerLive, WorkerReport, clear_reports, read_reports
+from datenwissenschaften.speedrun.live_search import SearchRound, search_field
+from datenwissenschaften.speedrun.mosaic import compose, shown_tiles, tile
+from datenwissenschaften.speedrun.movie import Segment
+from datenwissenschaften.speedrun.report import Course, course_of, report, splits, start_frame
+from datenwissenschaften.speedrun.routes import PartProgress
+from datenwissenschaften.speedrun.runner import SegmentRunner, Start
+from datenwissenschaften.speedrun.search import Cell, Crossing
 
 STARTED = datetime(2026, 10, 29, 14, 7, 10, tzinfo=UTC)
 START = Start("Survive", b"")

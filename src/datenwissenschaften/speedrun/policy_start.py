@@ -3,8 +3,8 @@ from pathlib import Path
 import msgspec
 import numpy as np
 
-from datenwissenschaften.tas.paths import atomic_write
-from datenwissenschaften.tas.runner import Start
+from datenwissenschaften.speedrun.paths import atomic_write
+from datenwissenschaften.speedrun.runner import Start
 
 POLICY_START_FILE = "policy_start.msgpack"
 POLICY_EXITS_FILE = "policy_exits.msgpack"

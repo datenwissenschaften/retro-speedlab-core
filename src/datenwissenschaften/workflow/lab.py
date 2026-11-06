@@ -9,9 +9,9 @@ from datenwissenschaften.lab.critic import CRITIC_FILE, read_critic
 from datenwissenschaften.lab.reports import publish_reports
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
-from datenwissenschaften.tas.journal import JOURNAL_FILE, last_progress
-from datenwissenschaften.tas.live import LIVE_DIR
-from datenwissenschaften.tas.paths import tas_dir
+from datenwissenschaften.speedrun.journal import JOURNAL_FILE, last_progress
+from datenwissenschaften.speedrun.live import LIVE_DIR
+from datenwissenschaften.speedrun.paths import tas_dir
 from datenwissenschaften.workflow.environment import speedlab
 
 SECONDS_PER_MINUTE = 60

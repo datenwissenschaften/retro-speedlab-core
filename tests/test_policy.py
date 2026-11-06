@@ -15,16 +15,16 @@ from datenwissenschaften.policy import trainer as trainer_module
 from datenwissenschaften.policy.env import EPISODE_DECISIONS, EXIT, PolicyEnv
 from datenwissenschaften.policy.prior import POLICY_FILE, PolicyPrior, observation
 from datenwissenschaften.policy.trainer import RoundCallback, export_policy, policy_model
-from datenwissenschaften.tas.live import read_reports
-from datenwissenschaften.tas.policy_start import (
+from datenwissenschaften.speedrun.live import read_reports
+from datenwissenschaften.speedrun.policy_start import (
     POLICY_EXITS_FILE,
     POLICY_START_FILE,
     load_policy_exits,
     save_policy_start,
 )
-from datenwissenschaften.tas.preferences import Preferences
-from datenwissenschaften.tas.prior import ActionPrior
-from datenwissenschaften.tas.runner import Start
+from datenwissenschaften.speedrun.preferences import Preferences
+from datenwissenschaften.speedrun.prior import ActionPrior
+from datenwissenschaften.speedrun.runner import Start
 
 CPU = torch.device("cpu")
 RIGHT, LEFT = 1, 2

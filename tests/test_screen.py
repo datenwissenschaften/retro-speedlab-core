@@ -8,13 +8,13 @@ import numpy as np
 import pytest
 
 from datenwissenschaften.route.position import Position
-from datenwissenschaften.tas import footage
-from datenwissenschaften.tas.footage import compare_cut, movie_cut, movie_field, render_compare, render_movie
-from datenwissenschaften.tas.movie import Segment, memory_field, memory_sample
-from datenwissenschaften.tas.routes import Leg
-from datenwissenschaften.tas.runner import Start
-from datenwissenschaften.tas.screen import Cut, Screen
-from datenwissenschaften.tas.search import Crossing
+from datenwissenschaften.speedrun import footage
+from datenwissenschaften.speedrun.footage import compare_cut, movie_cut, movie_field, render_compare, render_movie
+from datenwissenschaften.speedrun.movie import Segment, memory_field, memory_sample
+from datenwissenschaften.speedrun.routes import Leg
+from datenwissenschaften.speedrun.runner import Start
+from datenwissenschaften.speedrun.screen import Cut, Screen
+from datenwissenschaften.speedrun.search import Crossing
 
 COURSE = SimpleNamespace(first="PowerOn", frame_rate=60.0)
 LEG = Leg("Level 1", Start("PowerOn", b""), None)
@@ -71,7 +71,7 @@ def test_a_changed_movie_is_rendered_uploaded_with_its_memory_and_shown_once(tmp
 
 def test_an_upload_is_retried_until_the_backend_takes_it(tmp_path: Path, monkeypatch):
     render.directory = tmp_path
-    monkeypatch.setattr("datenwissenschaften.tas.screen.RETRY_SECONDS", 0.0)
+    monkeypatch.setattr("datenwissenschaften.speedrun.screen.RETRY_SECONDS", 0.0)
     shown, uploads = [], []
     movies = Screen("movie", render, flaky_upload([False, True], uploads), shown.append)
 

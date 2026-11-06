@@ -6,9 +6,9 @@ import cv2
 import numpy as np
 from loguru import logger
 
-from datenwissenschaften.tas.movie import Segment
-from datenwissenschaften.tas.runner import CellKey, SegmentRunner, Start
-from datenwissenschaften.tas.search import KEEP_ACTION, Cell, choose
+from datenwissenschaften.speedrun.movie import Segment
+from datenwissenschaften.speedrun.runner import CellKey, SegmentRunner, Start
+from datenwissenschaften.speedrun.search import KEEP_ACTION, Cell, choose
 
 SAMPLES_PER_LEVEL = 5000
 SAMPLE_EVERY_FRAMES = 3

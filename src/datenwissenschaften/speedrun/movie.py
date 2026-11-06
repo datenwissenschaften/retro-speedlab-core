@@ -9,7 +9,7 @@ import numpy as np
 
 from datenwissenschaften.environment.recording import active_movie_path
 from datenwissenschaften.ram import RamInfo
-from datenwissenschaften.tas.runner import SegmentRunner, Start
+from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 
 MEMORY_EVERY = 6
 

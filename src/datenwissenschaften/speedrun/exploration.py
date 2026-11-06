@@ -2,11 +2,11 @@ import time
 from dataclasses import dataclass, replace
 
 from datenwissenschaften.route.route_map import left_in
-from datenwissenschaften.tas.archives import Archive
-from datenwissenschaften.tas.live import WorkerLive
-from datenwissenschaften.tas.preferences import Preferences
-from datenwissenschaften.tas.runner import CellKey, SegmentRunner, Start, route_cell, route_needs
-from datenwissenschaften.tas.search import (
+from datenwissenschaften.speedrun.archives import Archive
+from datenwissenschaften.speedrun.live import WorkerLive
+from datenwissenschaften.speedrun.preferences import Preferences
+from datenwissenschaften.speedrun.runner import CellKey, SegmentRunner, Start, route_cell, route_needs
+from datenwissenschaften.speedrun.search import (
     BEAM,
     MAX_CELLS,
     Cell,

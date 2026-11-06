@@ -2,7 +2,7 @@ from pathlib import Path
 
 import msgspec
 
-from datenwissenschaften.tas.paths import atomic_write
+from datenwissenschaften.speedrun.paths import atomic_write
 
 TURN_FILE = "turn.json"
 COURSE_FILE = "course.json"

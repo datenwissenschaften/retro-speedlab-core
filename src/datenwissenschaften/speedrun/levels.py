@@ -6,7 +6,7 @@ from loguru import logger
 from datenwissenschaften.reference.fetch import ensure_reference
 from datenwissenschaften.route.paths import route_path
 from datenwissenschaften.settings import load_config
-from datenwissenschaften.tas.practice import (
+from datenwissenschaften.speedrun.practice import (
     LOADER_FILE,
     LevelLoader,
     ensure_loader,
@@ -14,12 +14,12 @@ from datenwissenschaften.tas.practice import (
     practised,
     write_practice_route,
 )
-from datenwissenschaften.tas.prior import PRIOR_FILE, write_prior
-from datenwissenschaften.tas.reel import Reel
-from datenwissenschaften.tas.routes import FULL_RUN, Leg, Part, Routes, finished, load_progress, save_progress
-from datenwissenschaften.tas.run import Tas, tas_run, worker_pool
-from datenwissenschaften.tas.runner import Start
-from datenwissenschaften.tas.turns import COURSE_FILE, Turn, changed_level, load_turn, save_turn
+from datenwissenschaften.speedrun.prior import PRIOR_FILE, write_prior
+from datenwissenschaften.speedrun.reel import Reel
+from datenwissenschaften.speedrun.routes import FULL_RUN, Leg, Part, Routes, finished, load_progress, save_progress
+from datenwissenschaften.speedrun.run import Tas, tas_run, worker_pool
+from datenwissenschaften.speedrun.runner import Start
+from datenwissenschaften.speedrun.turns import COURSE_FILE, Turn, changed_level, load_turn, save_turn
 
 PRACTICE_SEARCHES = 3
 

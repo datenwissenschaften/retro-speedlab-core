@@ -5,10 +5,10 @@ import msgspec
 
 from datenwissenschaften.environment.levels import level_map
 from datenwissenschaften.settings import GameSettings
-from datenwissenschaften.tas.journal import Split
-from datenwissenschaften.tas.movie import Segment, frames
-from datenwissenschaften.tas.runner import SegmentRunner
-from datenwissenschaften.tas.stuck import Stuck
+from datenwissenschaften.speedrun.journal import Split
+from datenwissenschaften.speedrun.movie import Segment, frames
+from datenwissenschaften.speedrun.runner import SegmentRunner
+from datenwissenschaften.speedrun.stuck import Stuck
 
 SECTION = "speedrun"
 START_BUTTON = "START"

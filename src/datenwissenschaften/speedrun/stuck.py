@@ -3,7 +3,7 @@ from pathlib import Path
 
 import msgspec
 
-from datenwissenschaften.tas.paths import atomic_write
+from datenwissenschaften.speedrun.paths import atomic_write
 
 STUCK_FILE = "stuck.json"
 FAILURES_FILE = "failures.json"

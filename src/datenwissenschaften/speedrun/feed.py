@@ -6,14 +6,14 @@ from typing import Any
 import msgspec
 import wandb
 
-from datenwissenschaften.tas.journal import JournalStore
-from datenwissenschaften.tas.live import clear_reports, read_reports
-from datenwissenschaften.tas.live_search import SearchRound, search_field
-from datenwissenschaften.tas.movie import Segment, frames
-from datenwissenschaften.tas.report import SECTION, Course, report, splits
-from datenwissenschaften.tas.routes import PartProgress
-from datenwissenschaften.tas.search_stats import SearchStats
-from datenwissenschaften.tas.stuck import load_stuck
+from datenwissenschaften.speedrun.journal import JournalStore
+from datenwissenschaften.speedrun.live import clear_reports, read_reports
+from datenwissenschaften.speedrun.live_search import SearchRound, search_field
+from datenwissenschaften.speedrun.movie import Segment, frames
+from datenwissenschaften.speedrun.report import SECTION, Course, report, splits
+from datenwissenschaften.speedrun.routes import PartProgress
+from datenwissenschaften.speedrun.search_stats import SearchStats
+from datenwissenschaften.speedrun.stuck import load_stuck
 from datenwissenschaften.ui.telemetry import publish_metadata
 
 PUBLISH_SECONDS = 5.0

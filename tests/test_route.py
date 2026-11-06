@@ -7,12 +7,12 @@ from typing import cast
 from datenwissenschaften.route.position import Position
 from datenwissenschaften.route.route_map import RouteMap
 from datenwissenschaften.route.rows import route_rows
-from datenwissenschaften.tas.archives import Archive
-from datenwissenschaften.tas.exploration import Exploration
-from datenwissenschaften.tas.novelty import RamNovelty
-from datenwissenschaften.tas.preferences import Preferences
-from datenwissenschaften.tas.runner import SegmentRunner, Start, route_cell
-from datenwissenschaften.tas.search import Cell
+from datenwissenschaften.speedrun.archives import Archive
+from datenwissenschaften.speedrun.exploration import Exploration
+from datenwissenschaften.speedrun.novelty import RamNovelty
+from datenwissenschaften.speedrun.preferences import Preferences
+from datenwissenschaften.speedrun.runner import SegmentRunner, Start, route_cell
+from datenwissenschaften.speedrun.search import Cell
 
 
 def at(x: int, y: int) -> Position:

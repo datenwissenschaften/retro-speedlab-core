@@ -5,15 +5,15 @@ import msgspec
 import numpy as np
 
 from datenwissenschaften.settings import RetroSpeedlabPaths
-from datenwissenschaften.tas.journal import now
-from datenwissenschaften.tas.movie import Segment, record_piece
-from datenwissenschaften.tas.paths import atomic_write
-from datenwissenschaften.tas.report import Course
-from datenwissenschaften.tas.routes import Leg
-from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.tas.screen import Cut
-from datenwissenschaften.tas.search import Crossing
-from datenwissenschaften.tas.video import render_video, stack_videos
+from datenwissenschaften.speedrun.journal import now
+from datenwissenschaften.speedrun.movie import Segment, record_piece
+from datenwissenschaften.speedrun.paths import atomic_write
+from datenwissenschaften.speedrun.report import Course
+from datenwissenschaften.speedrun.routes import Leg
+from datenwissenschaften.speedrun.runner import SegmentRunner, Start
+from datenwissenschaften.speedrun.screen import Cut
+from datenwissenschaften.speedrun.search import Crossing
+from datenwissenschaften.speedrun.video import render_video, stack_videos
 
 SCREEN_MOVIE = "screen.bk2"
 MOVIE_MEMORY = "movie-ram.json"

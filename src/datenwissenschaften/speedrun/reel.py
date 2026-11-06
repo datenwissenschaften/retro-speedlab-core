@@ -3,14 +3,14 @@ from functools import partial
 import msgspec
 
 from datenwissenschaften.settings import RetroSpeedlabConfig
-from datenwissenschaften.tas.feed import SpeedrunFeed
-from datenwissenschaften.tas.footage import MOVIE_MEMORY, movie_field, render_movie
-from datenwissenschaften.tas.movie import verified_segments
-from datenwissenschaften.tas.paths import tas_dir
-from datenwissenschaften.tas.routes import Part, Routes
-from datenwissenschaften.tas.run import video_upload
-from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.tas.screen import Cut, Screen
+from datenwissenschaften.speedrun.feed import SpeedrunFeed
+from datenwissenschaften.speedrun.footage import MOVIE_MEMORY, movie_field, render_movie
+from datenwissenschaften.speedrun.movie import verified_segments
+from datenwissenschaften.speedrun.paths import tas_dir
+from datenwissenschaften.speedrun.routes import Part, Routes
+from datenwissenschaften.speedrun.run import video_upload
+from datenwissenschaften.speedrun.runner import SegmentRunner, Start
+from datenwissenschaften.speedrun.screen import Cut, Screen
 
 REEL_DIR = "levels"
 ROUTE_MOVIE = "route.bk2"

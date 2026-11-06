@@ -21,9 +21,9 @@ from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.policy.env import EXIT, PolicyEnv
 from datenwissenschaften.policy.prior import BIAS, POLICY_FILE, WEIGHT, Weights
 from datenwissenschaften.settings import load_config
-from datenwissenschaften.tas.live import LIVE_DIR
-from datenwissenschaften.tas.paths import atomic_write, tas_dir
-from datenwissenschaften.tas.policy_start import POLICY_EXITS_FILE, POLICY_START_FILE, save_policy_exit
+from datenwissenschaften.speedrun.live import LIVE_DIR
+from datenwissenschaften.speedrun.paths import atomic_write, tas_dir
+from datenwissenschaften.speedrun.policy_start import POLICY_EXITS_FILE, POLICY_START_FILE, save_policy_exit
 
 ROLLOUT_DECISIONS = 1024
 HIDDEN = 256

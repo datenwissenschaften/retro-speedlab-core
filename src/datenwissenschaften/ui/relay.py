@@ -10,7 +10,7 @@ import httpx
 from loguru import logger
 
 from datenwissenschaften.settings import UISettings, UploadSettings
-from datenwissenschaften.tas.mosaic import compose
+from datenwissenschaften.speedrun.mosaic import compose
 from datenwissenschaften.ui.telemetry import metadata
 
 RELAY_SECONDS = 3.0

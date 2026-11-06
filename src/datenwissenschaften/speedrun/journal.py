@@ -7,7 +7,7 @@ from typing import Any
 
 import msgspec
 
-from datenwissenschaften.tas.paths import atomic_write
+from datenwissenschaften.speedrun.paths import atomic_write
 
 JOURNAL_FILE = "journal.json"
 SHOWN_EVENTS = 20

@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from datenwissenschaften.settings import UISettings, UploadSettings
-from datenwissenschaften.tas.mosaic import tile
+from datenwissenschaften.speedrun.mosaic import tile
 from datenwissenschaften.ui import relay, telemetry, video_upload
 from datenwissenschaften.ui.video_upload import VideoUpload
 

@@ -9,29 +9,38 @@ import pytest
 from fakes import saving_environment, write_config
 
 from datenwissenschaften.policy.prior import PolicyPrior
-from datenwissenschaften.tas import feed as feed_module
-from datenwissenschaften.tas import footage, movie, run, searcher, workers
-from datenwissenschaften.tas.archives import Archives
-from datenwissenschaften.tas.explore import search_segment
-from datenwissenschaften.tas.hints import Hint, Press, hints_path, load_hints, pressed
-from datenwissenschaften.tas.live import clear_reports
-from datenwissenschaften.tas.movie import Segment
-from datenwissenschaften.tas.paths import TAS_MOVIE, atomic_write
-from datenwissenschaften.tas.policy_start import (
+from datenwissenschaften.speedrun import feed as feed_module
+from datenwissenschaften.speedrun import footage, movie, run, searcher, workers
+from datenwissenschaften.speedrun.archives import Archives
+from datenwissenschaften.speedrun.explore import search_segment
+from datenwissenschaften.speedrun.hints import Hint, Press, hints_path, load_hints, pressed
+from datenwissenschaften.speedrun.live import clear_reports
+from datenwissenschaften.speedrun.movie import Segment
+from datenwissenschaften.speedrun.paths import TAS_MOVIE, atomic_write
+from datenwissenschaften.speedrun.policy_start import (
     POLICY_EXITS_FILE,
     POLICY_START_FILE,
     load_policy_exits,
     load_policy_start,
     save_policy_exit,
 )
-from datenwissenschaften.tas.preferences import Preferences
-from datenwissenschaften.tas.prior import ActionPrior
-from datenwissenschaften.tas.reel import Reel
-from datenwissenschaften.tas.routes import FULL_RUN, ROUTES_FILE, Leg, Part, Route, Routes, load_progress, save_progress
-from datenwissenschaften.tas.run import BACKTRACK_SEARCHES
-from datenwissenschaften.tas.runner import SegmentRunner, Start
-from datenwissenschaften.tas.search import UNBOUNDED, Checkpoint, Crossing, shave
-from datenwissenschaften.tas.stuck import (
+from datenwissenschaften.speedrun.preferences import Preferences
+from datenwissenschaften.speedrun.prior import ActionPrior
+from datenwissenschaften.speedrun.reel import Reel
+from datenwissenschaften.speedrun.routes import (
+    FULL_RUN,
+    ROUTES_FILE,
+    Leg,
+    Part,
+    Route,
+    Routes,
+    load_progress,
+    save_progress,
+)
+from datenwissenschaften.speedrun.run import BACKTRACK_SEARCHES
+from datenwissenschaften.speedrun.runner import SegmentRunner, Start
+from datenwissenschaften.speedrun.search import UNBOUNDED, Checkpoint, Crossing, shave
+from datenwissenschaften.speedrun.stuck import (
     FAILURES_FILE,
     STUCK_FILE,
     Stuck,
@@ -43,7 +52,7 @@ from datenwissenschaften.tas.stuck import (
     load_stuck,
     unbar,
 )
-from datenwissenschaften.tas.turns import Turn, load_turn, save_turn
+from datenwissenschaften.speedrun.turns import Turn, load_turn, save_turn
 
 BOSS_FRAMES = 3
 SECONDS = 0.05

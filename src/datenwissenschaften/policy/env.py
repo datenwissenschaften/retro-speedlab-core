@@ -7,12 +7,12 @@ import numpy as np
 from gymnasium import spaces
 
 from datenwissenschaften.policy.prior import observation
-from datenwissenschaften.tas.live import WorkerLive
-from datenwissenschaften.tas.novelty import RamNovelty
-from datenwissenschaften.tas.policy_start import POLICY_START_FILE, load_policy_start
-from datenwissenschaften.tas.runner import Start
-from datenwissenschaften.tas.search import leaves
-from datenwissenschaften.tas.workers import worker_runner
+from datenwissenschaften.speedrun.live import WorkerLive
+from datenwissenschaften.speedrun.novelty import RamNovelty
+from datenwissenschaften.speedrun.policy_start import POLICY_START_FILE, load_policy_start
+from datenwissenschaften.speedrun.runner import Start
+from datenwissenschaften.speedrun.search import leaves
+from datenwissenschaften.speedrun.workers import worker_runner
 
 EPISODE_DECISIONS = 128
 NOVELTY_REWARD = 0.01

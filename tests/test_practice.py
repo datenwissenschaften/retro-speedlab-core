@@ -7,9 +7,8 @@ import pytest
 from fakes import FakeRam, FakeWrapper, SavingEmulator, fake_routes
 
 from datenwissenschaften.route.position import Position
-from datenwissenschaften.states.levels import level_states
-from datenwissenschaften.tas.movie import Segment
-from datenwissenschaften.tas.practice import (
+from datenwissenschaften.speedrun.movie import Segment
+from datenwissenschaften.speedrun.practice import (
     LevelLoader,
     ensure_loader,
     level_start,
@@ -17,8 +16,9 @@ from datenwissenschaften.tas.practice import (
     practised,
     write_practice_route,
 )
-from datenwissenschaften.tas.routes import Leg, Part, PartProgress, Route, Routes
-from datenwissenschaften.tas.runner import SegmentRunner, Start
+from datenwissenschaften.speedrun.routes import Leg, Part, PartProgress, Route, Routes
+from datenwissenschaften.speedrun.runner import SegmentRunner, Start
+from datenwissenschaften.states.levels import level_states
 
 SCRIPT = [(3, 0), (3, 1), (3, 5), (3, 6), (3, 6)]
 LEVEL_ADDRESS = 0xAA

@@ -4,11 +4,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datenwissenschaften.settings import RetroSpeedlabConfig
-from datenwissenschaften.tas.feed import SpeedrunFeed
-from datenwissenschaften.tas.live_search import search_round
-from datenwissenschaften.tas.runner import Start
-from datenwissenschaften.tas.search import UNBOUNDED, Checkpoint, Crossing, farthest, fastest_distinct
-from datenwissenschaften.tas.workers import explore, polish
+from datenwissenschaften.speedrun.feed import SpeedrunFeed
+from datenwissenschaften.speedrun.live_search import search_round
+from datenwissenschaften.speedrun.runner import Start
+from datenwissenschaften.speedrun.search import UNBOUNDED, Checkpoint, Crossing, farthest, fastest_distinct
+from datenwissenschaften.speedrun.workers import explore, polish
 
 SEED_SPACE = 2**31
 

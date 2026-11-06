@@ -3,9 +3,9 @@ from pathlib import Path
 
 import msgspec
 
-from datenwissenschaften.tas.mosaic import TILE_SUFFIX, tile
-from datenwissenschaften.tas.paths import atomic_write
-from datenwissenschaften.tas.runner import SegmentRunner
+from datenwissenschaften.speedrun.mosaic import TILE_SUFFIX, tile
+from datenwissenschaften.speedrun.paths import atomic_write
+from datenwissenschaften.speedrun.runner import SegmentRunner
 
 LIVE_DIR = "live"
 REPORT_SUFFIX = ".msgpack"

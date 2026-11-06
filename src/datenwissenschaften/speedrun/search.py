@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from datenwissenschaften.tas.runner import CellKey, SegmentRunner, Start
+from datenwissenschaften.speedrun.runner import CellKey, SegmentRunner, Start
 
 EXPLORE_DECISIONS = 24
 STILL_FRAMES = 1800

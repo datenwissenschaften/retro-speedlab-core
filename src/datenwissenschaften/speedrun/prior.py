@@ -7,9 +7,9 @@ import msgspec
 import numpy as np
 
 from datenwissenschaften.route.route_map import changed_at
-from datenwissenschaften.tas.paths import atomic_write
-from datenwissenschaften.tas.routes import Routes
-from datenwissenschaften.tas.runner import SegmentRunner, Start
+from datenwissenschaften.speedrun.paths import atomic_write
+from datenwissenschaften.speedrun.routes import Routes
+from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 
 PRIOR_FILE = "prior.msgpack"
 

@@ -4,7 +4,7 @@ from fakes import write_config
 from typer.testing import CliRunner
 
 from datenwissenschaften.settings import load_config
-from datenwissenschaften.tas import video
+from datenwissenschaften.speedrun import video
 
 
 def test_a_movie_is_rendered_by_the_playback_module_next_to_it(tmp_path: Path, monkeypatch):

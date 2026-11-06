@@ -3,10 +3,10 @@ import random
 import time
 from dataclasses import dataclass
 
-from datenwissenschaften.tas.exploration import Exploration, Step, step_of
-from datenwissenschaften.tas.runner import Start
-from datenwissenschaften.tas.search import choose
-from datenwissenschaften.tas.strategies import actions_of, next_action
+from datenwissenschaften.speedrun.exploration import Exploration, Step, step_of
+from datenwissenschaften.speedrun.runner import Start
+from datenwissenschaften.speedrun.search import choose
+from datenwissenschaften.speedrun.strategies import actions_of, next_action
 
 TREE_SECONDS = 20.0
 TREE_SIMULATIONS = 256

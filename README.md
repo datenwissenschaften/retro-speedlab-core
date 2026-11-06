@@ -55,9 +55,9 @@ The app's default workflow is `speedrun`: it writes the fastest movie from
 power-on for any game package and improves it forever:
 
 ```bash
-python -m datenwissenschaften.tas.run search <wrapper> <config> <until-state>
-python -m datenwissenschaften.tas.run improve <wrapper> <config>
-python -m datenwissenschaften.tas.run verify <wrapper> <config> <progress>
+python -m datenwissenschaften.speedrun.run search <wrapper> <config> <until-state>
+python -m datenwissenschaften.speedrun.run improve <wrapper> <config>
+python -m datenwissenschaften.speedrun.run verify <wrapper> <config> <progress>
 ```
 
 The run is split at the state machine's transitions. Each segment is searched on
@@ -264,7 +264,7 @@ class AirstrikerWrapper(StateMachineGymWrapper[AirstrikerRam]):
 ```
 
 ```bash
-python -m datenwissenschaften.tas.run search airstriker:AirstrikerWrapper config.yaml SurviveAndScore
+python -m datenwissenschaften.speedrun.run search airstriker:AirstrikerWrapper config.yaml SurviveAndScore
 ```
 
 Every state sets a one-line `goal`. The ROM is imported through Stable Retro

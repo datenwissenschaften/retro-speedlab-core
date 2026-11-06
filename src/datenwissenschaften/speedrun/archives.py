@@ -7,10 +7,10 @@ from pathlib import Path
 import numpy as np
 from cachetools import LRUCache
 
-from datenwissenschaften.tas.archive_store import ARCHIVE_SUFFIX, load_archive, newest, save_archive
-from datenwissenschaften.tas.novelty import RamNovelty, novelty_of
-from datenwissenschaften.tas.runner import CellKey, SegmentRunner, Start
-from datenwissenschaften.tas.search import Cell
+from datenwissenschaften.speedrun.archive_store import ARCHIVE_SUFFIX, load_archive, newest, save_archive
+from datenwissenschaften.speedrun.novelty import RamNovelty, novelty_of
+from datenwissenschaften.speedrun.runner import CellKey, SegmentRunner, Start
+from datenwissenschaften.speedrun.search import Cell
 
 KEPT_ARCHIVES = 12
 KEPT_CELLS = 1000

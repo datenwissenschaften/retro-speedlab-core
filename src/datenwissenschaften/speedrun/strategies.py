@@ -3,9 +3,9 @@ import time
 from collections import deque
 from itertools import product
 
-from datenwissenschaften.tas.exploration import Exploration, Step, step_of
-from datenwissenschaften.tas.runner import Start
-from datenwissenschaften.tas.search import EXPLORE_DECISIONS, KEEP_ACTION, STILL_FRAMES, choose
+from datenwissenschaften.speedrun.exploration import Exploration, Step, step_of
+from datenwissenschaften.speedrun.runner import Start
+from datenwissenschaften.speedrun.search import EXPLORE_DECISIONS, KEEP_ACTION, STILL_FRAMES, choose
 
 FRONTIER_DEPTH = 3
 WALK = "walk"

@@ -4,10 +4,10 @@ from pathlib import Path
 import msgspec
 import numpy as np
 
-from datenwissenschaften.tas.movie import Segment
-from datenwissenschaften.tas.paths import atomic_write
-from datenwissenschaften.tas.report import Course
-from datenwissenschaften.tas.runner import SegmentRunner, Start
+from datenwissenschaften.speedrun.movie import Segment
+from datenwissenschaften.speedrun.paths import atomic_write
+from datenwissenschaften.speedrun.report import Course
+from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 
 ROUTES_FILE = "levels.msgpack"
 FULL_RUN = "Full run"
