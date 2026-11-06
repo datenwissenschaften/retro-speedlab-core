@@ -3,8 +3,8 @@ from pathlib import Path
 
 from loguru import logger
 
-from datenwissenschaften.reference.paths import FRAMES_DIR, MOVIE_DIR, VIDEO_FILE, reference_dir
-from datenwissenschaften.reference.tasvideos import download, save_movie, video_url
+from datenwissenschaften.reference.paths import FRAMES_DIR, reference_dir, video_path
+from datenwissenschaften.reference.speedrun_com import download, video_url
 from datenwissenschaften.settings import RetroSpeedlabConfig
 
 FRAMES_PER_SECOND = 4
@@ -24,11 +24,8 @@ def ensure_reference(settings: RetroSpeedlabConfig) -> None:
     frames = directory / FRAMES_DIR
     if frames.is_dir():
         return
-    publication = settings.speedrun.game.tasvideos
-    url = video_url(publication)
-    video = directory / f"{VIDEO_FILE}{Path(url).suffix}"
-    download(url, video)
-    save_movie(publication, directory / MOVIE_DIR)
-    extract_frames(video, directory / f".{FRAMES_DIR}")
+    url = video_url(settings.speedrun.game.speedrun_com)
+    download(url, directory)
+    extract_frames(video_path(settings), directory / f".{FRAMES_DIR}")
     (directory / f".{FRAMES_DIR}").rename(frames)
-    logger.info(f"TASVideos {publication} is the lab's reference: {len(list(frames.glob('*.png')))} frames in {frames}")
+    logger.info(f"The speedrun.com run {url} is the lab's reference: {len(list(frames.glob('*.png')))} frames")

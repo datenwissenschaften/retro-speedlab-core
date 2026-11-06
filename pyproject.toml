@@ -28,6 +28,7 @@ dependencies = [
     "langfuse==5.1.0",
     "opentelemetry-sdk==1.45.2",
     "wandb==0.31.0",
+    "yt-dlp==2026.10.21",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

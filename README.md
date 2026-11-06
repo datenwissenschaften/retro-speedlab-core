@@ -142,13 +142,20 @@ game package.
 
 `cache/reference/route.json` lists, per 16 px cell of every beaten level, how
 many frames the level's route still needed from there to its exit, and is
-rewritten after every level's turn. A game package may also ship
-`tas_ram_route.json` next to its `config.yaml`: the same rows taken from the RAM
-of a TAS replayed in the emulator it was recorded on, exact for every frame. A row
-may end in what the TAS had there, in the game's `dynamics()` order (Snake Rattle
-'n Roll: weight, pieces on the scale, speed); such a row counts only for a snake
-that has at least as much, so the map leads over nibbleys and power-ups too. The
-search weights cells on any of these routes by the fewest frames left to the exit.
+rewritten after every level's turn. A row may end in what the run had there, in
+the game's `dynamics()` order (Snake Rattle 'n Roll: weight, pieces on the scale,
+speed); such a row counts only for a snake that has at least as much, so the map
+leads over nibbleys and power-ups too. The search weights cells on the route by
+the fewest frames left to the exit.
+
+## Reference run
+
+On its first start the search downloads the video of the top verified human run
+on the game's speedrun.com leaderboard (`speedrun.speedrun_com`: game, category
+and variables) with [yt-dlp](https://github.com/yt-dlp/yt-dlp) to
+`cache/reference/video.*` and extracts 4 frames per second to
+`cache/reference/frames/<seconds>s.png` for the lab. It fails when that run has
+no video. Delete `cache/reference/frames` to fetch the run again.
 
 ## PPO policy
 
@@ -281,7 +288,7 @@ raise an error when the configuration is loaded.
 | `agent.stall_minutes` | Minutes without a new piece, a faster movie or a lab run before the `lab` task starts one |
 | `speedrun.workers`, `speedrun.segment_seconds` | Search processes and seconds per segment round |
 | `speedrun.id`, `speedrun.title`, `speedrun.platform` | The game as the stream names it |
-| `speedrun.category`, `speedrun.speedrun_com`, `speedrun.tasvideos` | The category run and where its records are read: speedrun.com game, category and variables, TASVideos publication |
+| `speedrun.category`, `speedrun.speedrun_com` | The category run and where its records and the lab's reference run are read: speedrun.com game, category and variables |
 | `log_level` | Loguru log level |
 
 ## Testing

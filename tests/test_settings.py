@@ -32,7 +32,6 @@ def _document() -> dict[str, Any]:
             "platform": "NES",
             "category": "Warpless",
             "speedrun_com": {"game": "m1z0mmd0", "category": "5dwpnllk", "variables": {"p85pg00l": "qyz5gr71"}},
-            "tasvideos": 1694,
         },
         "log_level": "info",
     }
@@ -50,7 +49,7 @@ def test_complete_config_loads(tmp_path: Path):
     assert config.training.game == "TestGame"
     assert config.lab.stall_minutes == 30
     source = SpeedrunComSource("m1z0mmd0", "5dwpnllk", {"p85pg00l": "qyz5gr71"})
-    game = GameSettings("testgame-v0", "Test Game", "NES", "Warpless", source, 1694)
+    game = GameSettings("testgame-v0", "Test Game", "NES", "Warpless", source)
     assert config.speedrun == SpeedrunSettings(4, 60.0, False, 3, game)
     assert config.upload.api_key is None
     assert config.log_level == "INFO"
@@ -89,14 +88,14 @@ def test_twitch_must_be_switched_on_or_off_explicitly(tmp_path: Path):
 
 def test_keys_the_core_no_longer_reads_are_ignored(tmp_path: Path):
     document = _document()
-    document["speedrun"]["guide"] = True
+    document["speedrun"] |= {"guide": True, "tasvideos": 1694}
 
     assert load_config(_write(tmp_path, document)) == load_config(_write(tmp_path, _document()))
 
 
 def test_the_record_sources_are_named_explicitly(tmp_path: Path):
     document = _document()
-    document["speedrun"]["tasvideos"] = "1694"
+    document["speedrun"]["speedrun_com"]["category"] = 5
 
-    with pytest.raises(RuntimeError, match="speedrun.tasvideos"):
+    with pytest.raises(RuntimeError, match="speedrun.speedrun_com.category"):
         load_config(_write(tmp_path, document))

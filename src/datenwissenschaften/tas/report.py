@@ -80,7 +80,7 @@ def objectives(course: Course, searching: str) -> list[dict[str, str]]:
 
 
 def game_field(game: GameSettings) -> dict[str, Any]:
-    sources = {"speedrun_com": msgspec.to_builtins(game.speedrun_com), "tasvideos": game.tasvideos}
+    sources = {"speedrun_com": msgspec.to_builtins(game.speedrun_com)}
     return {
         "id": game.id,
         "title": game.title,

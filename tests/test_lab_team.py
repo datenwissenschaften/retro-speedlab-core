@@ -61,7 +61,7 @@ def test_the_lead_actions_leave_out_what_its_subagents_do(tmp_path: Path):
 
 
 def test_parallel_and_background_subagents_stay_working_until_notified(tmp_path: Path):
-    fetch = {"type": "tool_use", "id": "f", "name": "WebFetch", "input": {"url": "https://www.tasvideos.org/1694M"}}
+    fetch = {"type": "tool_use", "id": "f", "name": "WebFetch", "input": {"url": "https://www.speedrun.com/snake"}}
     events = [
         assistant(
             None,
@@ -82,7 +82,7 @@ def test_parallel_and_background_subagents_stay_working_until_notified(tmp_path:
     assert [(member.name, member.state, member.step) for member in team] == [
         ("lead", "working", "Delegating to researcher"),
         ("scout", "done", "Running"),
-        ("researcher", "working", "Researching tasvideos.org"),
+        ("researcher", "working", "Researching speedrun.com"),
     ]
     assert [handoff["task"] for handoff in handoffs] == ["Measure the fall", "Find the route"]
 
@@ -131,7 +131,7 @@ def test_unsafe_sites_and_agent_definitions_are_left_out(tmp_path: Path):
     (tmp_path / ".claude" / "agents" / "broken.md").write_text("no front matter", encoding="utf-8")
 
     assert agent_roles(tmp_path) == {"engineer": "Writes the smallest change and its test"}
-    assert shown_site("https://user:pass@tasvideos.org/x") == "tasvideos.org"
+    assert shown_site("https://user:pass@speedrun.com/x") == "speedrun.com"
     assert shown_site("https://localhost:8080/x") is None
     assert shown_site("file:///etc/passwd") is None
     assert shown_site("https://speedrun.com/snake") == "speedrun.com"

@@ -4,7 +4,6 @@ from datenwissenschaften.settings import RetroSpeedlabConfig
 
 REFERENCE_DIR = "reference"
 FRAMES_DIR = "frames"
-MOVIE_DIR = "movie"
 VIDEO_FILE = "video"
 
 

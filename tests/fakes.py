@@ -160,7 +160,6 @@ def write_config(tmp_path: Path) -> Path:
                 "  platform: NES",
                 "  category: Any%",
                 "  speedrun_com: {game: fake, category: any, variables: {level: one}}",
-                "  tasvideos: 7",
                 "log_level: INFO",
             ]
         ),

@@ -175,7 +175,7 @@ def test_the_report_names_the_game_its_levels_goals_objectives_and_both_timings(
         "title": "Fake Game",
         "platform": "NES",
         "category": "Any%",
-        "sources": {"speedrun_com": {"game": "fake", "category": "any", "variables": {"level": "one"}}, "tasvideos": 7},
+        "sources": {"speedrun_com": {"game": "fake", "category": "any", "variables": {"level": "one"}}},
     }
     assert speedrun["timing"] == {"power_on_seconds": 3.0, "start_seconds": 2.5, "start_frame": 30}
     assert report(played, [], [], {}, "Menu", None)["timing"]["start_seconds"] is None
