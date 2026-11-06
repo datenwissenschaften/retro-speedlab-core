@@ -19,6 +19,7 @@ class WorkerReport(msgspec.Struct, frozen=True):
     cells: int
     frames: int
     best_frames: int | None
+    closest: int | None
 
 
 def read_reports(directory: Path) -> list[WorkerReport]:
@@ -45,7 +46,7 @@ class WorkerLive:
         self.report_due = 0.0
         self.frame_due = 0.0
 
-    def step(self, runner: SegmentRunner, cells: int, best: int | None, frames: int) -> None:
+    def step(self, runner: SegmentRunner, cells: int, best: int | None, frames: int, closest: int | None) -> None:
         self.frames += frames
         now = time.monotonic()
         if now >= self.frame_due:
@@ -53,5 +54,5 @@ class WorkerLive:
             atomic_write(self.directory / f"{self.seed}{TILE_SUFFIX}", tile(runner.emulator.em.get_screen()))
         if now >= self.report_due:
             self.report_due = now + REPORT_SECONDS
-            report = WorkerReport(self.seed, self.mode, cells, self.frames, best)
+            report = WorkerReport(self.seed, self.mode, cells, self.frames, best, closest)
             atomic_write(self.directory / f"{self.seed}{REPORT_SUFFIX}", msgspec.msgpack.encode(report))

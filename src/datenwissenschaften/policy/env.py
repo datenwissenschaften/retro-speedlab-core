@@ -60,7 +60,7 @@ class PolicyEnv(gymnasium.Env[np.ndarray, np.int64]):
         start = self.start if self.start is not None else self.begin()
         outcome = self.runner.decide(int(action))
         self.pressed.append(outcome.pressed)
-        self.live.step(self.runner, self.episodes, None, len(outcome.pressed))
+        self.live.step(self.runner, self.episodes, None, len(outcome.pressed), None)
         exited = leaves(self.runner, start, outcome.state, outcome.won)
         reward = reward_of(outcome.reward, self.novelty.see(self.runner.memory()), exited, outcome.alive)
         terminated = exited or not outcome.alive or outcome.state != start.state

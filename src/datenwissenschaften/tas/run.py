@@ -238,6 +238,8 @@ class Tas:
         if start.state == self.barred.get(leg.name) or spent:
             return self.wait_or_go_back(leg, segments, start, searches, patience)
         self.feed.event("checkpoint", start.state, found.frames)
+        if found.remaining is not None:
+            self.feed.journal.closer(start.state, found.remaining)
         on = f"{found.remaining} TAS frames before the exit" if found.guided else f"{found.gain:.1f} reward on"
         logger.info(f"Checkpoint in {start.state} after {found.frames} frames, {on}")
         return self.keep(leg, [*segments, checkpoint_segment(found)], start.state)

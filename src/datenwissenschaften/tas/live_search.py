@@ -25,6 +25,7 @@ def search_field(search: SearchRound | None, reports: list[WorkerReport], now: d
     played = sum(report.frames for report in reports)
     elapsed = (now - search.started_at).total_seconds()
     best = [report.best_frames for report in reports if report.best_frames is not None]
+    closest = [report.closest for report in reports if report.closest is not None]
     return {
         "state": search.state,
         "round": search.round + 1,
@@ -39,6 +40,7 @@ def search_field(search: SearchRound | None, reports: list[WorkerReport], now: d
                 "cells": report.cells,
                 "frames": report.frames,
                 "best_frames": report.best_frames,
+                "closest": report.closest,
             }
             for report in reports
         ],
@@ -46,4 +48,5 @@ def search_field(search: SearchRound | None, reports: list[WorkerReport], now: d
         "frames": played,
         "frames_per_second": played / elapsed if elapsed > 0 else 0.0,
         "best_frames": min(best, default=None),
+        "closest": min(closest, default=None),
     }

@@ -55,6 +55,8 @@ class Exploration:
         self.crossings: list[Crossing] = []
         self.guided = False
         self.guided_by: tuple[int | None, ...] = ()
+        known = [cell.remaining for cell in self.archive.values() if cell.remaining is not None]
+        self.closest = min(known, default=None)
 
     def cells(self) -> list[Cell]:
         routes = self.runner.wrapper.routes
@@ -77,7 +79,7 @@ class Exploration:
         moved = Step(trail, step.frames + len(outcome.pressed), step.score + outcome.reward, False)
         if self.live is not None:
             best = self.crossings[0].frames if self.crossings else None
-            self.live.step(self.runner, len(self.archive), best, len(outcome.pressed))
+            self.live.step(self.runner, len(self.archive), best, len(outcome.pressed), self.closest)
         if moved.frames >= self.limit():
             return replace(moved, ended=True)
         if leaves(self.runner, self.start, outcome.state, outcome.won):
@@ -95,7 +97,10 @@ class Exploration:
             del self.archive[min(places, key=lambda kept: (self.archive[kept].score, -self.archive[kept].visits))]
         here = Start(self.start.state, self.runner.snapshot())
         novelty = self.novelty.see(self.runner.memory())
-        self.archive[key] = Cell(here, step.trail, step.frames, 0, self.runner.remaining(), step.score, novelty)
+        remaining = self.runner.remaining()
+        self.archive[key] = Cell(here, step.trail, step.frames, 0, remaining, step.score, novelty)
+        if remaining is not None and (self.closest is None or remaining < self.closest):
+            self.closest = remaining
         return True
 
     def kept(self) -> Archive:

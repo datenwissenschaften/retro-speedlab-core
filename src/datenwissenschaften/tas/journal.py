@@ -1,3 +1,4 @@
+import re
 import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -14,6 +15,7 @@ PROGRESS_EVENTS = ("found", "improved")
 SHOWN_HISTORY = 200
 SHOWN_MILESTONES = 50
 TENTHS_PER_MINUTE = 600
+WORD_START = re.compile(r"(?<=[a-z])(?=[A-Z0-9])|(?<=[0-9])(?=[A-Z])")
 
 
 class Event(msgspec.Struct, frozen=True):
@@ -41,6 +43,7 @@ class Journal(msgspec.Struct):
     firsts: dict[str, float]
     bests: dict[str, float]
     progressed: str | None = None
+    closest: dict[str, int] = msgspec.field(default_factory=dict[str, int])
 
 
 @dataclass(slots=True, frozen=True)
@@ -53,6 +56,10 @@ class Split:
 def clock(seconds: float) -> str:
     tenths = round(seconds * 10)
     return f"{tenths // TENTHS_PER_MINUTE}:{tenths % TENTHS_PER_MINUTE / 10:04.1f}"
+
+
+def spoken(state: str) -> str:
+    return re.sub(WORD_START, " ", state)
 
 
 def now() -> str:
@@ -81,6 +88,16 @@ class JournalStore:
                 self.journal.progressed = event.at
             self._save()
 
+    def closer(self, state: str, remaining: int) -> None:
+        with self.lock:
+            closest = self.journal.closest
+            if state in closest and remaining >= closest[state]:
+                return
+            was = f" (was {closest[state]})" if state in closest else ""
+            closest[state] = remaining
+            self._milestone("closer", f"{spoken(state)}: {remaining} frames before the door{was}")
+            self._save()
+
     def progressed(self) -> datetime | None:
         with self.lock:
             progressed = self.journal.progressed
@@ -105,6 +122,7 @@ class JournalStore:
                     "history": journal.history,
                     "milestones": journal.milestones,
                     "progressed": journal.progressed,
+                    "closest": journal.closest,
                 }
             )
 

@@ -39,11 +39,11 @@ def test_a_worker_writes_its_report_and_tile_and_the_main_process_reads_them_bac
     crossings = [Crossing(START, runner.wrapper.action_table[0], False, ("Boss",))]
     busy, quiet = WorkerLive(tmp_path, 7, "frontier"), WorkerLive(tmp_path, 3, "policy")
 
-    busy.step(runner, len(archive), crossings[0].frames, 4)
-    busy.step(runner, len(archive), crossings[0].frames, 4)
-    quiet.step(runner, 0, None, 2)
+    busy.step(runner, len(archive), crossings[0].frames, 4, 300)
+    busy.step(runner, len(archive), crossings[0].frames, 4, 300)
+    quiet.step(runner, 0, None, 2, None)
 
-    expected = [WorkerReport(3, "policy", 0, 2, None), WorkerReport(7, "frontier", 2, 4, 1)]
+    expected = [WorkerReport(3, "policy", 0, 2, None, None), WorkerReport(7, "frontier", 2, 4, 1, 300)]
     assert read_reports(tmp_path) == expected
     assert (tmp_path / "7.jpg").read_bytes()[:2] == b"\xff\xd8"
     clear_reports(tmp_path)
@@ -89,7 +89,7 @@ def test_two_workers_share_one_row_of_the_mosaic(tmp_path: Path):
 
 def test_the_live_search_adds_up_its_workers():
     search = SearchRound("Scale2", 0, 2, STARTED, 120.0, 393)
-    reports = [WorkerReport(5, "walk", 10, 600, 393), WorkerReport(4, "tree", 10, 600, None)]
+    reports = [WorkerReport(5, "walk", 10, 600, 393, 120), WorkerReport(4, "tree", 10, 600, None, 90)]
 
     assert search_field(search, reports, STARTED + timedelta(seconds=2)) == {
         "state": "Scale2",
@@ -99,13 +99,14 @@ def test_the_live_search_adds_up_its_workers():
         "started_at": "2026-10-29T14:07:10+00:00",
         "ends_at": "2026-10-29T14:09:10+00:00",
         "workers": [
-            {"seed": 5, "mode": "walk", "cells": 10, "frames": 600, "best_frames": 393},
-            {"seed": 4, "mode": "tree", "cells": 10, "frames": 600, "best_frames": None},
+            {"seed": 5, "mode": "walk", "cells": 10, "frames": 600, "best_frames": 393, "closest": 120},
+            {"seed": 4, "mode": "tree", "cells": 10, "frames": 600, "best_frames": None, "closest": 90},
         ],
         "cells": 20,
         "frames": 1200,
         "frames_per_second": 600.0,
         "best_frames": 393,
+        "closest": 90,
     }
     assert search_field(SearchRound("Menu", 1, 2, STARTED, 240.0, None), [], STARTED)["frames_per_second"] == 0.0
     assert search_field(None, reports, STARTED) is None
@@ -130,6 +131,22 @@ def test_the_journal_keeps_the_first_time_of_each_level_and_tells_when_a_level_g
     assert [point["seconds"] for point in again["history"]] == [64.69, 70.0]
     assert [event["frames"] for event in again["events"]] == list(range(5, 25))
     assert clock(59.97) == "1:00.0"
+
+
+def test_the_journal_tells_when_a_state_gets_closer_to_its_door(tmp_path: Path):
+    path = tmp_path / "journal.json"
+    journal = JournalStore(path)
+
+    journal.closer("Level4Upper", 394)
+    journal.closer("Level4Upper", 400)
+    journal.closer("Level4Upper", 145)
+
+    again = JournalStore(path).fields()
+    assert again["closest"] == {"Level4Upper": 145}
+    assert [milestone["text"] for milestone in again["milestones"]] == [
+        "Level 4 Upper: 394 frames before the door",
+        "Level 4 Upper: 145 frames before the door (was 394)",
+    ]
 
 
 def test_the_report_names_the_game_its_levels_goals_objectives_and_both_timings(tmp_path: Path):
