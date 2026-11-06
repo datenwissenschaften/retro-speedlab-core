@@ -6,7 +6,7 @@ import pytest
 from fakes import HIDDEN_SPRITE, NO_SPRITES, fceu_state
 
 from datenwissenschaften.knowledge import NO_KNOWLEDGE, Enemy, Knowledge, Player, knowledge_path, load_knowledge
-from datenwissenschaften.sprites.catalog import CATALOG_FILE, DATA_URI, SpriteCatalog
+from datenwissenschaften.sprites.catalog import CATALOG_FILE, SpriteCatalog
 from datenwissenschaften.sprites.oam import TILE, sprites_of
 from datenwissenschaften.sprites.objects import objects_in
 from datenwissenschaften.sprites.overlay import (
@@ -70,7 +70,7 @@ def test_touching_sprites_form_one_object_placed_on_the_cropped_screen():
     assert objects_in(offscreen, screen()) == []
 
 
-def test_the_catalog_keeps_every_object_once_with_its_first_sighting_and_image(tmp_path: Path):
+def test_the_catalog_keeps_every_object_once_with_its_first_sighting_and_publishes_no_image(tmp_path: Path):
     knowledge = Knowledge([], Player("Rattle", "The snake.", "x"), [], [], [], [])
     catalog = SpriteCatalog(tmp_path / "sprites", knowledge)
 
@@ -82,7 +82,7 @@ def test_the_catalog_keeps_every_object_once_with_its_first_sighting_and_image(t
 
     snake, other = reloaded["sprites"]
     assert (snake["seen"], snake["first_level"], snake["first_state"], snake["name"]) == (2, 1, "Play", None)
-    assert other["seen"] == 1 and snake["image"].startswith(DATA_URI)
+    assert other["seen"] == 1 and "image" not in snake
     image = cv2.imread(str(tmp_path / "sprites" / f"{snake['signature']}.png"))
     assert image.shape == (16, 16, 3) and (tmp_path / "sprites" / CATALOG_FILE).is_file()
     assert reloaded["knowledge"]["player"] is None

@@ -1,4 +1,3 @@
-import base64
 import threading
 from pathlib import Path
 from typing import Any
@@ -16,7 +15,6 @@ from datenwissenschaften.sprites.objects import image_of, objects_in
 SPRITES_DIR = "sprites"
 CATALOG_FILE = "catalog.json"
 SHOWN_SPRITES = 48
-DATA_URI = "data:image/png;base64,"
 
 
 class Sighting(msgspec.Struct):
@@ -72,7 +70,6 @@ class SpriteCatalog:
         return {
             "signature": signature,
             "name": self.names[signature] if signature in self.names else None,
-            "image": DATA_URI + base64.b64encode(self.images[signature]).decode("ascii"),
             "first_seen": sighting.first_seen,
             "first_level": sighting.first_level,
             "first_state": sighting.first_state,
