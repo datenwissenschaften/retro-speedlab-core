@@ -139,10 +139,18 @@ def test_the_nearest_distance_of_each_query_to_the_seen_screens():
 
 def test_a_level_is_the_play_between_two_long_dark_screens_and_short_fades_stay_inside_it():
     dark = np.concatenate(
-        [np.ones(200), np.zeros(50), np.ones(30), np.zeros(50), np.ones(200), np.zeros(40), np.ones(200)]
+        [np.ones(200), np.zeros(300), np.ones(30), np.zeros(300), np.ones(200), np.zeros(400), np.ones(200)]
     )
 
-    assert play.level_spans(dark.astype(bool), 2, 60) == [(200, 330), (530, 570)]
+    assert play.level_spans(dark.astype(bool), 2, 60) == [(200, 830), (1030, 1430)]
+
+
+def test_a_score_screen_split_by_a_flash_is_one_break():
+    dark = np.concatenate(
+        [np.ones(200), np.zeros(600), np.ones(100), np.zeros(10), np.ones(100), np.zeros(600), np.ones(200)]
+    )
+
+    assert play.level_spans(dark.astype(bool), 2, 60) == [(200, 800), (1010, 1610)]
 
 
 def test_a_video_whose_dark_screens_frame_other_levels_than_the_game_has_fails():
