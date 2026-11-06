@@ -69,9 +69,7 @@ class Archives:
             return self.kept[key]
         single = self.directory / f"{key}{ARCHIVE_SUFFIX}"
         saved = [*sorted((self.directory / key).glob(f"*{ARCHIVE_SUFFIX}")), *([single] if single.is_file() else [])]
-        if saved:
-            return merged([Archive(*load_archive(path)) for path in saved])
-        return fresh_archive(runner, start)
+        return merged([fresh_archive(runner, start), *(Archive(*load_archive(path)) for path in saved)])
 
     def keep(self, start: Start, bound: int, archive: Archive) -> None:
         key = archive_key(start, bound)
