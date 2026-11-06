@@ -33,8 +33,9 @@ def fresh_archive(runner: SegmentRunner, start: Start) -> Archive:
 
 def pruned(archive: Archive) -> Archive:
     cells = archive.cells.items()
+    starts = {key: cell for key, cell in cells if cell.trail is None}
     scored = sorted(cells, key=lambda item: (item[1].score, -item[1].visits), reverse=True)
-    kept = dict(scored[:SCORED_CELLS])
+    kept = {**starts, **dict(scored[:SCORED_CELLS])}
     others = [item for item in cells if item[0] not in kept]
     rare = sorted(others, key=lambda item: (item[1].novelty, -item[1].visits), reverse=True)
     kept.update(rare[: KEPT_CELLS - len(kept)])
