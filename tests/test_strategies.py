@@ -9,9 +9,10 @@ from fakes import saving_environment
 from test_tas import NO_PREFERENCES, START, LineRunner
 
 from datenwissenschaften.tas import archives as archives_module
+from datenwissenschaften.tas import exploration as exploration_module
 from datenwissenschaften.tas import explore
 from datenwissenschaften.tas.archives import KEPT_CELLS, Archive, Archives, fresh_archive, pruned
-from datenwissenschaften.tas.exploration import Exploration
+from datenwissenschaften.tas.exploration import Exploration, Step
 from datenwissenschaften.tas.movie import Segment
 from datenwissenschaften.tas.novelty import RamNovelty
 from datenwissenschaften.tas.prior import ActionPrior, learned_table
@@ -135,7 +136,7 @@ def test_each_search_process_keeps_its_own_file_and_a_restart_merges_them(tmp_pa
 
     restarted = Archives(tmp_path, 2).resumed(LineRunner(), START, UNBOUNDED)
 
-    assert {key: cell.frames for key, cell in restarted.cells.items()} == {("spot",): 3, ("only",): 3}
+    assert {key: cell.frames for key, cell in restarted.cells.items()} == {("Walk", 0): 0, ("spot",): 3, ("only",): 3}
 
 
 def test_a_kept_archive_holds_the_best_scored_and_the_rarest_places():
@@ -164,6 +165,33 @@ def test_a_kept_archive_keeps_its_start_however_many_places_score_higher():
     assert kept[key].trail is None
 
 
+def test_a_resumed_archive_saved_without_its_start_gets_its_start_back(tmp_path: Path):
+    explored = exploration()
+    key, root = next(iter(explored.archive.items()))
+    place = replace(root, trail=Trail(None, np.zeros((1, 1), dtype=np.int8)), frames=4)
+    Archives(tmp_path, 2).keep(START, UNBOUNDED, Archive({("spot",): place}, explored.novelty))
+
+    resumed = Archives(tmp_path, 2).resumed(LineRunner(), START, UNBOUNDED).cells
+
+    assert resumed[key].trail is None
+    assert resumed[key].frames == 0
+    assert ("spot",) in resumed
+
+
+def test_a_full_search_never_drops_its_start_for_a_new_place(monkeypatch):
+    monkeypatch.setattr(exploration_module, "MAX_CELLS", 2)
+    explored = exploration()
+    key = next(iter(explored.archive))
+    explored.archive[key].visits = 50
+    trail = Trail(None, np.zeros((1, 1), dtype=np.int8))
+    for x in range(1, 5):
+        explored.runner.x = x
+        explored.remember(Step(trail, x, float(x), False))
+
+    assert explored.archive[key].trail is None
+    assert len(explored.archive) == 2
+
+
 def test_a_map_saved_as_one_file_by_the_last_release_is_still_read_and_then_moved(tmp_path: Path):
     explored = exploration()
     root = explored.archive[next(iter(explored.archive))]
@@ -174,6 +202,6 @@ def test_a_map_saved_as_one_file_by_the_last_release_is_still_read_and_then_move
     resumed = archives.resumed(LineRunner(), START, UNBOUNDED)
     archives.keep(START, UNBOUNDED, resumed)
 
-    assert {key: cell.frames for key, cell in resumed.cells.items()} == {("spot",): 4}
+    assert {key: cell.frames for key, cell in resumed.cells.items()} == {("Walk", 0): 0, ("spot",): 4}
     assert not single.exists()
-    assert Archives(tmp_path, 2).resumed(LineRunner(), START, UNBOUNDED).cells.keys() == {("spot",)}
+    assert Archives(tmp_path, 2).resumed(LineRunner(), START, UNBOUNDED).cells.keys() == {("Walk", 0), ("spot",)}
