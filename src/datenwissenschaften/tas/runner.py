@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -6,7 +7,7 @@ from numpy.typing import NDArray
 from datenwissenschaften.environment.recording import restore_emulator_state
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper, lost_life, phases, state_class
 from datenwissenschaften.ram import RamInfo
-from datenwissenschaften.route.route_map import CELL_SIZE
+from datenwissenschaften.route.route_map import CELL_SIZE, Needs
 from datenwissenschaften.route.route_map import Cell as RouteCell
 
 CELL_PIXELS = 8
@@ -25,6 +26,13 @@ def route_cell(key: CellKey) -> RouteCell | None:
     if not isinstance(area, int) or not isinstance(x, int) or not isinstance(y, int):
         return None
     return area, x // ROUTE_SCALE, y // ROUTE_SCALE
+
+
+def route_needs(key: CellKey) -> Needs:
+    dynamics = key[6] if len(key) == POSITIONED_KEY else None
+    if not isinstance(dynamics, tuple):
+        return ()
+    return tuple(value for value in cast(tuple[object, ...], dynamics) if isinstance(value, int))
 
 
 @dataclass(slots=True, frozen=True)
@@ -110,7 +118,7 @@ class SegmentRunner:
         return bytes(self.emulator.em.get_state())
 
     def remaining(self) -> int | None:
-        return self.wrapper.routes.remaining(self.ram.position())
+        return self.wrapper.routes.remaining(self.ram.position(), self.ram.dynamics())
 
     def key(self, frames: int) -> CellKey:
         state, position = self.wrapper.state_machine.state_name, self.ram.position()

@@ -5,7 +5,7 @@ from datenwissenschaften.route.route_map import left_in
 from datenwissenschaften.tas.archives import Archive
 from datenwissenschaften.tas.live import WorkerLive
 from datenwissenschaften.tas.preferences import Preferences
-from datenwissenschaften.tas.runner import CellKey, SegmentRunner, Start, route_cell
+from datenwissenschaften.tas.runner import CellKey, SegmentRunner, Start, route_cell, route_needs
 from datenwissenschaften.tas.search import (
     BEAM,
     MAX_CELLS,
@@ -61,7 +61,7 @@ class Exploration:
         route = routes.reload()
         if not self.guided or routes.loaded != self.guided_by:
             for key, cell in self.archive.items():
-                cell.remaining = left_in(route, route_cell(key))
+                cell.remaining = left_in(route, route_cell(key), route_needs(key))
             self.guided, self.guided_by = True, routes.loaded
         return list(self.archive.values())
 

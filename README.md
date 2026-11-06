@@ -153,7 +153,10 @@ trained on count. The frames left run to the level's score screen. The map is
 built once, when the file is missing, and only when every level has cells; the
 log names each level's video frames and cells. A game package may also ship
 `tas_ram_route.json` next to its `config.yaml`: the same rows taken from the RAM
-of a TAS replayed in the emulator it was recorded on, exact for every frame. The
+of a TAS replayed in the emulator it was recorded on, exact for every frame. A row
+may end in what the TAS had there, in the game's `dynamics()` order (Snake Rattle
+'n Roll: weight, pieces on the scale, speed); such a row counts only for a snake
+that has at least as much, so the map leads over nibbleys and power-ups too. The
 search weights cells on any of these routes by the fewest frames left to the exit.
 
 ## PPO policy

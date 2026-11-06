@@ -29,14 +29,25 @@ def test_a_cell_on_the_route_tells_how_many_frames_are_left(tmp_path: Path):
     write_route(tmp_path / "reference" / "route.json", [[1, 0, 0, 0, 2], [1, 1, 0, 1, 1]])
     routes = RouteMap((tmp_path / "reference" / "route.json",))
 
-    assert routes.remaining(at(3, 5)) == 2
-    assert routes.remaining(at(17, 0)) == 1
-    assert routes.remaining(at(40, 0)) is None
-    assert routes.remaining(None) is None
+    assert routes.remaining(at(3, 5), ()) == 2
+    assert routes.remaining(at(17, 0), ()) == 1
+    assert routes.remaining(at(40, 0), ()) is None
+    assert routes.remaining(None, ()) is None
+
+
+def test_a_cell_counts_only_when_the_snake_has_what_the_tas_had_there(tmp_path: Path):
+    write_route(tmp_path / "reference" / "route.json", [[1, 0, 0, 10, 300, 0, 0, 0], [1, 0, 0, 90, 5, 9, 4, 1]])
+    routes = RouteMap((tmp_path / "reference" / "route.json",))
+
+    assert routes.remaining(at(0, 0), (0, 0, 0)) == 300
+    assert routes.remaining(at(0, 0), (9, 4, 0)) == 300
+    assert routes.remaining(at(0, 0), (12, 4, 1)) == 5
+    assert routes.remaining(at(0, 0), (12, 4)) is None
+    assert routes.remaining(at(0, 0), ()) is None
 
 
 def test_without_a_route_file_there_is_no_route(tmp_path: Path):
-    assert RouteMap((tmp_path / "route.json", tmp_path / "tas_route.json")).remaining(at(0, 0)) is None
+    assert RouteMap((tmp_path / "route.json", tmp_path / "tas_route.json")).remaining(at(0, 0), ()) is None
 
 
 def test_the_practice_and_tas_maps_merge_and_the_fewer_frames_left_win(tmp_path: Path):
@@ -45,9 +56,9 @@ def test_the_practice_and_tas_maps_merge_and_the_fewer_frames_left_win(tmp_path:
     tas.write_text(json.dumps([[1, 0, 0, 0, 3], [1, 1, 0, 0, 8], [1, 2, 0, 0, 6]]), encoding="utf-8")
     routes = RouteMap((practice, tas))
 
-    assert [routes.remaining(at(x, 0)) for x in (0, 16, 32, 48)] == [3, 4, 6, None]
+    assert [routes.remaining(at(x, 0), ()) for x in (0, 16, 32, 48)] == [3, 4, 6, None]
     practice.unlink()
-    assert [routes.remaining(at(x, 0)) for x in (0, 16, 32, 48)] == [3, 8, 6, None]
+    assert [routes.remaining(at(x, 0), ()) for x in (0, 16, 32, 48)] == [3, 8, 6, None]
 
 
 def test_the_tas_route_counts_the_frames_left_until_its_level_ends_and_keeps_the_fastest(tmp_path: Path):
@@ -55,8 +66,8 @@ def test_the_tas_route_counts_the_frames_left_until_its_level_ends_and_keeps_the
     write_steps(steps, route_rows(steps), tmp_path / "reference" / "route.json", tmp_path / "reference" / "trace.json")
     routes = RouteMap((tmp_path / "reference" / "route.json",))
 
-    assert [routes.remaining(at(x, 0)) for x in (0, 16, 32)] == [1, 2, 0]
-    assert routes.remaining(Position(2, 0, 0, 0, False)) == 1
+    assert [routes.remaining(at(x, 0), ()) for x in (0, 16, 32)] == [1, 2, 0]
+    assert routes.remaining(Position(2, 0, 0, 0, False), ()) == 1
 
 
 def test_a_positioned_cell_key_names_its_route_cell_and_other_keys_none():
