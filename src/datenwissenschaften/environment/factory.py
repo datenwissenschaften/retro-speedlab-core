@@ -4,8 +4,8 @@ import stable_retro as retro
 
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.ram import RamInfo
-from datenwissenschaften.reference.paths import route_paths
 from datenwissenschaften.roms import import_roms
+from datenwissenschaften.route.paths import route_paths
 from datenwissenschaften.route.route_map import RouteMap
 from datenwissenschaften.settings import RetroSpeedlabConfig
 

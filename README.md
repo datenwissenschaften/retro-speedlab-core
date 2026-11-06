@@ -142,16 +142,7 @@ game package.
 
 `cache/reference/route.json` lists, per 16 px cell of every beaten level, how
 many frames the level's route still needed from there to its exit, and is
-rewritten after every level's turn. `cache/reference/tas_route.json` holds the
-same for every level of the TASVideos run. The long dark score screens between
-levels split the TAS video into its levels; a small CNN, trained on screens of
-the stored routes, of each level started by the level loader and of short
-random rollouts from up to 2 saved states per 16 px cell of the search's
-archives (`cache/tas/archives`, so also where the search is stuck), places the
-snake within the known level, and only frames that look like a screen it
-trained on count. The frames left run to the level's score screen. The map is
-built once, when the file is missing, and only when every level has cells; the
-log names each level's video frames and cells. A game package may also ship
+rewritten after every level's turn. A game package may also ship
 `tas_ram_route.json` next to its `config.yaml`: the same rows taken from the RAM
 of a TAS replayed in the emulator it was recorded on, exact for every frame. A row
 may end in what the TAS had there, in the game's `dynamics()` order (Snake Rattle

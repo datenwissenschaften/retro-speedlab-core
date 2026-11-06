@@ -60,7 +60,6 @@ class GameSettings:
 class SpeedrunSettings:
     workers: int
     segment_seconds: float
-    guide: bool
     policy: bool
     policy_emulators: int
     game: GameSettings
@@ -107,7 +106,6 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
         speedrun=SpeedrunSettings(
             workers=_positive_int(document.speedrun.workers, "speedrun.workers"),
             segment_seconds=_positive_number(document.speedrun.segment_seconds, "speedrun.segment_seconds"),
-            guide=_boolean(document.speedrun.guide, "speedrun.guide"),
             policy=_boolean(document.speedrun.policy, "speedrun.policy"),
             policy_emulators=_positive_int(document.speedrun.policy_emulators, "speedrun.policy_emulators"),
             game=_game(document.speedrun),

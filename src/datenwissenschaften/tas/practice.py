@@ -6,8 +6,8 @@ import numpy as np
 from loguru import logger
 
 from datenwissenschaften.ram import RamInfo
-from datenwissenschaften.reference.trace import LEVEL_GAP_FRAMES, Step, route_rows
 from datenwissenschaften.route.position import Position
+from datenwissenschaften.route.rows import LEVEL_GAP_FRAMES, Step, route_rows
 from datenwissenschaften.states.levels import current_level
 from datenwissenschaften.tas.paths import atomic_write
 from datenwissenschaften.tas.routes import Part, PartProgress, Route, Routes, finished

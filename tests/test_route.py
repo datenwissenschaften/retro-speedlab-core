@@ -4,10 +4,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
-from datenwissenschaften.reference.trace import route_rows
-from datenwissenschaften.reference.trace import write_route as write_steps
 from datenwissenschaften.route.position import Position
 from datenwissenschaften.route.route_map import RouteMap
+from datenwissenschaften.route.rows import route_rows
 from datenwissenschaften.tas.archives import Archive
 from datenwissenschaften.tas.exploration import Exploration
 from datenwissenschaften.tas.novelty import RamNovelty
@@ -35,7 +34,7 @@ def test_a_cell_on_the_route_tells_how_many_frames_are_left(tmp_path: Path):
     assert routes.remaining(None, ()) is None
 
 
-def test_a_cell_counts_only_when_the_snake_has_what_the_tas_had_there(tmp_path: Path):
+def test_a_cell_counts_only_when_the_snake_has_what_the_route_needs_there(tmp_path: Path):
     write_route(tmp_path / "reference" / "route.json", [[1, 0, 0, 10, 300, 0, 0, 0], [1, 0, 0, 90, 5, 9, 4, 1]])
     routes = RouteMap((tmp_path / "reference" / "route.json",))
 
@@ -47,23 +46,23 @@ def test_a_cell_counts_only_when_the_snake_has_what_the_tas_had_there(tmp_path: 
 
 
 def test_without_a_route_file_there_is_no_route(tmp_path: Path):
-    assert RouteMap((tmp_path / "route.json", tmp_path / "tas_route.json")).remaining(at(0, 0), ()) is None
+    assert RouteMap((tmp_path / "route.json", tmp_path / "other.json")).remaining(at(0, 0), ()) is None
 
 
-def test_the_practice_and_tas_maps_merge_and_the_fewer_frames_left_win(tmp_path: Path):
-    practice, tas = tmp_path / "reference" / "route.json", tmp_path / "reference" / "tas_route.json"
-    write_route(practice, [[1, 0, 0, 0, 9], [1, 1, 0, 0, 4]])
-    tas.write_text(json.dumps([[1, 0, 0, 0, 3], [1, 1, 0, 0, 8], [1, 2, 0, 0, 6]]), encoding="utf-8")
-    routes = RouteMap((practice, tas))
+def test_two_maps_merge_and_the_fewer_frames_left_win(tmp_path: Path):
+    first, second = tmp_path / "reference" / "route.json", tmp_path / "reference" / "other.json"
+    write_route(first, [[1, 0, 0, 0, 9], [1, 1, 0, 0, 4]])
+    second.write_text(json.dumps([[1, 0, 0, 0, 3], [1, 1, 0, 0, 8], [1, 2, 0, 0, 6]]), encoding="utf-8")
+    routes = RouteMap((first, second))
 
     assert [routes.remaining(at(x, 0), ()) for x in (0, 16, 32, 48)] == [3, 4, 6, None]
-    practice.unlink()
+    first.unlink()
     assert [routes.remaining(at(x, 0), ()) for x in (0, 16, 32, 48)] == [3, 8, 6, None]
 
 
-def test_the_tas_route_counts_the_frames_left_until_its_level_ends_and_keeps_the_fastest(tmp_path: Path):
+def test_the_route_counts_the_frames_left_until_its_level_ends_and_keeps_the_fastest(tmp_path: Path):
     steps = [(0, 1, 0, 0), (1, 1, 16, 0), (2, 1, 0, 0), (3, 1, 32, 0), (200, 2, 0, 0), (201, 2, 16, 0)]
-    write_steps(steps, route_rows(steps), tmp_path / "reference" / "route.json", tmp_path / "reference" / "trace.json")
+    write_route(tmp_path / "reference" / "route.json", list(route_rows(steps)))
     routes = RouteMap((tmp_path / "reference" / "route.json",))
 
     assert [routes.remaining(at(x, 0), ()) for x in (0, 16, 32)] == [1, 2, 0]

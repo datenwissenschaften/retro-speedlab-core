@@ -153,7 +153,6 @@ def write_config(tmp_path: Path) -> Path:
                 "speedrun:",
                 "  workers: 1",
                 "  segment_seconds: 0.05",
-                "  guide: false",
                 "  policy: false",
                 "  policy_emulators: 1",
                 "  id: fakegame-v0",

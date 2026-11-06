@@ -1,36 +1,10 @@
-import json
-from collections.abc import Iterator
-from pathlib import Path
-
-import cv2
-import numpy as np
-
-from datenwissenschaften.reference.samples import SIDE_CROP, small_screen
 from datenwissenschaften.route.position import Position
 from datenwissenschaften.route.route_map import Cell, cell_of
-from datenwissenschaften.tas.paths import atomic_write
 
-CHUNK_FRAMES = 2048
 LEVEL_GAP_FRAMES = 60
 
 Step = tuple[int, int, int, int]
 Timed = tuple[Step, int]
-
-
-def video_chunks(video: Path) -> Iterator[np.ndarray]:
-    capture = cv2.VideoCapture(str(video))
-    chunk: list[np.ndarray] = []
-    while True:
-        read, frame = capture.read()
-        if not read:
-            break
-        chunk.append(small_screen(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), SIDE_CROP))
-        if len(chunk) == CHUNK_FRAMES:
-            yield np.stack(chunk)
-            chunk = []
-    capture.release()
-    if chunk:
-        yield np.stack(chunk)
 
 
 def stretches(steps: list[Step]) -> list[list[Step]]:
@@ -54,8 +28,3 @@ def timed_rows(timed: list[Timed]) -> list[list[int]]:
 
 def route_rows(steps: list[Step]) -> list[list[int]]:
     return timed_rows([(step, stretch[-1][0]) for stretch in stretches(steps) for step in stretch])
-
-
-def write_route(steps: list[Step], rows: list[list[int]], route: Path, trace: Path) -> None:
-    atomic_write(trace, json.dumps(steps).encode())
-    atomic_write(route, json.dumps(rows).encode())

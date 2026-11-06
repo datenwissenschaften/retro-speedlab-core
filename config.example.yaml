@@ -27,7 +27,6 @@ twitch:
 speedrun:
   workers: 4
   segment_seconds: 240
-  guide: false
   policy: false
   policy_emulators: 3
   id: airstriker-genesis-v0

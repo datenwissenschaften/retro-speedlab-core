@@ -4,8 +4,7 @@ from pathlib import Path
 from loguru import logger
 
 from datenwissenschaften.reference.fetch import ensure_reference
-from datenwissenschaften.reference.guide import ensure_guide
-from datenwissenschaften.reference.paths import route_path
+from datenwissenschaften.route.paths import route_path
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.tas.practice import (
     LOADER_FILE,
@@ -124,7 +123,6 @@ def speedrun_forever(wrapper: str, config: Path) -> None:
     with worker_pool(settings.speedrun.workers) as pool:
         tas = tas_run(wrapper, config, pool)
         loader = ensure_loader(tas.output / LOADER_FILE, tas.runner, tas.routes)
-        ensure_guide(settings, tas.runner, tas.routes, loader)
         reel = Reel(settings, tas.feed, tas.runner, tas.routes)
         turn_to_changed_level(tas)
         LevelTrainer(tas, tas.routes, tas.runner.power_on(), loader, reel).forever()

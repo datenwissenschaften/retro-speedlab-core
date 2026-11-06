@@ -25,7 +25,6 @@ def _document() -> dict[str, Any]:
         "speedrun": {
             "workers": 4,
             "segment_seconds": 60,
-            "guide": False,
             "policy": False,
             "policy_emulators": 3,
             "id": "testgame-v0",
@@ -52,7 +51,7 @@ def test_complete_config_loads(tmp_path: Path):
     assert config.lab.stall_minutes == 30
     source = SpeedrunComSource("m1z0mmd0", "5dwpnllk", {"p85pg00l": "qyz5gr71"})
     game = GameSettings("testgame-v0", "Test Game", "NES", "Warpless", source, 1694)
-    assert config.speedrun == SpeedrunSettings(4, 60.0, False, False, 3, game)
+    assert config.speedrun == SpeedrunSettings(4, 60.0, False, 3, game)
     assert config.upload.api_key is None
     assert config.log_level == "INFO"
 
@@ -86,6 +85,13 @@ def test_twitch_must_be_switched_on_or_off_explicitly(tmp_path: Path):
 
     with pytest.raises(RuntimeError, match="twitch.enabled"):
         load_config(_write(tmp_path, document))
+
+
+def test_keys_the_core_no_longer_reads_are_ignored(tmp_path: Path):
+    document = _document()
+    document["speedrun"]["guide"] = True
+
+    assert load_config(_write(tmp_path, document)) == load_config(_write(tmp_path, _document()))
 
 
 def test_the_record_sources_are_named_explicitly(tmp_path: Path):
