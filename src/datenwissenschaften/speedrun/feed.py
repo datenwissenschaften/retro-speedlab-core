@@ -52,7 +52,7 @@ class SpeedrunFeed:
     def show(self, segments: list[Segment], searching: str) -> None:
         found = splits(self.course, segments)
         seconds = frames(segments) / self.course.frame_rate
-        firsts = self.journal.track(found, seconds)
+        firsts = self.journal.track(found, seconds, self.course.levels)
         self.stats.run(segments, found, seconds)
         summary = report(self.course, segments, found, firsts, searching, load_stuck(self.stuck))
         with self.lock:

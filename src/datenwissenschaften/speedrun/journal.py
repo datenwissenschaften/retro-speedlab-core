@@ -1,5 +1,6 @@
 import re
 import threading
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -103,10 +104,10 @@ class JournalStore:
             progressed = self.journal.progressed
         return None if progressed is None else datetime.fromisoformat(progressed)
 
-    def track(self, splits: list[Split], seconds: float) -> dict[str, float]:
+    def track(self, splits: list[Split], seconds: float, levels: Collection[str]) -> dict[str, float]:
         with self.lock:
             for split in splits:
-                self._split(split)
+                self._split(split, split.level in levels)
             history = self.journal.history
             if not history or history[-1].seconds != seconds:
                 self.journal.history = [*history, Point(now(), seconds)][-SHOWN_HISTORY:]
@@ -126,13 +127,14 @@ class JournalStore:
                 }
             )
 
-    def _split(self, split: Split) -> None:
+    def _split(self, split: Split, level: bool) -> None:
         firsts, bests = self.journal.firsts, self.journal.bests
         if split.level not in firsts:
             firsts[split.level] = bests[split.level] = split.level_seconds
-            self._milestone("level", f"{split.level} beaten in {clock(split.level_seconds)}")
+            if level:
+                self._milestone("level", f"{split.level} beaten in {clock(split.level_seconds)}")
             return
-        if split.level_seconds < bests[split.level]:
+        if level and split.level_seconds < bests[split.level]:
             saved = bests[split.level] - split.level_seconds
             bests[split.level] = split.level_seconds
             self._milestone("best", f"{split.level} in {clock(split.level_seconds)}, {saved:.1f} s faster")

@@ -112,23 +112,24 @@ def test_the_live_search_adds_up_its_workers():
     assert search_field(None, reports, STARTED) is None
 
 
-def test_the_journal_keeps_the_first_time_of_each_level_and_tells_when_a_level_got_faster(tmp_path: Path):
+def test_the_journal_keeps_the_first_time_of_each_part_and_tells_only_of_levels_beaten_or_faster(tmp_path: Path):
     path = tmp_path / "journal.json"
     journal = JournalStore(path)
 
-    first = journal.track([Split("Level 1", 64.69, 64.69)], 64.69)
-    journal.track([Split("Level 1", 64.69, 64.69)], 64.69)
-    faster = journal.track([Split("Level 1", 62.2, 62.2)], 70.0)
+    opened = journal.track([Split("Menu", 10.8, 10.8)], 10.8, LEVELS)
+    first = journal.track([Split("Level 1", 64.69, 64.69)], 64.69, LEVELS)
+    journal.track([Split("Level 1", 64.69, 64.69)], 64.69, LEVELS)
+    faster = journal.track([Split("Level 1", 62.2, 62.2)], 70.0, LEVELS)
     for index in range(25):
         journal.event("found", "Play", index)
 
     again = JournalStore(path).fields()
-    assert first == faster == {"Level 1": 64.69}
+    assert opened == {"Menu": 10.8} and first == faster == {"Menu": 10.8, "Level 1": 64.69}
     assert [milestone["text"] for milestone in again["milestones"]] == [
         "Level 1 beaten in 1:04.7",
         "Level 1 in 1:02.2, 2.5 s faster",
     ]
-    assert [point["seconds"] for point in again["history"]] == [64.69, 70.0]
+    assert [point["seconds"] for point in again["history"]] == [10.8, 64.69, 70.0]
     assert [event["frames"] for event in again["events"]] == list(range(5, 25))
     assert clock(59.97) == "1:00.0"
 
