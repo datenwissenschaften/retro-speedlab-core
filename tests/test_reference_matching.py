@@ -270,3 +270,17 @@ def test_a_video_whose_levels_do_not_split_logs_the_failure_and_reports_nothing(
     referencing.refresh()
 
     assert reported == [] and referencing.running is not None and referencing.running.exception() is not None
+
+
+def test_a_still_splits_panel_beside_the_game_is_cut_off(tmp_path: Path):
+    panel = 48
+    (tmp_path / "frames").mkdir()
+    for index in range(11):
+        frame = np.zeros((VIDEO[0], VIDEO[1] + panel, 3), np.uint8)
+        frame[:, : VIDEO[1]] = pattern(index, VIDEO)
+        frame[:, VIDEO[1] :] = 200
+        cv2.imwrite(str(tmp_path / "frames" / f"{index / 4:07.2f}s.png"), cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+
+    rows, columns = frames.video_box(sorted((tmp_path / "frames").glob("*s.png")))
+
+    assert (rows, columns) == (slice(0, VIDEO[0]), slice(0, VIDEO[1]))

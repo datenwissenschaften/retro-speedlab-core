@@ -7,7 +7,7 @@ FRAMES_DIR = "frames"
 VIDEO_FILE = "video"
 MATCHES_FILE = "matches.json"
 SCREENS_FILE = "screens.msgpack"
-THUMBS_FILE = "frames.npz"
+THUMBS_FILE = "game_thumbs.npz"
 
 
 def reference_dir(settings: RetroSpeedlabConfig) -> Path:
