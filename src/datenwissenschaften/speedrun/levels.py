@@ -1,4 +1,5 @@
 import multiprocessing
+from functools import partial
 from multiprocessing.process import BaseProcess
 from pathlib import Path
 
@@ -8,11 +9,12 @@ from datenwissenschaften.reference.fetch import ensure_reference
 from datenwissenschaften.reference.matching import ReferenceMatching
 from datenwissenschaften.route.paths import route_path
 from datenwissenschaften.settings import load_config
+from datenwissenschaften.speedrun.polish import Polisher
 from datenwissenschaften.speedrun.practice import practised, write_practice_route
 from datenwissenschaften.speedrun.prior import PRIOR_FILE, write_prior
 from datenwissenschaften.speedrun.reel import Reel
 from datenwissenschaften.speedrun.routes import FULL_RUN, Leg, Part, Routes, finished, load_progress, save_progress
-from datenwissenschaften.speedrun.run import Tas, tas_run, worker_pool
+from datenwissenschaften.speedrun.run import Tas, never_rest, tas_run, worker_pool
 from datenwissenschaften.speedrun.runner import Start
 
 
@@ -46,9 +48,10 @@ class LevelTrainer:
 
     def beat_levels(self) -> None:
         self.share_practice()
+        polisher = Polisher(self.tas, 0, 0)
         while unbeaten := self.unbeaten():
             part = unbeaten[0]
-            self.tas.extend(self.leg(part), self.routes.segments(part.name), None)
+            self.tas.extend(self.leg(part), self.routes.segments(part.name), None, partial(polisher.rest, part))
             self.share_practice()
         logger.info(f"All {len(self.routes.parts)} parts are beaten one after the other")
 
@@ -60,7 +63,7 @@ class LevelTrainer:
     def full_run(self) -> None:
         leg = Leg(FULL_RUN, self.power_on, None)
         segments = load_progress(self.routes.progress) or self.routes.stitched()
-        self.tas.improve(leg, self.tas.extend(leg, segments, None))
+        self.tas.improve(leg, self.tas.extend(leg, segments, None, never_rest))
 
     def forever(self) -> None:
         self.beat_levels()

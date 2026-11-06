@@ -72,6 +72,10 @@ Footage = Callable[[RetroSpeedlabPaths, Path, tuple[bytes, ...]], Path]
 app = typer.Typer()
 
 
+def never_rest() -> bool:
+    return False
+
+
 def segment_of(crossing: Crossing) -> Segment:
     return Segment(crossing.end.state, crossing.pressed.tolist(), crossing.end.emulator_state, crossing.won)
 
@@ -179,11 +183,15 @@ class Tas:
             self.movie.queue(movie_cut(self.feed.course, leg, replayed, movie, replay.memory))
         return replayed
 
-    def extend(self, leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
+    def extend(
+        self, leg: Leg, segments: list[Segment], patience: int | None, rest: Callable[[], bool]
+    ) -> list[Segment]:
         turn = Turn(leg.name, 0) if patience is None else turn_of(self.turn_file, leg.name, patience)
         while not finished(segments := self.verified(leg, segments), leg.exit):
             if patience is not None and turn.over(patience):
                 logger.info(f"{leg.name} rests after {turn.searches} searches; the next level takes its turn")
+                return segments
+            if rest():
                 return segments
             turn = turn.searched()
             start = self.start(leg, segments, len(segments))
@@ -345,7 +353,7 @@ def search(wrapper: str, config: Path, until: str) -> None:
     with worker_pool(settings.speedrun.workers) as pool:
         tas = tas_run(wrapper, config, pool)
         leg = Leg(FULL_RUN, tas.runner.power_on(), until)
-        publish(tas, tas.extend(leg, load_progress(tas.routes.progress), None))
+        publish(tas, tas.extend(leg, load_progress(tas.routes.progress), None, never_rest))
 
 
 def kept_on_verify(leg: Leg, segments: list[Segment]) -> int:

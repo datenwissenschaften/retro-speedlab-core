@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -114,7 +115,7 @@ def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_th
     kept.save(Leg(FULL_RUN, POWER_ON, None), [*RUN[:3], Segment("Boss2", [[1]], b"won", True)])
     calls: list[tuple[str, str, int]] = []
 
-    def extend(leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
+    def extend(leg: Leg, segments: list[Segment], patience: int | None, rest: Callable[[], bool]) -> list[Segment]:
         calls.append(("extend", leg.name, len(segments)))
         return segments
 
@@ -156,7 +157,7 @@ def test_levels_are_beaten_one_after_the_other_each_from_where_the_level_before_
     calls: list = []
     beats = {"Level 1": [RUN[1], RUN[2]], "Level 2": [Segment("Boss2", [[1]], b"won", True)]}
 
-    def extend(leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
+    def extend(leg: Leg, segments: list[Segment], patience: int | None, rest: Callable[[], bool]) -> list[Segment]:
         calls.append((leg.name, leg.entry, patience))
         kept.save(leg, beats[leg.name])
         return segments
@@ -185,7 +186,7 @@ def test_a_level_is_searched_until_it_is_beaten_before_the_next_one_starts(
     kept.split(RUN[:1], POWER_ON)
     searched: list[str] = []
 
-    def extend(leg: Leg, segments: list[Segment], patience: int | None) -> list[Segment]:
+    def extend(leg: Leg, segments: list[Segment], patience: int | None, rest: Callable[[], bool]) -> list[Segment]:
         searched.append(leg.name)
         if len(searched) == 3:
             raise OneRound
