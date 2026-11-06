@@ -11,11 +11,16 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from test_tas import START, LineRunner
 
 from datenwissenschaften.policy import env as env_module
+from datenwissenschaften.policy import starts as starts_module
 from datenwissenschaften.policy import trainer as trainer_module
 from datenwissenschaften.policy.env import EPISODE_DECISIONS, EXIT, PolicyEnv
 from datenwissenschaften.policy.prior import POLICY_FILE, PolicyPrior, observation
+from datenwissenschaften.policy.starts import openings
 from datenwissenschaften.policy.trainer import RoundCallback, export_policy, policy_model
+from datenwissenschaften.speedrun.archive_store import save_archive
+from datenwissenschaften.speedrun.archives import archive_key
 from datenwissenschaften.speedrun.live import read_reports
+from datenwissenschaften.speedrun.novelty import RamNovelty
 from datenwissenschaften.speedrun.policy_start import (
     POLICY_EXITS_FILE,
     POLICY_START_FILE,
@@ -25,6 +30,7 @@ from datenwissenschaften.speedrun.policy_start import (
 from datenwissenschaften.speedrun.preferences import Preferences
 from datenwissenschaften.speedrun.prior import ActionPrior
 from datenwissenschaften.speedrun.runner import Start
+from datenwissenschaften.speedrun.search import UNBOUNDED, Cell, Trail
 
 CPU = torch.device("cpu")
 RIGHT, LEFT = 1, 2
@@ -110,3 +116,38 @@ def test_the_search_follows_the_table_or_the_policy_part_of_the_time(line_env: P
 
     assert chosen.count(None) > 50 and chosen.count(2) > 50
     assert {choice for choice in chosen if choice is not None} <= {0, 1, 2}
+
+
+def place(x: int, score: float) -> Cell:
+    trail = Trail(None, np.full((x, 1), RIGHT, dtype=np.int8))
+    return Cell(Start("Walk", x.to_bytes(2, "big", signed=True)), trail, x, 0, None, score, 0)
+
+
+def save_places(tmp_path: Path, cells: list[Cell]) -> None:
+    folder = tmp_path / "archives" / archive_key(START, UNBOUNDED)
+    folder.mkdir(parents=True)
+    keyed = {("Walk", cell.frames): cell for cell in cells}
+    save_archive(folder / "1.msgpack", "Walk", keyed, RamNovelty(np.zeros(1, dtype=np.uint8)))
+
+
+def test_the_openings_are_the_search_start_then_its_places_closest_to_the_exit_first(tmp_path: Path):
+    save_places(tmp_path, [place(2, 1.0), place(4, 3.0)])
+
+    found = openings(tmp_path / "archives", START, 1)
+
+    assert [opening.start for opening in found] == [START, place(4, 3.0).start, place(2, 1.0).start]
+    assert [len(opening.prefix) for opening in found] == [0, 4, 2]
+
+
+def test_an_episode_from_a_place_inside_the_part_hands_the_search_a_way_out_from_its_start(
+    line_env: PolicyEnv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    save_places(tmp_path, [place(4, 3.0)])
+    monkeypatch.setattr(starts_module, "FRONTIER_SHARE", 1.0)
+
+    line_env.reset(seed=1)
+    _, _, terminated, _, info = line_env.step(np.int64(RIGHT))
+
+    state, pressed = info[EXIT]
+    assert terminated and state == "Walk"
+    assert pressed.tolist() == [[RIGHT]] * 6
