@@ -20,6 +20,7 @@ def test_a_movie_is_rendered_by_the_playback_module_next_to_it(tmp_path: Path, m
         video.PLAYBACK_MODULE,
         str(paths.roms_path),
         str(paths.integrations_dir),
+        str(tmp_path / "knowledge.yaml"),
         str(tmp_path / "tas.bk2"),
     ]
 
@@ -27,14 +28,15 @@ def test_a_movie_is_rendered_by_the_playback_module_next_to_it(tmp_path: Path, m
 def test_the_playback_imports_the_roms_and_renders_every_movie(tmp_path: Path, monkeypatch):
     calls: list[object] = []
     monkeypatch.setattr(video, "import_roms", lambda roms, integrations: calls.append((roms, integrations)))
-    monkeypatch.setattr(video, "render", calls.append)
+    monkeypatch.setattr(video, "render", lambda movie, labels: calls.append((movie, labels.player)))
     app = video.typer.Typer()
     app.command()(video.main)
+    arguments = [str(tmp_path / "roms"), str(tmp_path / "integrations"), str(tmp_path / "knowledge.yaml")]
 
-    result = CliRunner().invoke(app, [str(tmp_path / "roms"), str(tmp_path / "integrations"), "a.bk2", "b.bk2"])
+    result = CliRunner().invoke(app, [*arguments, "a.bk2", "b.bk2"])
 
     assert result.exit_code == 0
-    assert calls == [(tmp_path / "roms", tmp_path / "integrations"), Path("a.bk2"), Path("b.bk2")]
+    assert calls == [(tmp_path / "roms", tmp_path / "integrations"), (Path("a.bk2"), None), (Path("b.bk2"), None)]
 
 
 def test_the_encoder_writes_an_mp4_beside_the_movie():

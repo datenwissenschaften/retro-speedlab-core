@@ -13,6 +13,7 @@ class RetroSpeedlabPaths:
     models_dir: Path
     cache_dir: Path
     lab_run_marker: Path
+    game_dir: Path
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             models_dir=_path(document.paths.models, base_dir),
             cache_dir=_path(document.paths.cache, base_dir),
             lab_run_marker=_path(document.paths.lab_run, base_dir),
+            game_dir=base_dir,
         ),
         training=TrainingSettings(game=_text(document.training.game, "training.game")),
         upload=UploadSettings(

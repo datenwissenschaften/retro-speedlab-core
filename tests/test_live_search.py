@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import cv2
 import numpy as np
 import pytest
-from fakes import NO_EXPERIMENT, fake_environment, write_config
+from fakes import NO_EXPERIMENT, fake_catalog, fake_environment, write_config
 
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.speedrun import feed as feed_module
@@ -200,7 +200,15 @@ def test_the_feed_publishes_the_movie_with_the_live_search_and_notices_a_lab_run
     monkeypatch.setattr(feed_module, "publish_metadata", lambda section, values: published.append(values))
     marker = tmp_path / ".lab-run"
     journal = JournalStore(tmp_path / "journal.json")
-    feed = SpeedrunFeed(course(tmp_path), journal, tmp_path / "live", tmp_path / "stuck.json", marker, NO_EXPERIMENT)
+    feed = SpeedrunFeed(
+        course(tmp_path),
+        journal,
+        tmp_path / "live",
+        tmp_path / "stuck.json",
+        marker,
+        NO_EXPERIMENT,
+        fake_catalog(tmp_path),
+    )
     segments = [Segment("Play", [[0, 1]] * 60, b"", False), Segment("Level2", [[0, 0]] * 60, b"", False)]
 
     feed.show(segments, "Level2")
@@ -218,6 +226,7 @@ def test_the_feed_publishes_the_movie_with_the_live_search_and_notices_a_lab_run
     assert [(event["kind"], event["state"]) for event in published[-2]["events"]] == [("lab", "Level2")]
     assert published[-2]["search"] is None and "updated_at" in published[-1]
     assert published[-1]["compare"] == {"version": "def"} and searching["compare"] is None
+    assert published[-1]["sprites"] == [] and published[-1]["knowledge"]["player"] is None
 
 
 def test_the_feed_publishes_nothing_before_it_has_a_run_to_show(tmp_path: Path, monkeypatch):
@@ -225,7 +234,13 @@ def test_the_feed_publishes_nothing_before_it_has_a_run_to_show(tmp_path: Path, 
     monkeypatch.setattr(feed_module, "publish_metadata", lambda section, values: published.append(values))
     journal = JournalStore(tmp_path / "journal.json")
     feed = SpeedrunFeed(
-        course(tmp_path), journal, tmp_path / "live", tmp_path / "stuck.json", tmp_path / ".lab-run", NO_EXPERIMENT
+        course(tmp_path),
+        journal,
+        tmp_path / "live",
+        tmp_path / "stuck.json",
+        tmp_path / ".lab-run",
+        NO_EXPERIMENT,
+        fake_catalog(tmp_path),
     )
 
     feed.publish()
@@ -265,7 +280,13 @@ def test_the_feed_publishes_how_far_every_level_got_in_seconds(tmp_path: Path, m
     monkeypatch.setattr(feed_module, "publish_metadata", lambda section, values: published.append(values))
     journal = JournalStore(tmp_path / "journal.json")
     feed = SpeedrunFeed(
-        course(tmp_path), journal, tmp_path / "live", tmp_path / "stuck.json", tmp_path / ".lab-run", NO_EXPERIMENT
+        course(tmp_path),
+        journal,
+        tmp_path / "live",
+        tmp_path / "stuck.json",
+        tmp_path / ".lab-run",
+        NO_EXPERIMENT,
+        fake_catalog(tmp_path),
     )
     feed.show([Segment("Play", [[0, 1]] * 60, b"", False)], "Play")
 

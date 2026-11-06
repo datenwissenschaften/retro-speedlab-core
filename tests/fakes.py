@@ -6,13 +6,22 @@ import numpy as np
 import wandb
 
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
+from datenwissenschaften.knowledge import NO_KNOWLEDGE
 from datenwissenschaften.ram import RamInfo, ram
 from datenwissenschaften.route.route_map import RouteMap
+from datenwissenschaften.sprites.catalog import SpriteCatalog
 from datenwissenschaften.states.state import State
 
 FRAME_RATE = 60.0
 NO_EXPERIMENT = wandb.init(project="tests", mode="disabled")
 SAVING_SCRIPT = [(3, 0), (3, 1), (3, 2), (3, 5), (3, 6), (3, 6), (3, 6), (3, 6)]
+HIDDEN_SPRITE = bytes([0xEF, 0, 0, 0])
+NO_SPRITES = HIDDEN_SPRITE * 64
+
+
+def fceu_state(prefix: bytes, oam: bytes, control: int) -> bytes:
+    sprites = b"SPRA" + len(oam).to_bytes(4, "little") + oam
+    return prefix + sprites + b"PPUR" + (4).to_bytes(4, "little") + bytes([control, 0, 0, 0])
 
 
 @dataclass
@@ -47,6 +56,10 @@ class Boss(State[FakeRam]):
         return self.ram.score >= 7
 
 
+def saved_state(position: int) -> bytes:
+    return fceu_state(bytes([position]), NO_SPRITES, 0)
+
+
 class FakeEmulator:
     def __init__(self, movie_path: Path, script: list[tuple[int, int]]) -> None:
         self.movie_path = str(movie_path)
@@ -56,7 +69,7 @@ class FakeEmulator:
         self.buttons = ["A", "START"]
         self.movie = SimpleNamespace(set_state=lambda state: None)
         self.em = SimpleNamespace(
-            get_state=lambda: b"emulator",
+            get_state=lambda: fceu_state(b"emulator", NO_SPRITES, 0),
             set_state=lambda state: None,
             get_screen_rate=lambda: FRAME_RATE,
             get_screen=lambda: np.zeros((4, 4, 3), np.uint8),
@@ -92,7 +105,7 @@ class FakeEmulator:
 class SavingEmulator(FakeEmulator):
     def __init__(self, movie_path: Path, script: list[tuple[int, int]]) -> None:
         super().__init__(movie_path, script)
-        self.em.get_state = lambda: bytes([self.position])
+        self.em.get_state = lambda: saved_state(self.position)
         self.em.set_state = self._load
         self.em.step = self._advance
         self.em.set_button_mask = lambda mask, player: None
@@ -132,6 +145,10 @@ def fake_environment(tmp_path: Path, script: list[tuple[int, int]]) -> FakeWrapp
 def saving_environment(tmp_path: Path) -> FakeWrapper:
     emulator = SavingEmulator(tmp_path / "recordings", SAVING_SCRIPT)
     return FakeWrapper(emulator, fake_routes(tmp_path))
+
+
+def fake_catalog(tmp_path: Path) -> SpriteCatalog:
+    return SpriteCatalog(tmp_path / "sprites", NO_KNOWLEDGE)
 
 
 def fake_routes(tmp_path: Path) -> RouteMap:

@@ -52,7 +52,7 @@ class Reel:
         segments = self.routes.segments(part.name)
         start = Start(part.entry_state, self.routes.routes[part.name].entry)
         movie = self.directory / str(number) / ROUTE_MOVIE
-        replay = verified_segments(self.runner, start, segments, movie)
+        replay = verified_segments(self.runner, start, segments, movie, self.feed.catalog)
         field = movie_field(start.state, self.feed.course.frame_rate, segments)
         shown = {**field, "part": part.name, "number": number, "video": level_video(number)}
         return Cut(key, (movie.read_bytes(),), shown, {MOVIE_MEMORY: replay.memory})

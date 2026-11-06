@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import msgspec
 import numpy as np
 import pytest
-from fakes import saving_environment, write_config
+from fakes import saved_state, saving_environment, write_config
 
 from datenwissenschaften.policy.prior import PolicyPrior
 from datenwissenschaften.speedrun import feed as feed_module
@@ -106,7 +106,7 @@ def test_the_runner_restores_savestates_and_tells_when_a_segment_is_left(tmp_pat
 
     assert [outcome.state for outcome in outcomes] == ["Survive", "Survive", "Boss"]
     assert runner.forward("Survive", "Boss") and not runner.forward("Boss", "Survive")
-    assert runner.snapshot() == start.emulator_state == bytes([0])
+    assert runner.snapshot() == start.emulator_state == saved_state(0)
     assert runner.key(31) == ("Survive", 1)
     assert runner.remaining() is None
 
@@ -134,6 +134,7 @@ def test_search_and_improve_write_a_verified_movie_and_keep_only_faster_segments
     assert (tas.output / TAS_MOVIE).read_bytes() == b"movie"
     assert (tas.output / "screen.mp4").read_bytes() == b"movie"
     assert (tas.output / "compare.mp4").read_bytes() == b"moviemovie"
+    assert (tmp_path / "cache" / "sprites" / "catalog.json").read_bytes() == b"{}"
 
 
 def test_a_movie_that_no_longer_reaches_its_segments_is_cut_back(tmp_path: Path, monkeypatch):
@@ -144,7 +145,7 @@ def test_a_movie_that_no_longer_reaches_its_segments_is_cut_back(tmp_path: Path,
     kept = tas.verified(Leg(FULL_RUN, power_on, "Boss"), [Segment("Boss", [[1, 0]], bytes([1]), False)])
 
     assert kept == []
-    assert movie.verified_segments(runner, power_on, [], tas.output / "again.bk2").verified == 0
+    assert movie.verified_segments(runner, power_on, [], tas.output / "again.bk2", None).verified == 0
     assert tas.searcher.best(power_on, 1, 1) is None
 
 
@@ -262,7 +263,7 @@ def test_a_faster_piece_that_breaks_the_rest_of_the_run_is_not_taken(tmp_path: P
     segments = [Segment("Survive", [[1, 0]] * 4, bytes([4]), False), Segment("Boss", [[1, 0]], bytes([5]), False)]
     faster = Crossing(Start("Survive", bytes([2])), np.zeros((2, 2), np.int8), False, ("Survive", 0))
     monkeypatch.setattr(searcher.Searcher, "best", lambda self, start, bound, rounds: faster)
-    replayed = lambda runner, start, shorter, path: movie.Replay(1, {}, [bytes([2])])  # noqa: E731
+    replayed = lambda runner, start, shorter, path, catalog: movie.Replay(1, {}, [bytes([2])])  # noqa: E731
     monkeypatch.setattr(run, "verified_segments", replayed)
 
     assert tas.shorten(Leg(FULL_RUN, runner.power_on(), "Boss"), segments, 0) is segments

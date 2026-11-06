@@ -10,6 +10,7 @@ import numpy as np
 from datenwissenschaften.environment.recording import active_movie_path
 from datenwissenschaften.ram import RamInfo
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
+from datenwissenschaften.sprites.catalog import SpriteCatalog
 
 MEMORY_EVERY = 6
 
@@ -68,7 +69,9 @@ def record_piece(runner: SegmentRunner, start: Start, pressed: np.ndarray, movie
     return movie.read_bytes()
 
 
-def verified_segments(runner: SegmentRunner, start: Start, segments: list[Segment], movie: Path) -> Replay:
+def verified_segments(
+    runner: SegmentRunner, start: Start, segments: list[Segment], movie: Path, catalog: SpriteCatalog | None
+) -> Replay:
     machine = runner.wrapper.state_machine
     verified, played = 0, 0
     samples: list[dict[str, int | None]] = []
@@ -81,9 +84,15 @@ def verified_segments(runner: SegmentRunner, start: Start, segments: list[Segmen
                 machine.step(ram)
                 if played % MEMORY_EVERY == 0:
                     samples.append(memory_sample(ram))
+                    if catalog is not None:
+                        catalog.look(
+                            runner.snapshot(), runner.emulator.em.get_screen(), machine.state_name, ram.level()
+                        )
                 played += 1
             if machine.state_name != segment.state and not (segment.won and machine.current_state.won()):
                 break
             verified += 1
             ends.append(runner.snapshot())
+    if catalog is not None:
+        catalog.save()
     return Replay(verified, memory_field(samples), ends)

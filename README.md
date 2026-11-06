@@ -156,6 +156,46 @@ and variables) with [yt-dlp](https://github.com/yt-dlp/yt-dlp) to
 `cache/reference/frames/<seconds>s.png` for the lab. It fails when that run has
 no video. Delete `cache/reference/frames` to fetch the run again.
 
+## Sprites and game knowledge
+
+The engine reads what the NES draws, not what a picture looks like: every
+FCEUmm savestate holds the PPU's object memory (`SPRA`, 64 sprites of y, tile,
+attributes and x) and its control register (`PPUR`, bit 5 for 8x16 sprites).
+FCEUmm runs vertical blank and the game's sprite DMA before it draws a frame,
+so the object memory at the end of a frame is exactly the one on screen. No
+game setting is needed. Sprites whose 8x8 or 8x16 boxes touch or overlap form
+one object; an object is identified by its signature, the first 8 hex digits
+of a BLAKE2b hash of its sorted tile and palette pairs, so it keeps its
+signature wherever it moves and whichever way it faces.
+
+Every 6 frames of each verified replay of the run and of the level reel, the
+objects on screen go into the sprite catalog `cache/sprites/`:
+`<signature>.png` is the object cut out of the screen when it was first seen,
+`catalog.json` maps each signature to when (UTC), in which level
+(`RamInfo.level()`) and state it was first seen and how often since. Every
+rendered video is drawn at twice the NES resolution with a thin box and a short
+label around each object: the player's name in yellow, a named sprite in cyan,
+`?` in pink.
+
+Names come from the game package's optional `knowledge.yaml` next to its
+`config.yaml`, which the lab writes for the website's "What the AI learned"
+page. A missing file is empty knowledge; a malformed one stops the run with the
+file and the field named. Every key is required:
+
+```yaml
+mechanics: [{title: Weight, text: Each nibbley eaten makes the snake heavier.}]
+player: {name: Rattle, text: The red snake., sprite: bda9d2fe}  # or null
+enemies: [{name: Bigfoot, text: Stomps the snake flat., sprite: null, levels: [1, 2]}]
+powerups: [{name: Clock, text: Stops the timer., sprite: null, effect: More time}]
+levels: [{name: Level 1, goal: Ring the bell, route: Up the stairs, hazards: [water]}]
+ram: [{address: 0x00A5, name: weight, meaning: Nibbleys eaten, verified: true}]
+```
+
+`metadata.speedrun.knowledge` publishes the file as it reads, and
+`metadata.speedrun.sprites` the 48 most seen catalog entries:
+`[{signature, name, image, first_seen, first_level, first_state, seen}]`, with
+`name` from the knowledge or `null` and `image` the PNG as a data URI.
+
 ## PPO policy
 
 With `speedrun.policy`, a separate process trains a policy with
@@ -277,7 +317,7 @@ raise an error when the configuration is loaded.
 |-----|---------|
 | `paths.roms`, `paths.integrations` | ROMs and custom Stable Retro integrations |
 | `paths.models` | Route memory per state |
-| `paths.cache` | The search's movie, progress, stuck marker, journal, live reports and log under `tas/` |
+| `paths.cache` | The search's movie, progress, stuck marker, journal, live reports and log under `tas/`, the sprite catalog under `sprites/` |
 | `paths.lab_run` | Marker file of a running lab run |
 | `training.game` | Stable Retro game id |
 | `upload.url`, `upload.api_key` | Retro Speedlab API; `null` disables the relay |

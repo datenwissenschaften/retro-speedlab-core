@@ -13,6 +13,7 @@ from loguru import logger
 
 from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.experiments import start_experiment
+from datenwissenschaften.knowledge import knowledge_path, load_knowledge
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, RetroSpeedlabPaths, load_config
 from datenwissenschaften.speedrun.feed import SpeedrunFeed
@@ -50,6 +51,7 @@ from datenwissenschaften.speedrun.stuck import (
     unbar,
 )
 from datenwissenschaften.speedrun.turns import TURN_FILE, Turn, save_turn, turn_of
+from datenwissenschaften.sprites.catalog import SpriteCatalog, sprites_dir
 from datenwissenschaften.ui.relay import relay_key
 from datenwissenschaften.ui.video_upload import VideoUpload
 from datenwissenschaften.workflow.wrapper import wrapper_class
@@ -166,7 +168,7 @@ class Tas:
 
     def verified(self, leg: Leg, segments: list[Segment]) -> list[Segment]:
         movie = self.output / TAS_MOVIE
-        replay = verified_segments(self.runner, leg.entry, segments, movie)
+        replay = verified_segments(self.runner, leg.entry, segments, movie, self.feed.catalog)
         replayed = [
             replace(segment, emulator_state=end)
             for segment, end in zip(segments[: replay.verified], replay.ends, strict=True)
@@ -276,7 +278,7 @@ class Tas:
             return segments
         saved = len(segments[index].pressed) - crossing.frames
         shorter = [*segments[:index], segment_of(crossing), *segments[index + 1 :]]
-        if verified_segments(self.runner, leg.entry, shorter, self.output / TRIAL_MOVIE).verified < len(shorter):
+        if verified_segments(self.runner, leg.entry, shorter, self.output / TRIAL_MOVIE, None).verified < len(shorter):
             logger.info(f"Segment {index} of {leg.name} is {saved} frames faster but the rest breaks; it stays")
             return segments
         logger.info(f"Segment {index} of {leg.name} into {crossing.end.state} is {saved} frames faster")
@@ -318,8 +320,9 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
     course = course_of(runner, settings.speedrun.game)
     journal = JournalStore(output / JOURNAL_FILE)
     experiment = start_experiment(settings, SEARCH_JOB)
+    catalog = SpriteCatalog(sprites_dir(settings), load_knowledge(knowledge_path(settings.paths.game_dir)))
     feed = SpeedrunFeed(
-        course, journal, output / LIVE_DIR, output / STUCK_FILE, settings.paths.lab_run_marker, experiment
+        course, journal, output / LIVE_DIR, output / STUCK_FILE, settings.paths.lab_run_marker, experiment, catalog
     )
     threading.Thread(target=feed.publish_every, args=(threading.Event(),), name="speedrun-feed", daemon=True).start()
     movie, compare = screen(settings, feed, "movie", render_movie), screen(settings, feed, "compare", render_compare)
@@ -360,7 +363,9 @@ def verify(wrapper: str, config: Path, routes_file: Path) -> None:
         *((leg, routes.segments(leg.name)) for leg in legs),
         (Leg(FULL_RUN, power_on, None), load_progress(routes.progress)),
     ]:
-        verified = verified_segments(runner, leg.entry, segments, tas_dir(settings) / f"verify-{TAS_MOVIE}").verified
+        verified = verified_segments(
+            runner, leg.entry, segments, tas_dir(settings) / f"verify-{TAS_MOVIE}", None
+        ).verified
         if verified < kept_on_verify(leg, segments):
             raise RuntimeError(f"Only {verified} of {len(segments)} segments of {leg.name} replay with {wrapper}")
         if verified < len(segments):

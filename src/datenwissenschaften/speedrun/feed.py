@@ -14,6 +14,7 @@ from datenwissenschaften.speedrun.report import SECTION, Course, report, splits
 from datenwissenschaften.speedrun.routes import PartProgress
 from datenwissenschaften.speedrun.search_stats import SearchStats
 from datenwissenschaften.speedrun.stuck import load_stuck
+from datenwissenschaften.sprites.catalog import SpriteCatalog
 from datenwissenschaften.ui.telemetry import publish_metadata
 
 PUBLISH_SECONDS = 5.0
@@ -22,9 +23,17 @@ REEL_ORDER = "number"
 
 class SpeedrunFeed:
     def __init__(
-        self, course: Course, journal: JournalStore, live: Path, stuck: Path, lab_marker: Path, experiment: wandb.Run
+        self,
+        course: Course,
+        journal: JournalStore,
+        live: Path,
+        stuck: Path,
+        lab_marker: Path,
+        experiment: wandb.Run,
+        catalog: SpriteCatalog,
     ) -> None:
         self.course = course
+        self.catalog = catalog
         self.journal = journal
         self.live = live
         self.stuck = stuck
@@ -98,7 +107,7 @@ class SpeedrunFeed:
         reports = [] if search is None else read_reports(self.live)
         now = datetime.now(UTC)
         live = {"search": search_field(search, reports, now), "updated_at": now.isoformat(timespec="seconds")}
-        fields = {**summary, **screened, "practice": practice, "reel": reel}
+        fields = {**summary, **screened, "practice": practice, "reel": reel, **self.catalog.fields()}
         publish_metadata(SECTION, {**fields, **self.journal.fields(), **live})
 
     def notice_lab(self) -> None:
