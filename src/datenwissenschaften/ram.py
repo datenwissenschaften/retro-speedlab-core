@@ -14,13 +14,21 @@ def ram_array(address: int, length: int) -> Any:
     return field(default_factory=lambda: [0] * length, metadata={"address": address, "length": length})
 
 
+def seen() -> Any:
+    return field(default=False, metadata={"screen": True})
+
+
 class RamInfo:
     @classmethod
     @final
     def ram_map(cls) -> dict[str, tuple[int, int]]:
         if not is_dataclass(cls):
             raise TypeError(f"{cls.__name__} must be a dataclass to map its RAM")
-        return {f.name: (int(f.metadata["address"]), int(f.metadata["length"])) for f in fields(cls)}
+        return {
+            f.name: (int(f.metadata["address"]), int(f.metadata["length"]))
+            for f in fields(cls)
+            if "screen" not in f.metadata
+        }
 
     @classmethod
     @final

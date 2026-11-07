@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
-from datenwissenschaften.ram import RamInfo, ram, ram_array
+from datenwissenschaften.ram import RamInfo, ram, ram_array, seen
 
 
 @dataclass
@@ -30,6 +30,16 @@ def test_from_ram_reads_scalar_and_array_fields_from_raw_memory():
 
     assert ram_info.health == 42
     assert ram_info.inventory == [1, 2, 3]
+
+
+def test_a_field_seen_on_the_screen_has_no_address_and_starts_unseen():
+    @dataclass(frozen=True)
+    class Screened(RamInfo):
+        health: int = ram(0x10)
+        on_map: bool = seen()
+
+    assert Screened.ram_map() == {"health": (0x10, 1)}
+    assert Screened.from_ram(bytes(32)).on_map is False
 
 
 def test_a_game_without_known_ram_meanings_reports_none():
