@@ -62,10 +62,6 @@ def relabelled(runner: SegmentRunner, start: Start, segments: list[Segment]) -> 
     return kept
 
 
-def stale(segments: list[Segment], states: tuple[str, ...]) -> bool:
-    return any(segment.state not in states for segment in segments)
-
-
 def load_progress(path: Path) -> list[Segment]:
     return msgspec.msgpack.decode(path.read_bytes(), type=list[Segment]) if path.is_file() else []
 
@@ -82,17 +78,19 @@ class Routes:
         self.routes = msgspec.msgpack.decode(path.read_bytes(), type=dict[str, Route]) if path.is_file() else {}
 
     def relabel(self, runner: SegmentRunner) -> list[str]:
-        states, entries = runner.order, {part.name: part.entry_state for part in self.parts}
-        changed = [name for name, route in self.routes.items() if stale(list(route.segments), states)]
-        for name in changed:
-            route = self.routes[name]
-            segments = relabelled(runner, Start(entries[name], route.entry), list(route.segments))
-            self.routes = {**self.routes, name: Route(route.entry, segments)}
+        entries = {part.name: part.entry_state for part in self.parts}
+        replayed = {
+            name: Route(route.entry, relabelled(runner, Start(entries[name], route.entry), list(route.segments)))
+            for name, route in self.routes.items()
+            if name in entries
+        }
+        changed = [name for name, route in replayed.items() if route != self.routes[name]]
         if changed:
+            self.routes = {**self.routes, **replayed}
             atomic_write(self.path, msgspec.msgpack.encode(self.routes))
         progress = load_progress(self.progress)
-        if stale(progress, states):
-            save_progress(self.progress, relabelled(runner, runner.power_on(), progress))
+        if (progress_replayed := relabelled(runner, runner.power_on(), progress)) != progress:
+            save_progress(self.progress, progress_replayed)
             changed.append(FULL_RUN)
         return changed
 

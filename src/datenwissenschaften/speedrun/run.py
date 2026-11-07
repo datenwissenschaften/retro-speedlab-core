@@ -342,7 +342,7 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
     routes = Routes(output / ROUTES_FILE, output / PROGRESS_FILE, parts_of(course))
     if relabelled := routes.relabel(runner):
         logger.warning(
-            f"Pieces of {', '.join(relabelled)} ended in states the game package dropped; they keep their place"
+            f"Pieces of {', '.join(relabelled)} reach other states with this game package; they keep their place"
         )
     return Tas(settings, runner, searcher, routes, feed, movie, compare, 0, load_hints(hints_path(config)), set())
 

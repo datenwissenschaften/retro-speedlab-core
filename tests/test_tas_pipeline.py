@@ -557,6 +557,20 @@ def test_pieces_in_states_the_game_package_dropped_keep_their_place_under_the_st
     assert kept.relabel(runner) == []
 
 
+def test_pieces_that_reach_another_state_after_the_game_package_inserted_one_take_its_name(tmp_path: Path):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Survive", "Survive", "Boss")])
+    routes.save(
+        Leg("Survive", Start("Survive", bytes([0])), "Boss"), [Segment("Survive", [[0, 0]] * 3, bytes([3]), False)]
+    )
+
+    assert routes.relabel(runner) == ["Survive"]
+
+    kept = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", routes.parts)
+    assert [segment.state for segment in kept.segments("Survive")] == ["Boss"]
+    assert kept.relabel(runner) == []
+
+
 def test_a_level_without_a_route_leaves_the_reel(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
