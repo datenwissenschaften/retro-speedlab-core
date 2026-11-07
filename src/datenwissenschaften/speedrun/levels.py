@@ -48,7 +48,7 @@ class LevelTrainer:
 
     def beat_levels(self) -> None:
         self.share_practice()
-        polisher = Polisher(self.tas, 0, 0)
+        polisher = Polisher(self.tas, 0)
         while unbeaten := self.unbeaten():
             part = unbeaten[0]
             self.tas.extend(self.leg(part), self.routes.segments(part.name), None, partial(polisher.rest, part))

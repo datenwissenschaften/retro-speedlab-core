@@ -1,3 +1,4 @@
+import random
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -63,7 +64,6 @@ def rebased(
 class Polisher:
     tas: Tas
     searches: int
-    turns: int
 
     @property
     def movie(self) -> Path:
@@ -75,11 +75,9 @@ class Polisher:
         beaten = [part for part in routes.parts if part != current and finished(routes.segments(part.name), part.exit)]
         if self.searches % POLISH_EVERY or not beaten:
             return False
-        part = beaten[self.turns % len(beaten)]
+        part = max(beaten, key=lambda each: frames(routes.segments(each.name)))
         segments = routes.segments(part.name)
-        cuts = cut_points(frames(segments))
-        cut = cuts[self.turns // len(beaten) % len(cuts)]
-        self.turns += 1
+        cut = random.choice(cut_points(frames(segments)))
         leg = Leg(part.name, Start(part.entry_state, routes.routes[part.name].entry), part.exit)
         faster = self.tail(leg, segments, cut)
         return faster is not None and self.commit(part, current, leg, segments, faster)
