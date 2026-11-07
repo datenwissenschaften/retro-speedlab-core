@@ -101,13 +101,13 @@ turn of searches since a piece last left it (practice: one level's turn,
 otherwise 3 searches): a chain of checkpoints that has not led out by then is
 dropped down to the last piece. Going back drops every checkpoint in a row down
 to the last piece as well, and either way that level gets no new checkpoint in
-the state it went back from until a piece leaves that state (finding the way
+the state it went back from, other than one on the route map, until a piece leaves that state (finding the way
 back into it is not enough), also after a restart (`cache/tas/barred.json`).
 A checkpoint is the reached cell with the fewest frames left on the route map:
 from a start on the map that cell must be at least 60 frames closer to the
 exit, from a start off the map any reached map cell will do; otherwise it is
 the cell with the most reward. A checkpoint on the map always moves closer to
-the exit, so it is also kept after the first turn; of several workers'
+the exit, so it is also kept after the first turn and in a barred state; of several workers'
 checkpoints the one closest to the exit on the map wins, then the most reward.
 
 After every segment the whole movie is replayed from power-on; segments that do
