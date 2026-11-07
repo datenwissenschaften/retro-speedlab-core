@@ -35,6 +35,6 @@ def publish_reports(settings: RetroSpeedlabConfig, project: Path) -> None:
     headers = {"X-API-Key": relay_key(settings.upload)}
     with httpx.Client(base_url=settings.upload.url, headers=headers, timeout=TIMEOUT_SECONDS) as client:
         try:
-            publish(client, settings.training.game, settings.speedrun.game.title, project)
+            publish(client, settings.speedrun.game.id, settings.speedrun.game.title, project)
         except httpx.HTTPError as error:
             logger.warning(f"The lab reports wait for the website: {error}")

@@ -25,7 +25,7 @@ def measured_runs(settings: RetroSpeedlabConfig) -> list[dict[str, Any]]:
     with httpx.Client(base_url=settings.upload.url, timeout=TIMEOUT_SECONDS) as client:
         response = client.get("/lab-runs")
         response.raise_for_status()
-    game = settings.training.game
+    game = settings.speedrun.game.id
     return [run for run in response.json() if run["game"] == game and run["progress"] is not None]
 
 

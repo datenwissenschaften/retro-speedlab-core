@@ -43,7 +43,7 @@ app = typer.Typer()
 def record_lab_run(config: Path, log: Path, stamp: str, base: str, outcome: str, commits: int) -> None:
     settings = load_config(config)
     setup_logging(settings.log_level)
-    run = LabRun(settings.training.game, stamp, base, outcome, commits)
+    run = LabRun(settings.speedrun.game.id, stamp, base, outcome, commits)
     rounds = read_transcript(log)
     if not rounds:
         raise ValueError(f"the lab log {log} has no finished round")
