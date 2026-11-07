@@ -518,6 +518,37 @@ def test_a_route_checkpoint_no_closer_than_its_start_stops_after_the_first_turn(
     assert [event.kind for event in tas.feed.journal.journal.events] == ["checkpoint"] * (patience - 1) + ["stuck"]
 
 
+def test_a_checkpoint_chain_closer_to_the_exit_keeps_searching_from_its_end_until_it_goes_back(
+    tmp_path: Path, monkeypatch
+):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    guided = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 1.0, 300)
+    calls: list[int] = []
+    restored: list[Start] = []
+    restore = SegmentRunner.restore
+
+    def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Checkpoint | None:
+        calls.append(bound)
+        return guided if len(calls) == 1 else None
+
+    def remembered(self: SegmentRunner, start: Start) -> None:
+        restored.append(start)
+        restore(self, start)
+
+    leg = Leg("Level 1", runner.power_on(), "Exit")
+    monkeypatch.setattr(searcher.Searcher, "best", best)
+    monkeypatch.setattr(SegmentRunner, "restore", remembered)
+    monkeypatch.setattr(SegmentRunner, "remaining", lambda self: None if restored[-1] == leg.entry else 300)
+
+    tas.extend(leg, [], 1, never_rest)
+    kept = tas.extend(leg, tas.routes.segments(leg.name), 1, never_rest)
+    later = tas.extend(leg, tas.routes.segments(leg.name), 1, never_rest)
+
+    assert [segment.state for segment in kept] == ["Survive"]
+    assert later == [] and tas.barred == {"Level 1": "Survive"}
+
+
 def test_a_barred_state_stays_barred_when_the_search_finds_its_way_back_into_it(tmp_path: Path):
     barred = tmp_path / "barred.json"
     bar(barred, "Level 2", "Ledge")

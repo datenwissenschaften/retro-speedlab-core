@@ -233,12 +233,19 @@ class Tas:
             return mark_stuck(self.stuck_file, state).searches
         return save_stuck(self.stuck_file, failed(self.output / FAILURES_FILE, state)).searches
 
-    def closer(self, start: Start, found: Checkpoint) -> bool:
-        if found.remaining is None:
+    def nearer(self, start: Start, remaining: int | None) -> bool:
+        if remaining is None:
             return False
         self.runner.restore(start)
         before = self.runner.remaining()
-        return before is None or found.remaining <= before - ROUTE_CHECKPOINT
+        return before is None or remaining <= before - ROUTE_CHECKPOINT
+
+    def closer(self, start: Start, found: Checkpoint) -> bool:
+        return self.nearer(start, found.remaining)
+
+    def advanced(self, leg: Leg, segments: list[Segment], chain: int) -> bool:
+        self.runner.restore(self.start(leg, segments, len(segments)))
+        return self.nearer(self.start(leg, segments, len(segments) - chain), self.runner.remaining())
 
     def checkpoint(
         self, leg: Leg, segments: list[Segment], start: Start, found: Checkpoint, patience: int | None
@@ -262,7 +269,7 @@ class Tas:
     ) -> list[Segment]:
         self.feed.event("stuck", start.state, None)
         chain = checkpoints_in_a_row(leg, segments)
-        if chain and searches >= turn_searches(patience):
+        if chain and searches >= turn_searches(patience) and not self.advanced(leg, segments, chain):
             logger.warning(f"No way out of {start.state} after {searches} searches; its {chain} checkpoints go")
         elif searches % backtrack_searches(patience):
             logger.warning(f"No way out of {start.state} after {searches} searches; searching again")
