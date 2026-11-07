@@ -1,5 +1,7 @@
 from pathlib import Path
+from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from datenwissenschaften.speedrun import polish
@@ -56,3 +58,32 @@ def test_every_later_level_starts_where_the_one_before_it_now_ends(tmp_path: Pat
 
     assert moved is not None
     assert moved["Level 2"].entry == bytes([7]) and moved["Level 3"].entry == bytes([91])
+
+
+class Walker:
+    def __init__(self) -> None:
+        self.x = 0
+        self.wrapper = SimpleNamespace(state_machine=SimpleNamespace(state_name="Level1"))
+
+    def restore(self, start: Start) -> None:
+        self.x = start.emulator_state[0]
+
+    def press(self, buttons: np.ndarray) -> None:
+        self.x += int(buttons[0])
+
+    def snapshot(self) -> bytes:
+        return bytes([self.x])
+
+
+def test_cut_points_run_back_from_the_exit_every_20_seconds():
+    assert polish.cut_points(3000) == [1800, 600]
+    assert polish.cut_points(500) == [0]
+
+
+def test_the_route_up_to_a_cut_is_its_head_and_the_cut_is_the_new_start():
+    whole, last = Segment("Level1", [[1]] * 3, bytes([3]), False), Segment("Level2", [[1]] * 4, bytes([7]), False)
+
+    head, start = polish.played_until(Walker(), Start("Level1", bytes([0])), [whole, last], 5)
+
+    assert head == [whole, Segment("Level1", [[1]] * 2, bytes([5]), False)]
+    assert start == Start("Level1", bytes([5]))

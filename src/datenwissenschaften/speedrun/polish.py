@@ -1,6 +1,7 @@
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+import numpy as np
 from loguru import logger
 
 from datenwissenschaften.speedrun.movie import Segment, frames, verified_segments
@@ -12,6 +13,28 @@ from datenwissenschaften.speedrun.search import Crossing
 POLISH_EVERY = 3
 TAIL_ROUNDS = 1
 SMALLEST_GAIN_FRAMES = 60
+CUT_FRAMES = 1200
+
+
+def cut_points(total: int) -> list[int]:
+    return list(range(total - CUT_FRAMES, -1, -CUT_FRAMES)) or [0]
+
+
+def played_until(runner: SegmentRunner, entry: Start, segments: list[Segment], cut: int) -> tuple[list[Segment], Start]:
+    runner.restore(entry)
+    head: list[Segment] = []
+    played = 0
+    for segment in segments:
+        pressed = segment.pressed[: cut - played]
+        for buttons in pressed:
+            runner.press(np.asarray(buttons, dtype=np.int8))
+        played += len(pressed)
+        if not pressed:
+            break
+        whole = len(pressed) == len(segment.pressed)
+        state = runner.wrapper.state_machine.state_name
+        head.append(segment if whole else Segment(state, pressed, runner.snapshot(), False))
+    return head, Start(runner.wrapper.state_machine.state_name, runner.snapshot())
 
 
 def replayed(runner: SegmentRunner, entry: Start, segments: list[Segment], movie: Path) -> list[Segment]:
@@ -54,18 +77,21 @@ class Polisher:
             return False
         part = beaten[self.turns % len(beaten)]
         segments = routes.segments(part.name)
-        index = self.turns // len(beaten) % len(segments)
+        cuts = cut_points(frames(segments))
+        cut = cuts[self.turns // len(beaten) % len(cuts)]
         self.turns += 1
         leg = Leg(part.name, Start(part.entry_state, routes.routes[part.name].entry), part.exit)
-        faster = self.tail(leg, segments, index)
+        faster = self.tail(leg, segments, cut)
         return faster is not None and self.commit(part, current, leg, segments, faster)
 
-    def tail(self, leg: Leg, segments: list[Segment], index: int) -> list[Segment] | None:
-        bound = frames(segments[index:]) - SMALLEST_GAIN_FRAMES
-        crossing = self.tas.searcher.best(self.tas.start(leg, segments, index), bound, TAIL_ROUNDS)
+    def tail(self, leg: Leg, segments: list[Segment], cut: int) -> list[Segment] | None:
+        head, start = played_until(self.tas.runner, leg.entry, segments, cut)
+        bound = frames(segments) - cut - SMALLEST_GAIN_FRAMES
+        crossing = self.tas.searcher.best(start, bound, TAIL_ROUNDS)
         if not isinstance(crossing, Crossing) or crossing.frames > bound or crossing.end.state != leg.exit:
+            logger.info(f"{leg.name} from frame {cut}: no way to its exit in {bound} frames or fewer")
             return None
-        return [*segments[:index], segment_of(crossing)]
+        return [*head, segment_of(crossing)]
 
     def commit(self, part: Part, current: Part, leg: Leg, segments: list[Segment], faster: list[Segment]) -> bool:
         routes, runner = self.tas.routes, self.tas.runner
