@@ -244,8 +244,8 @@ class Tas:
         self, leg: Leg, segments: list[Segment], start: Start, found: Checkpoint, patience: int | None
     ) -> list[Segment]:
         searches = self.searched(start.state, patience)
-        spent = searches >= turn_searches(patience) and not self.closer(start, found)
-        if start.state == self.barred.get(leg.name) or spent:
+        held = start.state == self.barred.get(leg.name) or searches >= turn_searches(patience)
+        if held and not self.closer(start, found):
             return self.wait_or_go_back(leg, segments, start, searches, patience)
         self.feed.event("checkpoint", start.state, found.frames)
         if found.remaining is not None:

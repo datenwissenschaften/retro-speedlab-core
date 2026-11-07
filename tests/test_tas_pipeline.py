@@ -449,6 +449,26 @@ def test_a_level_keeps_its_turn_while_its_searches_find_pieces(tmp_path: Path, m
     assert searched == ["Survive", "Boss"]
 
 
+def test_a_route_checkpoint_closer_to_the_exit_goes_on_in_a_barred_state(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    found = searcher.Searcher.best
+    guided = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 1.0, 300)
+    calls: list[int] = []
+
+    def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Crossing | Checkpoint | None:
+        calls.append(bound)
+        return guided if len(calls) == 1 else found(self, start, bound, rounds)
+
+    monkeypatch.setattr(searcher.Searcher, "best", best)
+    bar(tas.barred_file, FULL_RUN, "Survive")
+
+    segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [], None, never_rest)
+
+    assert [segment.state for segment in segments] == ["Survive", "Boss"]
+    assert [event.kind for event in tas.feed.journal.journal.events][:2] == ["checkpoint", "found"]
+
+
 def test_a_checkpoint_chain_without_a_way_out_is_dropped_after_one_turn_and_its_state_barred(
     tmp_path: Path, monkeypatch
 ):
