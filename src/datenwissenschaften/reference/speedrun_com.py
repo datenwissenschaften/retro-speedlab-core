@@ -11,6 +11,7 @@ from datenwissenschaften.settings import SpeedrunComSource
 LEADERBOARD_URL = "https://www.speedrun.com/api/v1/leaderboards/{game}/category/{category}"
 TIMEOUT_SECONDS = 60
 VIDEO_FORMAT = "best[ext=mp4]/best"
+TOP_PLACES = 5
 
 
 def video_links(run: dict[str, Any]) -> list[str]:
@@ -20,15 +21,12 @@ def video_links(run: dict[str, Any]) -> list[str]:
     return [link["uri"] for link in videos["links"]]
 
 
-def video_url(source: SpeedrunComSource) -> str:
+def video_urls(source: SpeedrunComSource) -> list[str]:
     url = LEADERBOARD_URL.format(game=source.game, category=source.category)
-    query = {"top": 1, **{f"var-{variable}": value for variable, value in source.variables.items()}}
+    query = {"top": TOP_PLACES, **{f"var-{variable}": value for variable, value in source.variables.items()}}
     response = httpx.get(url, params=query, timeout=TIMEOUT_SECONDS)
     response.raise_for_status()
-    links = [link for place in response.json()["data"]["runs"] for link in video_links(place["run"])]
-    if not links:
-        raise ValueError(f"The top speedrun.com run of {source.game}/{source.category} {source.variables} has no video")
-    return links[0]
+    return [link for place in response.json()["data"]["runs"] for link in video_links(place["run"])]
 
 
 def download(url: str, directory: Path) -> None:
