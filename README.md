@@ -99,7 +99,9 @@ the way into it is searched again; a search that only ends in a checkpoint count
 as one without a way out too. Checkpoints in a state come only within its first
 turn of searches since a piece last left it (practice: one level's turn,
 otherwise 3 searches): a chain of checkpoints that has not led out by then is
-dropped down to the last piece. Going back drops every checkpoint in a row down
+dropped down to the last piece, unless its end is at least 60 frames closer to
+the exit on the route map than its start; such a chain is searched from its end
+again and goes only when the level goes back. Going back drops every checkpoint in a row down
 to the last piece as well, and either way that level gets no new checkpoint in
 the state it went back from, other than one on the route map, until a piece leaves that state (finding the way
 back into it is not enough), also after a restart (`cache/tas/barred.json`).
