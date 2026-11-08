@@ -95,6 +95,18 @@ def test_an_unbeaten_part_reports_how_far_it_got_and_leaves_the_route_map_as_it_
     assert json.loads(path.read_text(encoding="utf-8")) == [[0, 0, 0, 2, 0]]
 
 
+def test_a_beaten_part_without_places_replaces_a_route_map_that_no_beaten_part_backs(tmp_path: Path):
+    runner, _ = level_runner(tmp_path)
+    routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Menu", "Survive", "Boss")])
+    routes.save(Leg("Menu", Start("Survive", bytes([1])), "Boss"), [Segment("Boss", [[1, 0]], bytes([2]), False)])
+    path = tmp_path / "route.json"
+    path.write_text("[[0, 29, 14, 4538, 0]]", encoding="utf-8")
+
+    write_practice_route(runner, routes, path, practised(runner, routes))
+
+    assert json.loads(path.read_text(encoding="utf-8")) == []
+
+
 def test_a_part_whose_start_is_not_where_the_part_before_ends_was_loaded(tmp_path: Path):
     runner, _ = level_runner(tmp_path)
     parts = [Part("Menu", "Survive", "Boss"), Part("Level 2", "Boss", None)]

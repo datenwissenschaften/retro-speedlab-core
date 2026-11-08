@@ -40,13 +40,12 @@ def practised(runner: SegmentRunner, routes: Routes) -> dict[str, PartProgress]:
 
 
 def write_practice_route(runner: SegmentRunner, routes: Routes, path: Path, done: dict[str, PartProgress]) -> None:
-    steps: list[Step] = []
-    for part in routes.parts:
-        if part.name in done and done[part.name].beaten:
-            route = routes.routes[part.name]
-            first = steps[-1][0] + LEVEL_GAP_FRAMES + 1 if steps else 0
-            steps += part_steps(runner, part, route, first)
-    if not steps:
+    beaten = [part for part in routes.parts if part.name in done and done[part.name].beaten]
+    if not beaten:
         return
+    steps: list[Step] = []
+    for part in beaten:
+        first = steps[-1][0] + LEVEL_GAP_FRAMES + 1 if steps else 0
+        steps += part_steps(runner, part, routes.routes[part.name], first)
     path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write(path, json.dumps(route_rows(steps)).encode())
