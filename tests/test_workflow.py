@@ -75,6 +75,21 @@ def test_checkpoints_and_stored_routes_are_no_progress_that_holds_off_the_lab(tm
     assert not lab_run_due(config)
 
 
+def test_finding_the_way_into_a_state_again_is_no_progress_that_holds_off_the_lab(tmp_path: Path):
+    config = str(write_config(tmp_path))
+    searching(tmp_path)
+    path = tmp_path / "cache" / "tas" / JOURNAL_FILE
+    JournalStore(path).event("found", "Boss", 900)
+    progress_at = datetime.fromtimestamp(time.time() - STALLED_SECONDS_AGO, UTC).isoformat(timespec="seconds")
+    journal = msgspec.json.decode(path.read_bytes(), type=Journal)
+    path.write_bytes(msgspec.json.encode(msgspec.structs.replace(journal, progressed=progress_at)))
+
+    JournalStore(path).event("found", "Boss", 1100)
+    assert lab_run_due(config)
+    JournalStore(path).event("found", "Peak", 300)
+    assert not lab_run_due(config)
+
+
 def test_no_lab_run_while_the_search_is_not_running(tmp_path: Path):
     config = str(write_config(tmp_path))
     mark_stuck(tmp_path / "cache" / "tas" / STUCK_FILE, "Boss")
