@@ -12,7 +12,8 @@ from datenwissenschaften.speedrun.paths import atomic_write
 
 JOURNAL_FILE = "journal.json"
 SHOWN_EVENTS = 20
-PROGRESS_EVENTS = ("found", "improved")
+FOUND = "found"
+IMPROVED = "improved"
 SHOWN_HISTORY = 200
 SHOWN_MILESTONES = 50
 TENTHS_PER_MINUTE = 600
@@ -45,6 +46,7 @@ class Journal(msgspec.Struct):
     bests: dict[str, float]
     progressed: str | None = None
     closest: dict[str, int] = msgspec.field(default_factory=dict[str, int])
+    found: list[str] = msgspec.field(default_factory=list[str])
 
 
 @dataclass(slots=True, frozen=True)
@@ -85,9 +87,17 @@ class JournalStore:
         with self.lock:
             event = Event(now(), kind, state, frames)
             self.journal.events = [*self.journal.events, event][-SHOWN_EVENTS:]
-            if kind in PROGRESS_EVENTS:
+            if self._progress(kind, state):
                 self.journal.progressed = event.at
             self._save()
+
+    def _progress(self, kind: str, state: str | None) -> bool:
+        if kind != FOUND:
+            return kind == IMPROVED
+        if state is None or state in self.journal.found:
+            return False
+        self.journal.found = [*self.journal.found, state]
+        return True
 
     def closer(self, state: str, remaining: int) -> None:
         with self.lock:
