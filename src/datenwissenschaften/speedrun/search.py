@@ -23,6 +23,7 @@ CHECKPOINT_GAIN = 10.0
 ROUTE_CHECKPOINT = 60
 NOVELTY_GAIN = 2.0
 NOVELTY_HALF = 8
+FIRST_FRAME = 1
 
 
 @dataclass(slots=True, frozen=True)
@@ -156,7 +157,13 @@ def holds(runner: SegmentRunner, state: str, idle: np.ndarray) -> bool:
     return True
 
 
+def left_at_once(pressed: list[list[int]] | np.ndarray) -> bool:
+    return len(pressed) <= FIRST_FRAME
+
+
 def confirmed(runner: SegmentRunner, pressed: np.ndarray, won: bool) -> Crossing | None:
+    if left_at_once(pressed):
+        return None
     state = runner.wrapper.state_machine.state_name
     crossing = Crossing(Start(state, runner.snapshot()), pressed, won, runner.key(0))
     return crossing if won or holds(runner, state, np.zeros_like(pressed[-1])) else None
