@@ -8,7 +8,7 @@ from fakes import FakeEmulator, FakeRam, FakeWrapper, fake_environment, fake_rou
 
 from datenwissenschaften.environment import factory
 from datenwissenschaften.environment.recording import active_movie_path, recorded_buttons, restore_emulator_state
-from datenwissenschaften.environment.wrapper import lost_life, phases, state_class
+from datenwissenschaften.environment.wrapper import known_lives, lost_life, phases, state_class
 from datenwissenschaften.settings import load_config
 
 
@@ -44,9 +44,16 @@ class CountedRam(FakeRam):
 
 
 def test_only_fewer_known_lives_count_as_a_lost_life():
-    assert lost_life(CountedRam(3, 0), CountedRam(2, 0))
-    assert not lost_life(CountedRam(3, 0), CountedRam(3, 0))
-    assert not lost_life(FakeRam(3, 0), FakeRam(2, 0))
+    assert lost_life(3, CountedRam(2, 0))
+    assert not lost_life(3, CountedRam(3, 0))
+    assert not lost_life(None, CountedRam(2, 0))
+    assert not lost_life(3, FakeRam(2, 0))
+
+
+def test_a_life_lost_while_the_count_is_unreadable_still_counts_against_the_last_known_count():
+    known = known_lives(3, FakeRam(2, 0))
+    assert known == 3
+    assert lost_life(known, CountedRam(2, 0))
 
 
 def test_recording_is_mandatory(tmp_path: Path):

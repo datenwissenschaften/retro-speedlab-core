@@ -5,7 +5,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from datenwissenschaften.environment.recording import restore_emulator_state
-from datenwissenschaften.environment.wrapper import StateMachineGymWrapper, lost_life, phases, state_class
+from datenwissenschaften.environment.wrapper import StateMachineGymWrapper, known_lives, lost_life, phases, state_class
 from datenwissenschaften.ram import RamInfo
 from datenwissenschaften.route.route_map import CELL_SIZE, Needs
 from datenwissenschaften.route.route_map import Cell as RouteCell
@@ -58,16 +58,19 @@ class SegmentRunner:
         self.classes = (wrapper.start_state_cls, *wrapper.state_classes)
         self.emulator.reset()
         self.ram = wrapper.read_ram()
+        self.lives = self.ram.remaining_lives()
 
     def power_on(self) -> Start:
         self.emulator.reset()
         self.ram = self.wrapper.read_ram()
+        self.lives = self.ram.remaining_lives()
         self.wrapper.state_machine.reset(self.ram, None)
         return Start(self.order[0], self.snapshot())
 
     def restore(self, start: Start) -> None:
         restore_emulator_state(self.emulator, start.emulator_state)
         self.ram = self.wrapper.read_ram()
+        self.lives = self.ram.remaining_lives()
         state_type = None if start.state == self.order[0] else state_class(self.classes, start.state)
         self.wrapper.state_machine.reset(self.ram, state_type)
 
@@ -80,8 +83,8 @@ class SegmentRunner:
         machine = self.wrapper.state_machine
         reward, terminated, truncated = machine.step(ram)
         won = machine.current_state.won()
-        alive = won or not (terminated or truncated or lost_life(self.ram, ram))
-        self.ram = ram
+        alive = won or not (terminated or truncated or lost_life(self.lives, ram))
+        self.ram, self.lives = ram, known_lives(self.lives, ram)
         return alive, won, reward
 
     def decide(self, action: int) -> Outcome:

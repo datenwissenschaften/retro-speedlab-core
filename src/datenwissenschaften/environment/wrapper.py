@@ -27,9 +27,14 @@ def phases(wrapper_cls: type["StateMachineGymWrapper[RamInfo]"]) -> tuple[str, .
     return tuple(dict.fromkeys(state_cls.__name__ for state_cls in classes))
 
 
-def lost_life(before: RamInfo, after: RamInfo) -> bool:
-    lives_before, lives_after = before.remaining_lives(), after.remaining_lives()
-    return lives_before is not None and lives_after is not None and lives_after < lives_before
+def lost_life(known: int | None, after: RamInfo) -> bool:
+    lives = after.remaining_lives()
+    return known is not None and lives is not None and lives < known
+
+
+def known_lives(known: int | None, ram: RamInfo) -> int | None:
+    lives = ram.remaining_lives()
+    return known if lives is None else lives
 
 
 class StateMachineGymWrapper(Generic[T]):
