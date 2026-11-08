@@ -145,8 +145,8 @@ def test_the_journal_tells_when_a_state_gets_closer_to_its_door(tmp_path: Path):
     again = JournalStore(path).fields()
     assert again["closest"] == {"Level4Upper": 145}
     assert [milestone["text"] for milestone in again["milestones"]] == [
-        "Level 4 Upper: 394 frames before the door",
-        "Level 4 Upper: 145 frames before the door (was 394)",
+        "Level 4 Upper: 394 frames before the goal",
+        "Level 4 Upper: 145 frames before the goal (was 394)",
     ]
 
 

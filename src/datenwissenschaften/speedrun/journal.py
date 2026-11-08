@@ -106,7 +106,7 @@ class JournalStore:
                 return
             was = f" (was {closest[state]})" if state in closest else ""
             closest[state] = remaining
-            self._milestone("closer", f"{spoken(state)}: {remaining} frames before the door{was}")
+            self._milestone("closer", f"{spoken(state)}: {remaining} frames before the goal{was}")
             self._save()
 
     def progressed(self) -> datetime | None:
