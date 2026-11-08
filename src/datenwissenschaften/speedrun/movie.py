@@ -10,6 +10,7 @@ import numpy as np
 from datenwissenschaften.environment.recording import active_movie_path
 from datenwissenschaften.ram import RamInfo
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
+from datenwissenschaften.speedrun.search import left_at_once
 from datenwissenschaften.sprites.catalog import SpriteCatalog
 
 MEMORY_EVERY = 6
@@ -78,6 +79,7 @@ def verified_segments(
     ends: list[bytes] = []
     with recording(runner, movie, start):
         for segment in segments:
+            entered = machine.state_name
             for buttons in np.asarray(segment.pressed, dtype=np.int8):
                 runner.emulator.step(buttons)
                 ram = runner.wrapper.read_ram()
@@ -90,6 +92,8 @@ def verified_segments(
                         )
                 played += 1
             if machine.state_name != segment.state and not (segment.won and machine.current_state.won()):
+                break
+            if left_at_once(segment.pressed) and (segment.won or segment.state != entered):
                 break
             verified += 1
             ends.append(runner.snapshot())

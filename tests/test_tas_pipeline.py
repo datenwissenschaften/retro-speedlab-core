@@ -10,7 +10,7 @@ from fakes import saved_state, saving_environment, write_config
 
 from datenwissenschaften.policy.prior import PolicyPrior
 from datenwissenschaften.speedrun import feed as feed_module
-from datenwissenschaften.speedrun import footage, movie, run, searcher, workers
+from datenwissenschaften.speedrun import footage, movie, run, search, searcher, workers
 from datenwissenschaften.speedrun.archives import Archives
 from datenwissenschaften.speedrun.explore import search_segment
 from datenwissenschaften.speedrun.hints import Hint, Press, hints_path, load_hints, pressed
@@ -147,6 +147,20 @@ def test_a_movie_that_no_longer_reaches_its_segments_is_cut_back(tmp_path: Path,
     assert kept == []
     assert movie.verified_segments(runner, power_on, [], tas.output / "again.bk2", None).verified == 0
     assert tas.searcher.best(power_on, 1, 1) is None
+
+
+def test_a_start_that_is_left_in_its_first_frame_has_no_crossing(tmp_path: Path):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    runner.power_on()
+    pressed = np.array([[1, 0]] * 3, dtype=np.int8)
+    movie_path = tmp_path / "replay.bk2"
+
+    assert search.replay(runner, Start("Survive", saved_state(2)), pressed) is None
+    assert search.replay(runner, Start("Survive", saved_state(1)), pressed).frames == 2
+    instant = [Segment("Boss", [[1, 0]], saved_state(3), False)]
+    assert movie.verified_segments(runner, Start("Survive", saved_state(2)), instant, movie_path, None).verified == 0
+    walked = [Segment("Boss", [[1, 0]] * 2, saved_state(3), False)]
+    assert movie.verified_segments(runner, Start("Survive", saved_state(1)), walked, movie_path, None).verified == 1
 
 
 def test_verify_replays_every_part_from_its_own_start_and_rejects_one_that_breaks(tmp_path: Path, monkeypatch):
