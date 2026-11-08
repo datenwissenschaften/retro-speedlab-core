@@ -53,9 +53,10 @@ class Knowledge(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
     powerups: list[Powerup]
     levels: list[Level]
     ram: list[RamValue]
+    sprites: dict[str, str]
 
 
-NO_KNOWLEDGE = Knowledge([], None, [], [], [], [])
+NO_KNOWLEDGE = Knowledge([], None, [], [], [], [], {})
 
 
 def knowledge_path(game_dir: Path) -> Path:
@@ -73,7 +74,8 @@ def load_knowledge(path: Path) -> Knowledge:
 
 def sprite_names(knowledge: Knowledge) -> dict[str, str]:
     named = [knowledge.player, *knowledge.enemies, *knowledge.powerups]
-    return {entry.sprite: entry.name for entry in named if entry is not None and entry.sprite is not None}
+    entries = {entry.sprite: entry.name for entry in named if entry is not None and entry.sprite is not None}
+    return {**knowledge.sprites, **entries}
 
 
 def player_sprite(knowledge: Knowledge) -> str | None:

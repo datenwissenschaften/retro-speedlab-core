@@ -5,7 +5,15 @@ import numpy as np
 import pytest
 from fakes import HIDDEN_SPRITE, NO_SPRITES, fceu_state
 
-from datenwissenschaften.knowledge import NO_KNOWLEDGE, Enemy, Knowledge, Player, knowledge_path, load_knowledge
+from datenwissenschaften.knowledge import (
+    NO_KNOWLEDGE,
+    Enemy,
+    Knowledge,
+    Player,
+    knowledge_path,
+    load_knowledge,
+    sprite_names,
+)
 from datenwissenschaften.sprites.catalog import CATALOG_FILE, SpriteCatalog
 from datenwissenschaften.sprites.oam import TILE, sprites_of
 from datenwissenschaften.sprites.objects import objects_in
@@ -26,6 +34,7 @@ enemies: [{name: Bigfoot, text: Stomps the snake., sprite: null, levels: [1, Lev
 powerups: [{name: Clock, text: Freezes time., sprite: null, effect: More time}]
 levels: [{name: Level 1, goal: Ring the bell, route: Up the stairs, hazards: [water]}]
 ram: [{address: 0x00A5, name: weight, meaning: Pieces eaten, verified: true}]
+sprites: {}
 """
 
 
@@ -71,7 +80,7 @@ def test_touching_sprites_form_one_object_placed_on_the_cropped_screen():
 
 
 def test_the_catalog_keeps_every_object_once_with_its_first_sighting_and_publishes_no_image(tmp_path: Path):
-    knowledge = Knowledge([], Player("Rattle", "The snake.", "x"), [], [], [], [])
+    knowledge = Knowledge([], Player("Rattle", "The snake.", "x"), [], [], [], [], {})
     catalog = SpriteCatalog(tmp_path / "sprites", knowledge)
 
     catalog.look(two_objects(), screen(), "Play", 1)
@@ -90,7 +99,7 @@ def test_the_catalog_keeps_every_object_once_with_its_first_sighting_and_publish
 
 def test_the_catalog_names_the_sprites_the_game_knowledge_names(tmp_path: Path):
     signature = objects_in(two_objects(), screen())[0].signature
-    catalog = SpriteCatalog(tmp_path, Knowledge([], Player("Rattle", "The snake.", signature), [], [], [], []))
+    catalog = SpriteCatalog(tmp_path, Knowledge([], Player("Rattle", "The snake.", signature), [], [], [], [], {}))
 
     catalog.look(two_objects(), screen(), "Play", None)
 
@@ -104,8 +113,8 @@ def test_the_overlay_boxes_the_player_and_marks_unknown_objects(tmp_path: Path):
     player = Player("Rattle", "The snake.", snake.signature)
     enemy = Enemy("Bigfoot", "Stomps.", other.signature, [])
 
-    unknown = annotate(screen(), [snake, other], labels_of(Knowledge([], player, [], [], [], [])))
-    named = annotate(screen(), [snake, other], labels_of(Knowledge([], player, [enemy], [], [], [])))
+    unknown = annotate(screen(), [snake, other], labels_of(Knowledge([], player, [], [], [], [], {})))
+    named = annotate(screen(), [snake, other], labels_of(Knowledge([], player, [enemy], [], [], [], {})))
 
     assert unknown.shape == (SCREEN[0] * PIXEL_SCALE, SCREEN[1] * PIXEL_SCALE, 3)
     assert tuple(unknown[snake.bottom * PIXEL_SCALE - 1, 40 * PIXEL_SCALE]) == PLAYER_COLOR
@@ -131,3 +140,10 @@ def test_malformed_game_knowledge_fails_with_the_file_named(tmp_path: Path, text
 
     with pytest.raises(RuntimeError, match="knowledge.yaml is not valid game knowledge"):
         load_knowledge(knowledge_path(tmp_path))
+
+
+def test_the_sprites_mapping_names_every_frame_and_an_entry_wins_over_it():
+    player = Player("Darkwing Duck", "The hero.", "a")
+    knowledge = Knowledge([], player, [], [], [], [], {"a": "Darkwing Duck (standing)", "b": "Darkwing Duck (jumping)"})
+
+    assert sprite_names(knowledge) == {"a": "Darkwing Duck", "b": "Darkwing Duck (jumping)"}
