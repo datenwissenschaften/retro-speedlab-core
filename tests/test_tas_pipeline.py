@@ -349,12 +349,33 @@ def test_no_checkpoint_comes_back_in_a_state_the_search_just_left_one_behind(tmp
         return useless if len(calls) == 1 else found(self, start, bound, rounds)
 
     monkeypatch.setattr(searcher.Searcher, "best", best)
+    monkeypatch.setattr(SegmentRunner, "remaining", lambda self: 300)
     bar(tas.barred_file, FULL_RUN, "Survive")
 
     segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [], None, never_rest)
 
     assert [segment.state for segment in segments] == ["Boss"]
     assert tas.barred == {}
+
+
+def test_a_reward_checkpoint_goes_on_in_a_barred_state_the_route_map_does_not_cover(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    found = searcher.Searcher.best
+    reward = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 20.0, None)
+    calls: list[int] = []
+
+    def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Crossing | Checkpoint | None:
+        calls.append(bound)
+        return reward if len(calls) == 1 else found(self, start, bound, rounds)
+
+    monkeypatch.setattr(searcher.Searcher, "best", best)
+    bar(tas.barred_file, FULL_RUN, "Survive")
+
+    segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [], None, never_rest)
+
+    assert [segment.state for segment in segments] == ["Survive", "Boss"]
+    assert [event.kind for event in tas.feed.journal.journal.events][:2] == ["checkpoint", "found"]
 
 
 def test_a_level_keeps_its_barred_state_when_another_level_goes_back_later(tmp_path: Path, monkeypatch):
@@ -368,6 +389,7 @@ def test_a_level_keeps_its_barred_state_when_another_level_goes_back_later(tmp_p
         calls.append(bound)
         return useless if len(calls) == 1 else found(self, start, bound, rounds)
 
+    monkeypatch.setattr(SegmentRunner, "remaining", lambda self: 300)
     first = Leg("Level 1", runner.power_on(), "Boss")
     second = Leg("Level 2", Start("Boss", bytes([3])), "Exit")
     for _ in range(BACKTRACK_SEARCHES):
@@ -490,6 +512,7 @@ def test_a_checkpoint_chain_without_a_way_out_is_dropped_after_one_turn_and_its_
     tas = local_tas(tmp_path, monkeypatch, runner)
     checkpoint = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 1.0, None)
     monkeypatch.setattr(searcher.Searcher, "best", lambda self, start, bound, rounds: checkpoint)
+    monkeypatch.setattr(SegmentRunner, "remaining", lambda self: 300)
     leg = Leg("Level 1", runner.power_on(), "Exit")
     patience = 1 + BACKTRACK_SEARCHES
 
@@ -672,6 +695,7 @@ def test_a_practised_state_stays_stuck_since_its_first_failed_search_after_other
 ):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
+    monkeypatch.setattr(SegmentRunner, "remaining", lambda self: 300)
     first = Leg("Level 1", runner.power_on(), "Boss")
     second = Leg("Level 2", Start("Boss", bytes([3])), "Exit")
     patience = 3
@@ -687,6 +711,7 @@ def test_a_practised_state_stays_stuck_since_its_first_failed_search_after_other
 def test_a_practised_level_shows_its_own_stuck_state_from_the_start_of_its_turn(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
+    monkeypatch.setattr(SegmentRunner, "remaining", lambda self: 300)
     first = Leg("Level 1", runner.power_on(), "Boss")
     second = Leg("Level 2", Start("Boss", bytes([3])), "Exit")
     patience = 3

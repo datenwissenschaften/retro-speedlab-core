@@ -240,8 +240,12 @@ class Tas:
         before = self.runner.remaining()
         return before is None or remaining <= before - ROUTE_CHECKPOINT
 
+    def unmapped(self, start: Start) -> bool:
+        self.runner.restore(start)
+        return self.runner.remaining() is None
+
     def closer(self, start: Start, found: Checkpoint) -> bool:
-        return self.nearer(start, found.remaining)
+        return self.nearer(start, found.remaining) if found.guided else self.unmapped(start)
 
     def advanced(self, leg: Leg, segments: list[Segment], chain: int) -> bool:
         self.runner.restore(self.start(leg, segments, len(segments)))
