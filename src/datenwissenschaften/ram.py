@@ -14,8 +14,8 @@ def ram_array(address: int, length: int) -> Any:
     return field(default_factory=lambda: [0] * length, metadata={"address": address, "length": length})
 
 
-def seen() -> Any:
-    return field(default=False, metadata={"screen": True})
+def seen(unseen: Any) -> Any:
+    return field(default=unseen, metadata={"screen": True})
 
 
 class RamInfo:

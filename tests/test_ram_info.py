@@ -35,11 +35,13 @@ def test_from_ram_reads_scalar_and_array_fields_from_raw_memory():
 def test_a_field_seen_on_the_screen_has_no_address_and_starts_unseen():
     @dataclass(frozen=True)
     class Screened(RamInfo):
-        health: int = ram(0x10)
-        on_map: bool = seen()
+        lives: int = ram(0x10)
+        on_map: bool = seen(False)
+        health: int | None = seen(None)
 
-    assert Screened.ram_map() == {"health": (0x10, 1)}
-    assert Screened.from_ram(bytes(32)).on_map is False
+    assert Screened.ram_map() == {"lives": (0x10, 1)}
+    screened = Screened.from_ram(bytes(32))
+    assert screened.on_map is False and screened.health is None
 
 
 def test_a_game_without_known_ram_meanings_reports_none():
