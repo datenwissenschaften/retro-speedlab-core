@@ -23,7 +23,11 @@ def _document() -> dict[str, Any]:
         "twitch": {"enabled": True},
         "agent": {"stall_minutes": 30},
         "speedrun": {
-            "workers": 4,
+            "scouts": 3,
+            "backtrackers": 2,
+            "beam_scouts": 2,
+            "vision_scouts": 1,
+            "polishers": 2,
             "segment_seconds": 60,
             "policy": False,
             "policy_emulators": 3,
@@ -50,7 +54,7 @@ def test_complete_config_loads(tmp_path: Path):
     assert config.lab.stall_minutes == 30
     source = SpeedrunComSource("m1z0mmd0", "5dwpnllk", {"p85pg00l": "qyz5gr71"})
     game = GameSettings("testgame-v0", "Test Game", "NES", "Warpless", source)
-    assert config.speedrun == SpeedrunSettings(4, 60.0, False, 3, game)
+    assert config.speedrun == SpeedrunSettings(3, 2, 2, 1, 2, 60.0, False, 3, game)
     assert config.upload.api_key is None
     assert config.log_level == "INFO"
 

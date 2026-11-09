@@ -14,7 +14,7 @@ from datenwissenschaften.speedrun.practice import practised, write_practice_rout
 from datenwissenschaften.speedrun.prior import PRIOR_FILE, write_prior
 from datenwissenschaften.speedrun.reel import Reel
 from datenwissenschaften.speedrun.routes import FULL_RUN, Leg, Part, Routes, finished, load_progress, save_progress
-from datenwissenschaften.speedrun.run import Tas, never_rest, tas_run, worker_pool
+from datenwissenschaften.speedrun.run import Tas, frontier_workers, never_rest, tas_run, worker_pool
 from datenwissenschaften.speedrun.runner import Start
 
 
@@ -85,8 +85,8 @@ def start_policy(wrapper: str, config: Path) -> BaseProcess:
 
 def search_forever(wrapper: str, config: Path) -> None:
     settings = load_config(config)
-    with worker_pool(settings.speedrun.workers) as pool:
-        tas = tas_run(wrapper, config, pool)
+    with worker_pool(frontier_workers(settings)) as pool, worker_pool(settings.speedrun.polishers) as polishing:
+        tas = tas_run(wrapper, config, pool, polishing)
         reel = Reel(settings, tas.feed, tas.runner, tas.routes)
         matching = ReferenceMatching(wrapper, config, pool, tas.feed)
         LevelTrainer(tas, tas.routes, tas.runner.power_on(), reel, matching).forever()

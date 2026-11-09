@@ -26,7 +26,11 @@ def start_experiment(settings: RetroSpeedlabConfig, job: str) -> wandb.Run:
         config={
             "game": settings.training.game,
             "category": speedrun.game.category,
-            "workers": speedrun.workers,
+            "scouts": speedrun.scouts,
+            "backtrackers": speedrun.backtrackers,
+            "beam_scouts": speedrun.beam_scouts,
+            "vision_scouts": speedrun.vision_scouts,
+            "polishers": speedrun.polishers,
             "segment_seconds": speedrun.segment_seconds,
             "policy_emulators": speedrun.policy_emulators,
         },

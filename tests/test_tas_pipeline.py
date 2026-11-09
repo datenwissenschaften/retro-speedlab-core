@@ -58,6 +58,11 @@ BOSS_FRAMES = 3
 SECONDS = 0.05
 
 
+class IdlePool:
+    def submit(self, function, *arguments) -> Future:
+        return Future()
+
+
 class SyncPool:
     def submit(self, function, *arguments) -> Future:
         future: Future = Future()
@@ -94,7 +99,7 @@ def local_tas(tmp_path: Path, monkeypatch, runner: SegmentRunner) -> run.Tas:
     monkeypatch.setattr(run, "make_environment", lambda wrapper_cls, settings, worker: runner.wrapper)
     monkeypatch.setattr(run, "SegmentRunner", lambda wrapper: runner)
     local_workers(monkeypatch, runner)
-    return run.tas_run("fakes:FakeWrapper", write_config(tmp_path), SyncPool())
+    return run.tas_run("fakes:FakeWrapper", write_config(tmp_path), SyncPool(), IdlePool())
 
 
 def test_the_runner_restores_savestates_and_tells_when_a_segment_is_left(tmp_path: Path):
@@ -202,7 +207,7 @@ def test_a_segment_without_a_way_out_is_marked_stuck_and_the_way_into_it_searche
     segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [], None, never_rest)
 
     assert run.frames(segments) == BOSS_FRAMES
-    assert [marked and (marked.state, marked.searches) for marked in stuck] == [None, ("Survive", 1), None]
+    assert [marked and (marked.state, marked.searches) for marked in stuck] == [None, ("Survive", 1)]
     assert load_stuck(tas.output / STUCK_FILE) is None
     assert [(event.kind, event.state) for event in tas.feed.journal.journal.events] == [
         ("stuck", "Survive"),
@@ -259,7 +264,7 @@ def test_workers_search_and_shave_from_a_savestate(tmp_path: Path, monkeypatch):
     assert workers.polish("fakes:FakeWrapper", tmp_path, start, crossing, SECONDS) == shave(runner, start, crossing, 0)
 
 
-def test_every_new_piece_is_followed_by_one_try_to_shorten_an_earlier_one(tmp_path: Path, monkeypatch):
+def test_the_frontier_never_waits_for_a_shorter_piece(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
     shortened: list[int] = []
@@ -267,8 +272,7 @@ def test_every_new_piece_is_followed_by_one_try_to_shorten_an_earlier_one(tmp_pa
 
     tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [], None, never_rest)
 
-    assert shortened == [0]
-    assert tas.turn == 1
+    assert shortened == []
 
 
 def test_a_faster_piece_that_breaks_the_rest_of_the_run_is_not_taken(tmp_path: Path, monkeypatch):

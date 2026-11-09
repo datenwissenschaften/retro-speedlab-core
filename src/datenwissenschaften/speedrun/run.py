@@ -19,6 +19,7 @@ from datenwissenschaften.settings import RetroSpeedlabConfig, RetroSpeedlabPaths
 from datenwissenschaften.speedrun.feed import SpeedrunFeed, publish_every
 from datenwissenschaften.speedrun.footage import compare_cut, movie_cut, render_compare, render_movie
 from datenwissenschaften.speedrun.hints import Hint, hinted, hints_path, load_hints, pressed
+from datenwissenschaften.speedrun.improver import Improver
 from datenwissenschaften.speedrun.journal import JOURNAL_FILE, JournalStore
 from datenwissenschaften.speedrun.live import LIVE_DIR
 from datenwissenschaften.speedrun.movie import Segment, frames, verified_segments
@@ -33,8 +34,8 @@ from datenwissenschaften.speedrun.report import course_of
 from datenwissenschaften.speedrun.routes import FULL_RUN, ROUTES_FILE, Leg, Routes, finished, load_progress, parts_of
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.speedrun.screen import Screen
-from datenwissenschaften.speedrun.search import ROUTE_CHECKPOINT, UNBOUNDED, Checkpoint, Crossing
-from datenwissenschaften.speedrun.searcher import Searcher
+from datenwissenschaften.speedrun.search import ROUTE_CHECKPOINT, Checkpoint, Crossing
+from datenwissenschaften.speedrun.searcher import Lead, Searcher
 from datenwissenschaften.speedrun.shown import SHOWN_FILE, worth_showing
 from datenwissenschaften.speedrun.stuck import (
     BARRED_FILE,
@@ -109,7 +110,7 @@ class Tas:
     feed: SpeedrunFeed
     movie: Screen
     compare: Screen
-    turn: int
+    improver: Improver
     hints: list[Hint]
     hinted: set[tuple[str, str]]
 
@@ -187,7 +188,8 @@ class Tas:
         self, leg: Leg, segments: list[Segment], patience: int | None, rest: Callable[[], bool]
     ) -> list[Segment]:
         turn = Turn(leg.name, 0) if patience is None else turn_of(self.turn_file, leg.name, patience)
-        while not finished(segments := self.verified(leg, segments), leg.exit):
+        while not finished(segments := self.verified(leg, self.improved(leg, segments)), leg.exit):
+            self.improver.keep_busy(leg, segments)
             if patience is not None and turn.over(patience):
                 logger.info(f"{leg.name} rests after {turn.searches} searches; the next level takes its turn")
                 return segments
@@ -201,7 +203,7 @@ class Tas:
             self.feed.show(self.routes.view(leg.name, segments), start.state)
             hint = self.hint(leg, segments, start)
             if hint is None:
-                found = self.searcher.best(start, UNBOUNDED, SEARCH_ROUNDS)
+                segments, found = self.frontier(leg, segments)
             else:
                 segments, found = hint
             if patience is not None:
@@ -223,8 +225,6 @@ class Tas:
             logger.info(
                 f"{start.state} -> {found.end.state} in {found.frames} frames; {leg.name} at {frames(segments)}"
             )
-            segments = self.shorten(leg, segments, self.turn % len(segments))
-            self.turn += 1
         self.feed.show(self.routes.view(leg.name, segments), segments[-1].state)
         return segments
 
@@ -293,11 +293,29 @@ class Tas:
             segments = self.shorten(leg, segments, index)
         return segments
 
+    def frontier(self, leg: Leg, segments: list[Segment]) -> tuple[list[Segment], Crossing | Checkpoint | None]:
+        first = len(segments) - checkpoints_in_a_row(leg, segments)
+        starts = [self.start(leg, segments, index) for index in range(first, len(segments) + 1)]
+        found = self.searcher.lead(starts, SEARCH_ROUNDS)
+        if not isinstance(found, Lead):
+            return segments, found
+        if first + found.index < len(segments):
+            logger.info(f"A backtracker leaves {starts[-1].state} from checkpoint {found.index} of the chain")
+        return segments[: first + found.index], found.crossing
+
+    def improved(self, leg: Leg, segments: list[Segment]) -> list[Segment]:
+        for index, crossing in self.improver.found(leg, segments):
+            segments = self.swapped(leg, segments, index, crossing)
+        return segments
+
     def shorten(self, leg: Leg, segments: list[Segment], index: int) -> list[Segment]:
-        start = self.start(leg, segments, index)
-        crossing = self.searcher.best(start, len(segments[index].pressed), IMPROVE_ROUNDS)
+        crossing = self.searcher.best(self.start(leg, segments, index), len(segments[index].pressed), IMPROVE_ROUNDS)
         if not isinstance(crossing, Crossing) or crossing.frames >= len(segments[index].pressed):
             return segments
+        return self.swapped(leg, segments, index, crossing)
+
+    def swapped(self, leg: Leg, segments: list[Segment], index: int, crossing: Crossing) -> list[Segment]:
+        start = self.start(leg, segments, index)
         saved = len(segments[index].pressed) - crossing.frames
         shorter = [*segments[:index], segment_of(crossing), *segments[index + 1 :]]
         if verified_segments(self.runner, leg.entry, shorter, self.output / TRIAL_MOVIE, None).verified < len(shorter):
@@ -327,12 +345,17 @@ def screen(settings: RetroSpeedlabConfig, feed: SpeedrunFeed, name: str, render:
     return shown
 
 
+def frontier_workers(settings: RetroSpeedlabConfig) -> int:
+    speedrun = settings.speedrun
+    return speedrun.scouts + speedrun.backtrackers + speedrun.beam_scouts + speedrun.vision_scouts
+
+
 def worker_pool(workers: int) -> ProcessPoolExecutor:
     os.environ.update(dict.fromkeys(MATH_THREADS, "1"))
     return ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn"))
 
 
-def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
+def tas_run(wrapper: str, config: Path, pool: Executor, polishing: Executor) -> Tas:
     settings = load_config(config)
     setup_logging(settings.log_level)
     output = tas_dir(settings)
@@ -358,14 +381,16 @@ def tas_run(wrapper: str, config: Path, pool: Executor) -> Tas:
         logger.warning(
             f"Pieces of {', '.join(relabelled)} reach other states with this game package; they keep their place"
         )
-    return Tas(settings, runner, searcher, routes, feed, movie, compare, 0, load_hints(hints_path(config)), set())
+    improver = Improver(wrapper, config, polishing, settings.speedrun.polishers, settings.speedrun.segment_seconds)
+    hints = load_hints(hints_path(config))
+    return Tas(settings, runner, searcher, routes, feed, movie, compare, improver, hints, set())
 
 
 @app.command()
 def search(wrapper: str, config: Path, until: str) -> None:
     settings = load_config(config)
-    with worker_pool(settings.speedrun.workers) as pool:
-        tas = tas_run(wrapper, config, pool)
+    with worker_pool(frontier_workers(settings)) as pool, worker_pool(settings.speedrun.polishers) as polishing:
+        tas = tas_run(wrapper, config, pool, polishing)
         leg = Leg(FULL_RUN, tas.runner.power_on(), until)
         publish(tas, tas.extend(leg, load_progress(tas.routes.progress), None, never_rest))
 

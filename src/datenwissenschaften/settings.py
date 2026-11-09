@@ -57,7 +57,11 @@ class GameSettings:
 
 @dataclass(frozen=True)
 class SpeedrunSettings:
-    workers: int
+    scouts: int
+    backtrackers: int
+    beam_scouts: int
+    vision_scouts: int
+    polishers: int
     segment_seconds: float
     policy: bool
     policy_emulators: int
@@ -103,7 +107,11 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
         ),
         lab=LabSettings(stall_minutes=_positive_int(document.agent.stall_minutes, "agent.stall_minutes")),
         speedrun=SpeedrunSettings(
-            workers=_positive_int(document.speedrun.workers, "speedrun.workers"),
+            scouts=_positive_int(document.speedrun.scouts, "speedrun.scouts"),
+            backtrackers=_count(document.speedrun.backtrackers, "speedrun.backtrackers"),
+            beam_scouts=_count(document.speedrun.beam_scouts, "speedrun.beam_scouts"),
+            vision_scouts=_count(document.speedrun.vision_scouts, "speedrun.vision_scouts"),
+            polishers=_positive_int(document.speedrun.polishers, "speedrun.polishers"),
             segment_seconds=_positive_number(document.speedrun.segment_seconds, "speedrun.segment_seconds"),
             policy=_boolean(document.speedrun.policy, "speedrun.policy"),
             policy_emulators=_positive_int(document.speedrun.policy_emulators, "speedrun.policy_emulators"),
@@ -150,6 +158,12 @@ def _boolean(value: Any, name: str) -> bool:
 def _positive_int(value: Any, name: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 1:
         raise RuntimeError(f"Configuration value '{name}' must be a positive integer.")
+    return value
+
+
+def _count(value: Any, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise RuntimeError(f"Configuration value '{name}' must be zero or a positive integer.")
     return value
 
 

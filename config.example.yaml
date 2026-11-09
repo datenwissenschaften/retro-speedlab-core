@@ -25,7 +25,11 @@ twitch:
   enabled: true
 
 speedrun:
-  workers: 4
+  scouts: 3
+  backtrackers: 2
+  beam_scouts: 2
+  vision_scouts: 1
+  polishers: 2
   segment_seconds: 240
   policy: false
   policy_emulators: 3
