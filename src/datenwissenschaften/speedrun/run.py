@@ -180,9 +180,13 @@ class Tas:
         ]
         if replay.verified < len(segments):
             logger.warning(f"Only {replay.verified} of {len(segments)} segments of {leg.name} replay; searching again")
-        elif frames(replayed) and worth_showing(self.output / SHOWN_FILE, self.runner.order, leg.entry.state, replayed):
+        elif frames(replayed) and self.showable(leg, replayed):
             self.movie.queue(movie_cut(self.feed.course, leg, replayed, movie, replay.memory))
         return replayed
+
+    def showable(self, leg: Leg, replayed: list[Segment]) -> bool:
+        worth = worth_showing(self.output / SHOWN_FILE, self.runner.order, leg.entry.state, replayed)
+        return worth or self.movie.queued is None
 
     def extend(
         self, leg: Leg, segments: list[Segment], patience: int | None, rest: Callable[[], bool]

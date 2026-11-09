@@ -840,3 +840,16 @@ def test_off_the_route_map_going_back_drops_only_the_last_checkpoint(tmp_path: P
     kept = [tas.stuck(leg, [piece, *checkpoints], Start("Boss", bytes([4])), None) for _ in range(BACKTRACK_SEARCHES)]
 
     assert kept[-1] == [piece, *checkpoints[:-1]]
+
+
+def test_after_a_restart_the_stored_movie_is_shown_again(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    leg = Leg(FULL_RUN, runner.power_on(), "Boss")
+    segments = local_tas(tmp_path, monkeypatch, runner).extend(leg, [], None, never_rest)
+    restarted = local_tas(tmp_path, monkeypatch, runner)
+    queued: list[object] = []
+    monkeypatch.setattr(restarted.movie, "queue", queued.append)
+
+    restarted.verified(leg, segments)
+
+    assert len(queued) == 1
