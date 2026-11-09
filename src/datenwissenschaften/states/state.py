@@ -12,8 +12,8 @@ class State(ABC, Generic[T]):
 
     def reset(self, ram: T) -> None:
         self.ram = ram
-        self._see()
         self._on_reset()
+        self._see()
 
     def step(self, ram: T) -> tuple[float, bool, bool, type["State[T]"] | None]:
         self.ram = ram
