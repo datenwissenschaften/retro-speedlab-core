@@ -19,7 +19,7 @@ from datenwissenschaften.settings import RetroSpeedlabConfig, RetroSpeedlabPaths
 from datenwissenschaften.speedrun.feed import SpeedrunFeed, publish_every
 from datenwissenschaften.speedrun.footage import compare_cut, movie_cut, render_compare, render_movie
 from datenwissenschaften.speedrun.hints import Hint, hinted, hints_path, load_hints, pressed
-from datenwissenschaften.speedrun.improver import Improver
+from datenwissenschaften.speedrun.improver import Improver, Repair
 from datenwissenschaften.speedrun.journal import JOURNAL_FILE, JournalStore
 from datenwissenschaften.speedrun.live import LIVE_DIR
 from datenwissenschaften.speedrun.movie import Segment, frames, verified_segments
@@ -310,6 +310,8 @@ class Tas:
     def improved(self, leg: Leg, segments: list[Segment]) -> list[Segment]:
         for index, crossing in self.improver.found(leg, segments):
             segments = self.swapped(leg, segments, index, crossing)
+        for repair, crossing in self.improver.repaired(leg, segments):
+            segments = self.rebuilt(leg, segments, [*repair.chain, segment_of(crossing)])
         return segments
 
     def shorten(self, leg: Leg, segments: list[Segment], index: int) -> list[Segment]:
@@ -319,17 +321,41 @@ class Tas:
         return self.swapped(leg, segments, index, crossing)
 
     def swapped(self, leg: Leg, segments: list[Segment], index: int, crossing: Crossing) -> list[Segment]:
-        start = self.start(leg, segments, index)
-        saved = len(segments[index].pressed) - crossing.frames
-        shorter = [*segments[:index], segment_of(crossing), *segments[index + 1 :]]
-        if verified_segments(self.runner, leg.entry, shorter, self.output / TRIAL_MOVIE, None).verified < len(shorter):
-            logger.info(f"Segment {index} of {leg.name} is {saved} frames faster but the rest breaks; it stays")
+        faster = self.rebuilt(leg, segments, [*segments[:index], segment_of(crossing)])
+        if faster is not segments:
+            self.compare.queue(
+                compare_cut(self.runner, self.output, self.start(leg, segments, index), segments[index], crossing)
+            )
+        return faster
+
+    def rebuilt(self, leg: Leg, segments: list[Segment], head: list[Segment]) -> list[Segment]:
+        candidate = [*head, *segments[len(head) :]]
+        replay = verified_segments(self.runner, leg.entry, candidate, self.output / TRIAL_MOVIE, None)
+        if replay.verified < len(head):
+            logger.info(f"A faster piece {len(head) - 1} of {leg.name} does not replay from its start; it stays")
             return segments
-        logger.info(f"Segment {index} of {leg.name} into {crossing.end.state} is {saved} frames faster")
-        self.feed.event("improved", crossing.end.state, crossing.frames)
+        if replay.verified < len(candidate):
+            self.repair(leg, segments, candidate[: replay.verified], replay.ends)
+            return segments
+        if frames(candidate) >= frames(segments):
+            return segments
+        saved = frames(segments) - frames(candidate)
+        logger.info(f"{leg.name} is {saved} frames faster from piece {len(head) - 1} into {head[-1].state}")
+        self.feed.event("improved", head[-1].state, frames(candidate))
         self.feed.stats.trimmed(saved)
-        self.compare.queue(compare_cut(self.runner, self.output, start, segments[index], crossing))
-        return self.keep(leg, self.verified(leg, shorter), shorter[-1].state)
+        return self.keep(leg, self.verified(leg, candidate), candidate[-1].state)
+
+    def repair(self, leg: Leg, segments: list[Segment], replayed: list[Segment], ends: list[bytes]) -> None:
+        played = len(replayed)
+        chain = [replace(piece, emulator_state=end) for piece, end in zip(replayed, ends, strict=True)]
+        bound = frames(segments) - frames(chain) - frames(segments[played + 1 :]) - 1
+        if segments[played].state == chain[-1].state or bound <= 0:
+            logger.info(
+                f"Piece {played} of {leg.name} breaks after a faster one and cannot be searched again; it stays"
+            )
+            return
+        logger.info(f"Piece {played} of {leg.name} is searched again from the faster run, in at most {bound} frames")
+        self.improver.repair(Repair(leg.name, segments, chain), bound)
 
 
 def publish(tas: Tas, segments: list[Segment]) -> None:

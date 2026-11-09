@@ -14,6 +14,7 @@ from datenwissenschaften.speedrun import footage, movie, run, search, searcher, 
 from datenwissenschaften.speedrun.archives import Archives
 from datenwissenschaften.speedrun.explore import search_segment
 from datenwissenschaften.speedrun.hints import Hint, Press, hints_path, load_hints, pressed
+from datenwissenschaften.speedrun.improver import Improver
 from datenwissenschaften.speedrun.live import clear_reports
 from datenwissenschaften.speedrun.movie import Segment
 from datenwissenschaften.speedrun.paths import TAS_MOVIE, atomic_write
@@ -39,7 +40,7 @@ from datenwissenschaften.speedrun.routes import (
 )
 from datenwissenschaften.speedrun.run import BACKTRACK_SEARCHES, never_rest
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
-from datenwissenschaften.speedrun.search import UNBOUNDED, Checkpoint, Crossing, shave
+from datenwissenschaften.speedrun.search import UNBOUNDED, Checkpoint, Crossing, Searched, shave
 from datenwissenschaften.speedrun.stuck import (
     FAILURES_FILE,
     STUCK_FILE,
@@ -862,3 +863,43 @@ def test_a_piece_that_loses_a_life_on_the_way_does_not_replay(tmp_path: Path):
     through_death = [Segment("Boss", [[0, 0]] * 3, bytes([3]), False)]
 
     assert movie.verified_segments(runner, start, through_death, tmp_path / "death.bk2", None).verified == 0
+
+
+class RecordingPool:
+    def __init__(self) -> None:
+        self.jobs: list[tuple[object, ...]] = []
+        self.futures: list[Future] = []
+
+    def submit(self, function, *arguments) -> Future:
+        self.jobs.append(arguments)
+        self.futures.append(Future())
+        return self.futures[-1]
+
+
+def test_a_faster_piece_whose_follower_breaks_has_the_follower_searched_again_and_kept_when_faster(
+    tmp_path: Path, monkeypatch
+):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    pool = RecordingPool()
+    tas.improver = Improver("fakes:FakeWrapper", tmp_path, pool, 1, SECONDS, None)
+    leg = Leg(FULL_RUN, runner.power_on(), "Exit")
+    segments = [Segment("Boss", [[0, 0]] * 40, bytes([1]), False), Segment("Exit", [[0, 0]] * 50, bytes([2]), False)]
+    faster = Crossing(Start("Boss", bytes([5])), np.zeros((30, 2), np.int8), False, ("cell",))
+    monkeypatch.setattr(run, "verified_segments", lambda *arguments: movie.Replay(1, {}, [bytes([7])]))
+
+    assert tas.swapped(leg, segments, 0, faster) is segments
+    assert pool.jobs[0][2] == Start("Boss", bytes([7]))
+    assert pool.jobs[0][3] == 90 - 30 - 1
+
+    repaired = Crossing(Start("Exit", bytes([8])), np.zeros((45, 2), np.int8), False, ("cell",))
+    pool.futures[0].set_result(Searched([repaired], None))
+    monkeypatch.setattr(
+        run,
+        "verified_segments",
+        lambda runner, start, candidate, *rest: movie.Replay(len(candidate), {}, [bytes([9])] * len(candidate)),
+    )
+
+    monkeypatch.setattr(run.Tas, "verified", lambda self, leg, kept: kept)
+
+    assert [len(piece.pressed) for piece in tas.improved(leg, segments)] == [30, 45]

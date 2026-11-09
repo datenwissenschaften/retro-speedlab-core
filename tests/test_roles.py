@@ -8,7 +8,7 @@ from fakes import saving_environment
 
 from datenwissenschaften.speedrun import vision
 from datenwissenschaften.speedrun.beam import beam_search
-from datenwissenschaften.speedrun.improver import SMALLEST_GAIN_FRAMES, Improver, shortenable
+from datenwissenschaften.speedrun.improver import SMALLEST_GAIN_FRAMES, Improver, Repair, shortenable
 from datenwissenschaften.speedrun.movie import Segment
 from datenwissenschaften.speedrun.routes import Leg
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
@@ -114,3 +114,17 @@ def test_a_vision_plan_that_is_no_json_list_is_skipped(tmp_path: Path, monkeypat
     monkeypatch.setattr(vision, "asked", lambda prompt, folder: "Jump over the van.")
 
     assert vision.vision_search(runner, runner.power_on(), "Survive", "- Hold A to jump", None) == Searched([], None)
+
+
+def test_a_repair_is_handed_over_only_while_the_route_still_starts_with_its_original_pieces():
+    pool = RecordingPool()
+    improver = Improver("fakes:FakeWrapper", Path("config.yaml"), pool, 1, SECONDS, None)
+    original = [piece("Boss", LONG, 1), piece("Exit", LONG, 2)]
+    improver.repair(Repair("Level 1", original, [piece("Boss", LONG - SMALLEST_GAIN_FRAMES, 5)]), LONG)
+    pool.futures[0].set_result(Searched([crossing("Exit", LONG + 1), crossing("Exit", LONG - 1)], None))
+
+    assert improver.repaired(leg(), [piece("Boss", LONG - 1, 1), *original[1:]]) == []
+    improver.repair(Repair("Level 1", original, [piece("Boss", LONG - SMALLEST_GAIN_FRAMES, 5)]), LONG)
+    pool.futures[1].set_result(Searched([crossing("Exit", LONG + 1), crossing("Exit", LONG - 1)], None))
+
+    assert [found.frames for _, found in improver.repaired(leg(), [*original, piece("Stage", LONG, 3)])] == [LONG - 1]
