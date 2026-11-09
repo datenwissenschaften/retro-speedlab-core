@@ -62,7 +62,7 @@ def simulate(exploration: Exploration, root: Node, rng: random.Random) -> bool:
         leaf.children[action] = None
         return True
     found = exploration.remember(step)
-    child = Node(Start(leaf.start.state, exploration.runner.snapshot()), step, 0, 0.0, {})
+    child = Node(exploration.runner.here(leaf.start.state), step, 0, 0.0, {})
     leaf.children[action] = child
     value = rollout(exploration, step, rng) + NEW_PLACE_VALUE * found - root.step.score
     for node in (*path, child):

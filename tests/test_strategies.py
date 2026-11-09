@@ -5,14 +5,14 @@ from pathlib import Path
 
 import msgspec
 import numpy as np
-from fakes import saving_environment
+from fakes import FakeRam, FakeWrapper, SavingEmulator, fake_routes, saving_environment
 from test_tas import NO_PREFERENCES, START, LineRunner
 
 from datenwissenschaften.speedrun import archives as archives_module
 from datenwissenschaften.speedrun import exploration as exploration_module
 from datenwissenschaften.speedrun import explore
 from datenwissenschaften.speedrun.archives import KEPT_CELLS, Archive, Archives, fresh_archive, pruned
-from datenwissenschaften.speedrun.exploration import Exploration, Step
+from datenwissenschaften.speedrun.exploration import Exploration, Step, step_of
 from datenwissenschaften.speedrun.movie import Segment
 from datenwissenschaften.speedrun.novelty import RamNovelty
 from datenwissenschaften.speedrun.prior import ActionPrior, learned_table
@@ -21,6 +21,7 @@ from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.speedrun.search import UNBOUNDED, Trail
 from datenwissenschaften.speedrun.strategies import frontier
 from datenwissenschaften.speedrun.tree import tree
+from datenwissenschaften.states.state import State
 
 
 def test_ram_novelty_counts_the_byte_values_never_seen_before():
@@ -56,6 +57,46 @@ def exploration() -> Exploration:
     runner = LineRunner()
     archive = fresh_archive(runner, START)
     return Exploration(runner, START, UNBOUNDED, time.monotonic() + 5.0, None, NO_PREFERENCES, archive)
+
+
+class HeightRam(FakeRam):
+    def dynamics(self) -> tuple[int, ...]:
+        return (self.score,)
+
+
+class Climb(State[HeightRam]):
+    goal = "Climb"
+
+    def _on_reset(self) -> None:
+        self._best = self.ram.score
+
+    def _reward(self) -> float:
+        gained, self._best = max(0, self.ram.score - self._best), max(self._best, self.ram.score)
+        return float(gained)
+
+
+class ClimbWrapper(FakeWrapper):
+    start_state_cls = Climb
+    state_classes = (Climb,)
+    ram_info_cls = HeightRam
+
+
+def test_a_place_below_the_best_height_earns_nothing_for_climbing_back_after_the_search_goes_on_from_it(
+    tmp_path: Path,
+):
+    emulator = SavingEmulator(tmp_path / "recordings", [(3, 0), (3, 4), (3, 1), (3, 4), (3, 4)])
+    runner = SegmentRunner(ClimbWrapper(emulator, fake_routes(tmp_path)))
+    start = runner.power_on()
+    explored = Exploration(
+        runner, start, UNBOUNDED, time.monotonic() + 5.0, None, NO_PREFERENCES, fresh_archive(runner, start)
+    )
+    step = explored.act(explored.act(Step(None, 0, 0.0, False), 0), 0)
+    explored.remember(step)
+    dip = explored.archive[runner.key(step.frames)]
+
+    runner.restore(dip.start)
+
+    assert explored.act(step_of(dip), 0).score == 4.0
 
 
 def test_the_frontier_tries_every_short_input_from_a_place_and_finds_the_shortest_crossing():

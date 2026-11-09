@@ -4,7 +4,6 @@ from collections import deque
 from itertools import product
 
 from datenwissenschaften.speedrun.exploration import Exploration, Step, step_of
-from datenwissenschaften.speedrun.runner import Start
 from datenwissenschaften.speedrun.search import EXPLORE_DECISIONS, KEEP_ACTION, STILL_FRAMES, choose
 
 FRONTIER_DEPTH = 3
@@ -66,4 +65,4 @@ def frontier(exploration: Exploration, rng: random.Random) -> None:
                 continue
             exploration.remember(reached)
             if depth > 1:
-                layer.append((Start(start.state, exploration.runner.snapshot()), reached, depth - 1))
+                layer.append((exploration.runner.here(start.state), reached, depth - 1))

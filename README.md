@@ -62,7 +62,9 @@ python -m datenwissenschaften.speedrun.run verify <wrapper> <config> <progress>
 The run is split at the state machine's transitions. Each segment is searched on
 `speedrun.workers` emulator processes over an archive that keeps the fastest
 savestate per cell (state, 8 px position, height, airborne and
-`RamInfo.dynamics()`, the game's coarse view of whatever moves nearby). Three
+`RamInfo.dynamics()`, the game's coarse view of whatever moves nearby). A cell
+also keeps the state's memory, so a search that goes on from it earns reward as
+the unbroken trail would, never again for ground it already scored. Three
 modes share each search by time:
 
 - **Go-Explore walks** (60 %) branch from rarely visited cells with short input

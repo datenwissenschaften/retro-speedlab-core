@@ -95,7 +95,7 @@ class Exploration:
         if key not in self.archive and len(self.archive) >= MAX_CELLS:
             places = [kept for kept, cell in self.archive.items() if cell.trail is not None]
             del self.archive[min(places, key=lambda kept: (self.archive[kept].score, -self.archive[kept].visits))]
-        here = Start(self.start.state, self.runner.snapshot())
+        here = self.runner.here(self.start.state)
         novelty = self.novelty.see(self.runner.memory())
         remaining = self.runner.remaining()
         self.archive[key] = Cell(here, step.trail, step.frames, 0, remaining, step.score, novelty)
