@@ -586,6 +586,30 @@ def test_a_checkpoint_chain_closer_to_the_exit_keeps_searching_from_its_end_unti
     assert later == [] and tas.barred == {"Level 1": "Survive"}
 
 
+def test_a_reward_checkpoint_chain_off_the_route_map_keeps_searching_from_its_end_until_it_goes_back(
+    tmp_path: Path, monkeypatch
+):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    reward = Checkpoint(Start("Survive", bytes([1])), np.zeros((1, 2), np.int8), 20.0, None)
+    calls: list[int] = []
+
+    def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Checkpoint | None:
+        calls.append(bound)
+        return reward if len(calls) == 1 else None
+
+    leg = Leg("Level 1", runner.power_on(), "Exit")
+    monkeypatch.setattr(searcher.Searcher, "best", best)
+    monkeypatch.setattr(SegmentRunner, "remaining", lambda self: None)
+
+    tas.extend(leg, [], 1, never_rest)
+    kept = tas.extend(leg, tas.routes.segments(leg.name), 1, never_rest)
+    later = tas.extend(leg, tas.routes.segments(leg.name), 1, never_rest)
+
+    assert [segment.state for segment in kept] == ["Survive"]
+    assert later == [] and tas.barred == {"Level 1": "Survive"}
+
+
 def test_a_barred_state_stays_barred_when_the_search_finds_its_way_back_into_it(tmp_path: Path):
     barred = tmp_path / "barred.json"
     bar(barred, "Level 2", "Ledge")
