@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -39,6 +39,7 @@ def route_needs(key: CellKey) -> Needs:
 class Start:
     state: str
     emulator_state: bytes
+    state_memory: dict[str, Any] | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -73,6 +74,8 @@ class SegmentRunner:
         self.lives = self.ram.remaining_lives()
         state_type = None if start.state == self.order[0] else state_class(self.classes, start.state)
         self.wrapper.state_machine.reset(self.ram, state_type)
+        if start.state_memory is not None:
+            self.wrapper.state_machine.current_state.recall(start.state_memory)
 
     def press(self, buttons: np.ndarray) -> tuple[bool, bool, float]:
         for player, mask in enumerate(self.emulator.action_to_array(buttons)):
@@ -119,6 +122,9 @@ class SegmentRunner:
 
     def snapshot(self) -> bytes:
         return bytes(self.emulator.em.get_state())
+
+    def here(self, state: str) -> Start:
+        return Start(state, self.snapshot(), self.wrapper.state_machine.current_state.memory())
 
     def remaining(self) -> int | None:
         return self.wrapper.routes.remaining(self.ram.position(), self.ram.dynamics())

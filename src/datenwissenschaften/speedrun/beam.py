@@ -47,7 +47,7 @@ def expanded(runner: SegmentRunner, origin: Start, node: Node, macro: np.ndarray
             return confirmed(runner, pressed, won)
         if not alive or machine.state_name != origin.state:
             return None
-    return Node(Start(origin.state, runner.snapshot()), np.concatenate([node.pressed, macro]), score)
+    return Node(runner.here(origin.state), np.concatenate([node.pressed, macro]), score)
 
 
 def beam_search(runner: SegmentRunner, start: Start, seconds: float, live: WorkerLive | None) -> Searched:

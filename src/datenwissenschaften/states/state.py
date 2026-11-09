@@ -1,5 +1,6 @@
 from abc import ABC
-from typing import Generic, TypeVar
+from copy import deepcopy
+from typing import Any, Generic, TypeVar
 
 from datenwissenschaften.ram import RamInfo
 
@@ -19,6 +20,12 @@ class State(ABC, Generic[T]):
         self.ram = ram
         self._see()
         return self._reward(), self._terminated(), self._truncated(), self._next()
+
+    def memory(self) -> dict[str, Any]:
+        return deepcopy({name: value for name, value in vars(self).items() if name != "ram"})
+
+    def recall(self, memory: dict[str, Any]) -> None:
+        vars(self).update(deepcopy(memory))
 
     def _see(self) -> None:
         pass
