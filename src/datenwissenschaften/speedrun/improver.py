@@ -3,6 +3,7 @@ from concurrent.futures import Executor, Future
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from datenwissenschaften.speedrun.live import POLISHER
 from datenwissenschaften.speedrun.movie import Segment
 from datenwissenschaften.speedrun.routes import Leg
 from datenwissenschaften.speedrun.runner import Start
@@ -65,7 +66,16 @@ class Improver:
             index = random.choice(candidates)
             target = Target(leg.name, index, piece_start(leg, segments, index), segments[index])
             bound = len(target.piece.pressed) - SMALLEST_GAIN_FRAMES
-            job = (self.wrapper, self.config, target.start, bound, random.randrange(SEED_SPACE), self.seconds, None)
+            job = (
+                self.wrapper,
+                self.config,
+                target.start,
+                bound,
+                random.randrange(SEED_SPACE),
+                self.seconds,
+                None,
+                POLISHER,
+            )
             self.running[self.pool.submit(explore, *job)] = target
 
     def found(self, leg: Leg, segments: list[Segment]) -> list[tuple[int, Crossing]]:

@@ -9,7 +9,7 @@ from gymnasium import spaces
 
 from datenwissenschaften.policy.prior import observation
 from datenwissenschaften.policy.starts import Opening, chosen, openings
-from datenwissenschaften.speedrun.live import WorkerLive
+from datenwissenschaften.speedrun.live import PPO, WorkerLive
 from datenwissenschaften.speedrun.novelty import RamNovelty
 from datenwissenschaften.speedrun.paths import ARCHIVES_DIR
 from datenwissenschaften.speedrun.policy_start import POLICY_START_FILE, load_policy_start
@@ -34,7 +34,7 @@ class PolicyEnv(gymnasium.Env[np.ndarray, np.int64]):
     def __init__(self, wrapper: str, config: Path, output: Path, live: Path) -> None:
         self.runner = worker_runner(wrapper, config)
         self.output = output
-        self.live = WorkerLive(live, os.getpid(), POLICY_MODE)
+        self.live = WorkerLive(live, os.getpid(), PPO, POLICY_MODE)
         self.runner.power_on()
         self.observation_space = spaces.Box(0.0, 1.0, (len(self.runner.memory()),), np.float32)
         self.action_space = spaces.Discrete(len(self.runner.wrapper.action_table))

@@ -8,10 +8,12 @@ import numpy as np
 from loguru import logger
 
 from datenwissenschaften.speedrun.hints import Hint, Press, pressed
+from datenwissenschaften.speedrun.live import WorkerLive
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.speedrun.search import Crossing, Searched, replay
 
 VISION_MODEL = "haiku"
+VISION_MODE = "plan"
 VISION_SECONDS = 120
 MOST_FRAMES = 600
 PROMPT = """You play the NES game in the screenshot {image}. Read it with the Read tool.
@@ -40,7 +42,7 @@ def planned(answer: str, state: str) -> Hint:
     return Hint(state, steps)
 
 
-def vision_search(runner: SegmentRunner, start: Start, goal: str) -> Searched:
+def vision_search(runner: SegmentRunner, start: Start, goal: str, live: WorkerLive | None) -> Searched:
     runner.restore(start)
     with tempfile.TemporaryDirectory() as directory:
         folder = Path(directory)
@@ -54,5 +56,7 @@ def vision_search(runner: SegmentRunner, start: Start, goal: str) -> Searched:
         logger.warning(f"The vision scout's plan for {start.state} could not be read: {error}")
         return Searched([], None)
     crossing: Crossing | None = replay(runner, start, np.asarray(frames, dtype=np.int8)) if len(frames) else None
+    if live is not None:
+        live.step(runner, 0, None if crossing is None else crossing.frames, len(frames), None)
     logger.info(f"The vision scout's {len(frames)}-frame plan {'leaves' if crossing else 'stays in'} {start.state}")
     return Searched([] if crossing is None else [crossing], None)

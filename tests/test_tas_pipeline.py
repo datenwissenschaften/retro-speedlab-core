@@ -259,7 +259,8 @@ def test_workers_search_and_shave_from_a_savestate(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(workers, "worker_archives", lambda config: archives)
 
     assert (
-        workers.explore("fakes:FakeWrapper", tmp_path, start, 100, 1, SECONDS, None).crossings[0].frames == BOSS_FRAMES
+        workers.explore("fakes:FakeWrapper", tmp_path, start, 100, 1, SECONDS, None, "scout").crossings[0].frames
+        == BOSS_FRAMES
     )
     assert workers.polish("fakes:FakeWrapper", tmp_path, start, crossing, SECONDS) == shave(runner, start, crossing, 0)
 

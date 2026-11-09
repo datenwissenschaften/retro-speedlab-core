@@ -88,7 +88,7 @@ def test_the_vision_scout_plays_the_plan_claude_writes(tmp_path: Path, monkeypat
     runner = SegmentRunner(saving_environment(tmp_path))
     monkeypatch.setattr(vision, "asked", lambda prompt, folder: 'Plan: [[6, ["A"]]]')
 
-    searched = vision.vision_search(runner, runner.power_on(), "Survive")
+    searched = vision.vision_search(runner, runner.power_on(), "Survive", None)
 
     assert [found.end.state for found in searched.crossings] == ["Boss"]
 
@@ -97,4 +97,4 @@ def test_a_vision_plan_that_is_no_json_list_is_skipped(tmp_path: Path, monkeypat
     runner = SegmentRunner(saving_environment(tmp_path))
     monkeypatch.setattr(vision, "asked", lambda prompt, folder: "Jump over the van.")
 
-    assert vision.vision_search(runner, runner.power_on(), "Survive") == Searched([], None)
+    assert vision.vision_search(runner, runner.power_on(), "Survive", None) == Searched([], None)

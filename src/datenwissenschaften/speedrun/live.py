@@ -11,10 +11,17 @@ LIVE_DIR = "live"
 REPORT_SUFFIX = ".msgpack"
 REPORT_SECONDS = 2.0
 FRAME_SECONDS = 1.0
+SCOUT = "scout"
+BACKTRACKER = "backtracker"
+BEAM_SCOUT = "beam-scout"
+VISION_SCOUT = "vision-scout"
+POLISHER = "polisher"
+PPO = "ppo"
 
 
 class WorkerReport(msgspec.Struct, frozen=True):
     seed: int
+    role: str
     mode: str
     cells: int
     frames: int
@@ -38,9 +45,10 @@ def clear_reports(directory: Path) -> None:
 
 
 class WorkerLive:
-    def __init__(self, directory: Path, seed: int, mode: str) -> None:
+    def __init__(self, directory: Path, seed: int, role: str, mode: str) -> None:
         self.directory = directory
         self.seed = seed
+        self.role = role
         self.mode = mode
         self.frames = 0
         self.report_due = 0.0
@@ -54,5 +62,5 @@ class WorkerLive:
             atomic_write(self.directory / f"{self.seed}{TILE_SUFFIX}", tile(runner.emulator.em.get_screen()))
         if now >= self.report_due:
             self.report_due = now + REPORT_SECONDS
-            report = WorkerReport(self.seed, self.mode, cells, self.frames, best, closest)
+            report = WorkerReport(self.seed, self.role, self.mode, cells, self.frames, best, closest)
             atomic_write(self.directory / f"{self.seed}{REPORT_SUFFIX}", msgspec.msgpack.encode(report))

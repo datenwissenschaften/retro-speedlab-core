@@ -36,6 +36,7 @@ def search_field(search: SearchRound | None, reports: list[WorkerReport], now: d
         "workers": [
             {
                 "seed": report.seed,
+                "role": report.role,
                 "mode": report.mode,
                 "cells": report.cells,
                 "frames": report.frames,

@@ -37,13 +37,13 @@ def test_a_worker_writes_its_report_and_tile_and_the_main_process_reads_them_bac
         ("Survive", 2): Cell(START, None, 0, 0, None, 0.0, 0),
     }
     crossings = [Crossing(START, runner.wrapper.action_table[0], False, ("Boss",))]
-    busy, quiet = WorkerLive(tmp_path, 7, "frontier"), WorkerLive(tmp_path, 3, "policy")
+    busy, quiet = WorkerLive(tmp_path, 7, "scout", "frontier"), WorkerLive(tmp_path, 3, "ppo", "policy")
 
     busy.step(runner, len(archive), crossings[0].frames, 4, 300)
     busy.step(runner, len(archive), crossings[0].frames, 4, 300)
     quiet.step(runner, 0, None, 2, None)
 
-    expected = [WorkerReport(3, "policy", 0, 2, None, None), WorkerReport(7, "frontier", 2, 4, 1, 300)]
+    expected = [WorkerReport(3, "ppo", "policy", 0, 2, None, None), WorkerReport(7, "scout", "frontier", 2, 4, 1, 300)]
     assert read_reports(tmp_path) == expected
     assert (tmp_path / "7.jpg").read_bytes()[:2] == b"\xff\xd8"
     clear_reports(tmp_path)
@@ -89,7 +89,10 @@ def test_two_workers_share_one_row_of_the_mosaic(tmp_path: Path):
 
 def test_the_live_search_adds_up_its_workers():
     search = SearchRound("Scale2", 0, 2, STARTED, 120.0, 393)
-    reports = [WorkerReport(5, "walk", 10, 600, 393, 120), WorkerReport(4, "tree", 10, 600, None, 90)]
+    reports = [
+        WorkerReport(5, "scout", "walk", 10, 600, 393, 120),
+        WorkerReport(4, "backtracker", "tree", 10, 600, None, 90),
+    ]
 
     assert search_field(search, reports, STARTED + timedelta(seconds=2)) == {
         "state": "Scale2",
@@ -99,8 +102,24 @@ def test_the_live_search_adds_up_its_workers():
         "started_at": "2026-10-29T14:07:10+00:00",
         "ends_at": "2026-10-29T14:09:10+00:00",
         "workers": [
-            {"seed": 5, "mode": "walk", "cells": 10, "frames": 600, "best_frames": 393, "closest": 120},
-            {"seed": 4, "mode": "tree", "cells": 10, "frames": 600, "best_frames": None, "closest": 90},
+            {
+                "seed": 5,
+                "role": "scout",
+                "mode": "walk",
+                "cells": 10,
+                "frames": 600,
+                "best_frames": 393,
+                "closest": 120,
+            },
+            {
+                "seed": 4,
+                "role": "backtracker",
+                "mode": "tree",
+                "cells": 10,
+                "frames": 600,
+                "best_frames": None,
+                "closest": 90,
+            },
         ],
         "cells": 20,
         "frames": 1200,
