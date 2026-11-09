@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import msgspec
 import numpy as np
 import pytest
-from fakes import saved_state, saving_environment, write_config
+from fakes import FakeWrapper, SavingEmulator, fake_routes, saved_state, saving_environment, write_config
 
 from datenwissenschaften.policy.prior import PolicyPrior
 from datenwissenschaften.speedrun import feed as feed_module
@@ -853,3 +853,12 @@ def test_after_a_restart_the_stored_movie_is_shown_again(tmp_path: Path, monkeyp
     restarted.verified(leg, segments)
 
     assert len(queued) == 1
+
+
+def test_a_piece_that_loses_a_life_on_the_way_does_not_replay(tmp_path: Path):
+    script = [(3, 0), (3, 1), (0, 2), (3, 5)]
+    runner = SegmentRunner(FakeWrapper(SavingEmulator(tmp_path / "recordings", script), fake_routes(tmp_path)))
+    start = runner.power_on()
+    through_death = [Segment("Boss", [[0, 0]] * 3, bytes([3]), False)]
+
+    assert movie.verified_segments(runner, start, through_death, tmp_path / "death.bk2", None).verified == 0

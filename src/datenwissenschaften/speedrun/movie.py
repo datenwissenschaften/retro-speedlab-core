@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 
 from datenwissenschaften.environment.recording import active_movie_path
+from datenwissenschaften.environment.wrapper import known_lives, lost_life
 from datenwissenschaften.ram import RamInfo
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.speedrun.search import left_at_once
@@ -78,12 +79,15 @@ def verified_segments(
     samples: list[dict[str, int | None]] = []
     ends: list[bytes] = []
     with recording(runner, movie, start):
+        lives, died = runner.lives, False
         for segment in segments:
             entered = machine.state_name
             for buttons in np.asarray(segment.pressed, dtype=np.int8):
                 runner.emulator.step(buttons)
                 ram = runner.wrapper.read_ram()
-                machine.step(ram)
+                _, terminated, _ = machine.step(ram)
+                died = died or terminated or lost_life(lives, ram)
+                lives = known_lives(lives, ram)
                 if played % MEMORY_EVERY == 0:
                     samples.append(memory_sample(ram))
                     if catalog is not None:
@@ -91,7 +95,7 @@ def verified_segments(
                             runner.snapshot(), runner.emulator.em.get_screen(), machine.state_name, ram.level()
                         )
                 played += 1
-            if machine.state_name != segment.state and not (segment.won and machine.current_state.won()):
+            if died or (machine.state_name != segment.state and not (segment.won and machine.current_state.won())):
                 break
             if left_at_once(segment.pressed) and (segment.won or segment.state != entered):
                 break
