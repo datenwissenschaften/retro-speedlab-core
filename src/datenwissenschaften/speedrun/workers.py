@@ -4,6 +4,7 @@ from pathlib import Path
 
 from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.environment.wrapper import state_class
+from datenwissenschaften.knowledge import knowledge_path, load_knowledge
 from datenwissenschaften.policy.prior import POLICY_FILE, PolicyPrior
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.speedrun.archives import Archives
@@ -57,4 +58,11 @@ def beam(wrapper: str, config: Path, start: Start, seed: int, seconds: float, li
 def vision(wrapper: str, config: Path, start: Start, seed: int, live: Path | None) -> Searched:
     runner = worker_runner(wrapper, config)
     watched = None if live is None else WorkerLive(live, seed, VISION_SCOUT, VISION_MODE)
-    return vision_search(runner, start, state_class(runner.wrapper.state_classes, start.state).goal, watched)
+    goal = state_class(runner.wrapper.state_classes, start.state).goal
+    return vision_search(runner, start, goal, worker_notes(config), watched)
+
+
+@cache
+def worker_notes(config: Path) -> str:
+    knowledge = load_knowledge(knowledge_path(load_config(config).paths.game_dir))
+    return "\n".join(f"- {mechanic.title}: {mechanic.text}" for mechanic in knowledge.mechanics)

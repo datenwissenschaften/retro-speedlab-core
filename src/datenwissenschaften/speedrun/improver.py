@@ -58,6 +58,7 @@ class Improver:
     pool: Executor
     polishers: int
     seconds: float
+    live: Path | None
     running: dict[Future[Searched], Target] = field(default_factory=dict[Future[Searched], Target])
 
     def keep_busy(self, leg: Leg, segments: list[Segment]) -> None:
@@ -73,7 +74,7 @@ class Improver:
                 bound,
                 random.randrange(SEED_SPACE),
                 self.seconds,
-                None,
+                self.live,
                 POLISHER,
             )
             self.running[self.pool.submit(explore, *job)] = target

@@ -381,7 +381,9 @@ def tas_run(wrapper: str, config: Path, pool: Executor, polishing: Executor) -> 
         logger.warning(
             f"Pieces of {', '.join(relabelled)} reach other states with this game package; they keep their place"
         )
-    improver = Improver(wrapper, config, polishing, settings.speedrun.polishers, settings.speedrun.segment_seconds)
+    improver = Improver(
+        wrapper, config, polishing, settings.speedrun.polishers, settings.speedrun.segment_seconds, feed.live
+    )
     hints = load_hints(hints_path(config))
     return Tas(settings, runner, searcher, routes, feed, movie, compare, improver, hints, set())
 

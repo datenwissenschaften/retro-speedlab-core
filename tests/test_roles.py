@@ -50,7 +50,7 @@ def test_only_pieces_that_leave_a_state_and_are_long_enough_are_shortened():
 
 def test_polishers_keep_their_slots_busy_and_never_take_more():
     pool = RecordingPool()
-    improver = Improver("fakes:FakeWrapper", Path("config.yaml"), pool, 2, SECONDS)
+    improver = Improver("fakes:FakeWrapper", Path("config.yaml"), pool, 2, SECONDS, None)
     segments = [piece("Boss", LONG, 1), piece("Exit", LONG, 2)]
 
     improver.keep_busy(leg(), segments)
@@ -62,7 +62,7 @@ def test_polishers_keep_their_slots_busy_and_never_take_more():
 
 def test_a_faster_piece_is_handed_over_only_while_the_route_still_holds_it():
     pool = RecordingPool()
-    improver = Improver("fakes:FakeWrapper", Path("config.yaml"), pool, 1, SECONDS)
+    improver = Improver("fakes:FakeWrapper", Path("config.yaml"), pool, 1, SECONDS, None)
     segments = [piece("Boss", LONG, 1)]
     improver.keep_busy(leg(), segments)
     pool.futures[0].set_result(Searched([crossing("Boss", LONG - SMALLEST_GAIN_FRAMES)], None))
@@ -87,14 +87,15 @@ def test_the_beam_scout_finds_the_way_out_with_button_patterns(tmp_path: Path):
 
 def test_the_vision_scout_plays_the_plan_claude_writes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     runner = SegmentRunner(saving_environment(tmp_path))
-    runner.emulator.buttons = ["A", None]
+    runner.emulator.buttons = ["A", "START"]
     prompts: list[str] = []
-    monkeypatch.setattr(vision, "asked", lambda prompt, folder: prompts.append(prompt) or 'Plan: [[6, ["A"]]]')
+    monkeypatch.setattr(vision, "asked", lambda prompt, folder: prompts.append(prompt) or 'Plan: [[6, ["A", "START"]]]')
 
-    searched = vision.vision_search(runner, runner.power_on(), "Survive", None)
+    searched = vision.vision_search(runner, runner.power_on(), "Survive", "- Hold A to jump", None)
 
     assert [found.end.state for found in searched.crossings] == ["Boss"]
-    assert "Buttons: A." in prompts[0]
+    assert "Buttons: A." in prompts[0] and "- Hold A to jump" in prompts[0]
+    assert not any(buttons[1] for buttons in runner.emulator.pressed)
 
 
 def test_a_failed_claude_call_leaves_the_search_running(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -105,11 +106,11 @@ def test_a_failed_claude_call_leaves_the_search_running(tmp_path: Path, monkeypa
 
     monkeypatch.setattr(vision, "asked", timed_out)
 
-    assert vision.vision_search(runner, runner.power_on(), "Survive", None) == Searched([], None)
+    assert vision.vision_search(runner, runner.power_on(), "Survive", "- Hold A to jump", None) == Searched([], None)
 
 
 def test_a_vision_plan_that_is_no_json_list_is_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     runner = SegmentRunner(saving_environment(tmp_path))
     monkeypatch.setattr(vision, "asked", lambda prompt, folder: "Jump over the van.")
 
-    assert vision.vision_search(runner, runner.power_on(), "Survive", None) == Searched([], None)
+    assert vision.vision_search(runner, runner.power_on(), "Survive", "- Hold A to jump", None) == Searched([], None)
