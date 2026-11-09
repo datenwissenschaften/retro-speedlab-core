@@ -9,7 +9,7 @@ from datenwissenschaften.reference.fetch import FRAMES_PER_SECOND
 from datenwissenschaften.reference.frames import load_frames
 from datenwissenschaften.reference.matches import LevelMatches, LevelReading, Matches, read_level
 from datenwissenschaften.reference.paths import FRAMES_DIR, MATCHES_FILE, SCREENS_FILE, THUMBS_FILE, reference_dir
-from datenwissenschaften.reference.play import dark_screens, level_spans
+from datenwissenschaften.reference.play import UnsplitVideo, dark_screens, level_spans
 from datenwissenschaften.reference.screens import updated_screens
 from datenwissenschaften.route.paths import video_route_path
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
@@ -56,15 +56,20 @@ class ReferenceMatching:
         self.pool = pool
         self.feed = feed
         self.running: Future[list[LevelMatches]] | None = None
+        self.unsplit = False
 
     def refresh(self) -> None:
-        if not self.frames.is_dir() or (self.running is not None and not self.running.done()):
+        if self.unsplit or not self.frames.is_dir() or (self.running is not None and not self.running.done()):
             return
         self.running = self.pool.submit(match_reference, self.wrapper, self.config)
         self.running.add_done_callback(self.matched)
 
     def matched(self, done: Future[list[LevelMatches]]) -> None:
         error = done.exception()
+        if isinstance(error, UnsplitVideo):
+            logger.warning(f"{error}; the reference video gives this game no route map")
+            self.unsplit = True
+            return
         if error is not None:
             logger.opt(exception=error).error("The reference video could not be matched with emulator screens")
             return

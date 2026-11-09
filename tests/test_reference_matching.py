@@ -260,16 +260,18 @@ def test_matching_waits_for_frames_and_for_the_matching_before(tmp_path: Path):
     assert pool.jobs == 0
 
 
-def test_a_video_whose_levels_do_not_split_logs_the_failure_and_reports_nothing(
+def test_a_video_whose_levels_do_not_split_is_reported_once_and_never_matched_again(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     config = reference(tmp_path, monkeypatch, [1, 2])
     reported: list[list[dict[str, int]]] = []
-    referencing = matching.ReferenceMatching("Fake", config, NowPool(), SimpleNamespace(referenced=reported.append))
+    pool = NowPool()
+    referencing = matching.ReferenceMatching("Fake", config, pool, SimpleNamespace(referenced=reported.append))
 
     referencing.refresh()
+    referencing.refresh()
 
-    assert reported == [] and referencing.running is not None and referencing.running.exception() is not None
+    assert reported == [] and referencing.unsplit and pool.jobs == 1
 
 
 def test_a_still_splits_panel_beside_the_game_is_cut_off(tmp_path: Path):

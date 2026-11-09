@@ -8,6 +8,10 @@ FLASH_SECONDS = 1.5
 Span = tuple[int, int]
 
 
+class UnsplitVideo(RuntimeError):
+    pass
+
+
 def dark_screens(screens: np.ndarray) -> np.ndarray:
     return (screens.max(3) < BLACK).mean((1, 2)) >= DARK_SHARE
 
@@ -36,7 +40,7 @@ def level_spans(dark: np.ndarray, level_count: int, frames_per_second: float) ->
     found = breaks(dark, frames_per_second)
     spans = [(before[1], after[0]) for before, after in zip(found, found[1:], strict=False)]
     if len(spans) != level_count:
-        raise RuntimeError(
+        raise UnsplitVideo(
             f"The video shows {len(spans)} levels between {len(found)} dark score screens, not {level_count}"
         )
     return spans
