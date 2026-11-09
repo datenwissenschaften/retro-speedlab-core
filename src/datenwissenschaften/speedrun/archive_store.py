@@ -23,6 +23,7 @@ class StoredCell(msgspec.Struct, array_like=True):
     remaining: int | None
     score: float
     novelty: int
+    state_memory: dict[str, Any] | None = None
 
 
 class StoredArchive(msgspec.Struct, array_like=True):
@@ -48,6 +49,7 @@ def stored_cell(key: CellKey, cell: Cell) -> StoredCell:
         cell.remaining,
         cell.score,
         cell.novelty,
+        cell.start.state_memory,
     )
 
 
@@ -55,7 +57,7 @@ def loaded_cell(state: str, stored: StoredCell) -> Cell:
     trail = None
     if stored.pressed is not None:
         trail = Trail(None, np.frombuffer(stored.pressed, dtype=np.int8).reshape(-1, stored.buttons).copy())
-    start = Start(state, stored.emulator_state)
+    start = Start(state, stored.emulator_state, stored.state_memory)
     return Cell(start, trail, stored.frames, stored.visits, stored.remaining, stored.score, stored.novelty)
 
 
@@ -71,7 +73,8 @@ def load_archive(path: Path) -> tuple[dict[CellKey, Cell], RamNovelty]:
     stored = msgspec.msgpack.decode(path.read_bytes(), type=StoredArchive)
     bits = np.unpackbits(np.frombuffer(stored.seen, dtype=np.uint8), count=stored.addresses * BYTE_VALUES)
     novelty = novelty_of(bits.astype(bool).reshape(stored.addresses, BYTE_VALUES))
-    return {hashable(cell.key): loaded_cell(stored.state, cell) for cell in stored.cells}, novelty
+    cells = [cell for cell in stored.cells if cell.pressed is None or cell.state_memory is not None]
+    return {hashable(cell.key): loaded_cell(stored.state, cell) for cell in cells}, novelty
 
 
 def modified(path: Path) -> float | None:
