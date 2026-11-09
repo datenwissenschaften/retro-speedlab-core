@@ -180,7 +180,8 @@ class Tas:
         ]
         if replay.verified < len(segments):
             logger.warning(f"Only {replay.verified} of {len(segments)} segments of {leg.name} replay; searching again")
-        elif frames(replayed) and self.showable(leg, replayed):
+            replay = verified_segments(self.runner, leg.entry, replayed, movie, self.feed.catalog)
+        if frames(replayed) and self.showable(leg, replayed):
             self.movie.queue(movie_cut(self.feed.course, leg, replayed, movie, replay.memory))
         return replayed
 

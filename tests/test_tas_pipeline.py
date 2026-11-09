@@ -903,3 +903,25 @@ def test_a_faster_piece_whose_follower_breaks_has_the_follower_searched_again_an
     monkeypatch.setattr(run.Tas, "verified", lambda self, leg, kept: kept)
 
     assert [len(piece.pressed) for piece in tas.improved(leg, segments)] == [30, 45]
+
+
+def test_when_only_a_part_replays_the_movie_shows_that_part_without_the_broken_piece(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    leg = Leg(FULL_RUN, runner.power_on(), "Boss")
+    walked = tas.extend(leg, [], None, never_rest)
+    broken = Segment("Nowhere", [[0, 0]], bytes([9]), False)
+    replayed: list[int] = []
+    verify = movie.verified_segments
+
+    def counted(runner, start, segments, path, catalog):
+        replayed.append(len(segments))
+        return verify(runner, start, segments, path, catalog)
+
+    monkeypatch.setattr(run, "verified_segments", counted)
+    queued: list[object] = []
+    restarted = local_tas(tmp_path, monkeypatch, runner)
+    monkeypatch.setattr(restarted.movie, "queue", queued.append)
+
+    assert [piece.state for piece in restarted.verified(leg, [*walked, broken, broken])] == [p.state for p in walked]
+    assert replayed == [len(walked) + 2, len(walked)] and len(queued) == 1
