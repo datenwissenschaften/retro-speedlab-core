@@ -249,7 +249,9 @@ class Tas:
 
     def advanced(self, leg: Leg, segments: list[Segment], chain: int) -> bool:
         self.runner.restore(self.start(leg, segments, len(segments)))
-        return self.nearer(self.start(leg, segments, len(segments) - chain), self.runner.remaining())
+        remaining = self.runner.remaining()
+        start = self.start(leg, segments, len(segments) - chain)
+        return self.unmapped(start) if remaining is None else self.nearer(start, remaining)
 
     def checkpoint(
         self, leg: Leg, segments: list[Segment], start: Start, found: Checkpoint, patience: int | None
