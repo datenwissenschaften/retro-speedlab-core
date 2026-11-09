@@ -284,7 +284,8 @@ class Tas:
             logger.warning(f"No way out of {start.state} after {searches} searches; searching the way into it again")
         if segments and segments[-1].state == start.state:
             bar(self.barred_file, leg.name, start.state)
-        kept = segments[: len(segments) - max(1, chain)]
+        dropped = 1 if self.unmapped(start) else max(1, chain)
+        kept = segments[: len(segments) - dropped]
         return self.keep(leg, kept, self.start(leg, kept, len(kept)).state)
 
     def improve(self, leg: Leg, segments: list[Segment]) -> list[Segment]:

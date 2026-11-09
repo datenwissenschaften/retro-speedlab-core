@@ -318,6 +318,7 @@ def test_the_search_goes_back_a_piece_only_after_three_failed_searches(tmp_path:
 def test_going_back_drops_every_checkpoint_in_a_row_down_to_the_last_piece(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
+    monkeypatch.setattr(SegmentRunner, "remaining", lambda self: 300)
     piece = Segment("Boss", [[0, 0]], bytes([1]), False)
     checkpoints = [Segment("Boss", [[0, 0]], bytes([index]), False) for index in (2, 3, 4)]
     leg = Leg(FULL_RUN, runner.power_on(), "Exit")
@@ -821,3 +822,16 @@ def test_clearing_the_live_view_leaves_files_still_being_written(tmp_path: Path)
     clear_reports(tmp_path)
 
     assert [path.name for path in tmp_path.iterdir()] == [".2.jpg.7.tmp"]
+
+
+def test_off_the_route_map_going_back_drops_only_the_last_checkpoint(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    monkeypatch.setattr(SegmentRunner, "remaining", lambda self: None)
+    piece = Segment("Boss", [[0, 0]], bytes([1]), False)
+    checkpoints = [Segment("Boss", [[0, 0]], bytes([index]), False) for index in (2, 3, 4)]
+    leg = Leg(FULL_RUN, runner.power_on(), "Exit")
+
+    kept = [tas.stuck(leg, [piece, *checkpoints], Start("Boss", bytes([4])), None) for _ in range(BACKTRACK_SEARCHES)]
+
+    assert kept[-1] == [piece, *checkpoints[:-1]]
