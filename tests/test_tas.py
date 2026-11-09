@@ -69,7 +69,7 @@ class LineRunner:
         return self.x.to_bytes(2, "big", signed=True)
 
     def here(self, state: str) -> Start:
-        return Start(state, self.snapshot())
+        return Start(state, self.snapshot(), {})
 
     def memory(self) -> np.ndarray:
         return np.asarray([self.x % 256], dtype=np.uint8)

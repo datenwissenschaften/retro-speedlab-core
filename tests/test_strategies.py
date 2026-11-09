@@ -11,6 +11,7 @@ from test_tas import NO_PREFERENCES, START, LineRunner
 from datenwissenschaften.speedrun import archives as archives_module
 from datenwissenschaften.speedrun import exploration as exploration_module
 from datenwissenschaften.speedrun import explore
+from datenwissenschaften.speedrun.archive_store import load_archive, save_archive
 from datenwissenschaften.speedrun.archives import KEPT_CELLS, Archive, Archives, fresh_archive, pruned
 from datenwissenschaften.speedrun.exploration import Exploration, Step, step_of
 from datenwissenschaften.speedrun.movie import Segment
@@ -81,9 +82,7 @@ class ClimbWrapper(FakeWrapper):
     ram_info_cls = HeightRam
 
 
-def test_a_place_below_the_best_height_earns_nothing_for_climbing_back_after_the_search_goes_on_from_it(
-    tmp_path: Path,
-):
+def climbed_into_a_dip(tmp_path: Path) -> tuple[SegmentRunner, Exploration, Step]:
     emulator = SavingEmulator(tmp_path / "recordings", [(3, 0), (3, 4), (3, 1), (3, 4), (3, 4)])
     runner = SegmentRunner(ClimbWrapper(emulator, fake_routes(tmp_path)))
     start = runner.power_on()
@@ -92,11 +91,43 @@ def test_a_place_below_the_best_height_earns_nothing_for_climbing_back_after_the
     )
     step = explored.act(explored.act(Step(None, 0, 0.0, False), 0), 0)
     explored.remember(step)
+    return runner, explored, step
+
+
+def test_a_place_below_the_best_height_earns_nothing_for_climbing_back_after_the_search_goes_on_from_it(
+    tmp_path: Path,
+):
+    runner, explored, step = climbed_into_a_dip(tmp_path)
     dip = explored.archive[runner.key(step.frames)]
 
     runner.restore(dip.start)
 
     assert explored.act(step_of(dip), 0).score == 4.0
+
+
+def test_a_place_loaded_from_disk_still_earns_nothing_for_climbing_back(tmp_path: Path):
+    runner, explored, step = climbed_into_a_dip(tmp_path)
+    key = runner.key(step.frames)
+    Archives(tmp_path / "archives", 2).keep(explored.start, UNBOUNDED, explored.kept())
+    dip = Archives(tmp_path / "archives", 2).resumed(runner, explored.start, UNBOUNDED).cells[key]
+
+    runner.restore(dip.start)
+
+    assert explored.act(step_of(dip), 0).score == 4.0
+
+
+def test_a_place_stored_without_the_state_memory_is_not_loaded(tmp_path: Path):
+    _, explored, _ = climbed_into_a_dip(tmp_path)
+    path = tmp_path / "old.msgpack"
+    save_archive(path, explored.start.state, explored.archive, explored.novelty)
+    old = msgspec.msgpack.decode(path.read_bytes())
+    old[3] = [cell[:9] for cell in old[3]]
+    path.write_bytes(msgspec.msgpack.encode(old))
+
+    cells, _ = load_archive(path)
+
+    assert len(explored.archive) == 2
+    assert [cell.trail for cell in cells.values()] == [None]
 
 
 def test_the_frontier_tries_every_short_input_from_a_place_and_finds_the_shortest_crossing():
@@ -209,7 +240,9 @@ def test_a_kept_archive_keeps_its_start_however_many_places_score_higher():
 def test_a_resumed_archive_saved_without_its_start_gets_its_start_back(tmp_path: Path):
     explored = exploration()
     key, root = next(iter(explored.archive.items()))
-    place = replace(root, trail=Trail(None, np.zeros((1, 1), dtype=np.int8)), frames=4)
+    place = replace(
+        root, start=replace(START, state_memory={}), trail=Trail(None, np.zeros((1, 1), dtype=np.int8)), frames=4
+    )
     Archives(tmp_path, 2).keep(START, UNBOUNDED, Archive({("spot",): place}, explored.novelty))
 
     resumed = Archives(tmp_path, 2).resumed(LineRunner(), START, UNBOUNDED).cells

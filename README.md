@@ -64,8 +64,9 @@ The run is split at the state machine's transitions. Each segment is searched on
 savestate per cell (state, 8 px position, height, airborne and
 `RamInfo.dynamics()`, the game's coarse view of whatever moves nearby). A cell
 also keeps the state's memory, so a search that goes on from it earns reward as
-the unbroken trail would, never again for ground it already scored. Three
-modes share each search by time:
+the unbroken trail would, never again for ground it already scored, and a life
+lost on the trail stays lost. The archive on disk keeps that memory too; a stored
+cell without it is not loaded. Three modes share each search by time:
 
 - **Go-Explore walks** (60 %) branch from rarely visited cells with short input
   bursts; half the time they start from the tenth of cells that earned the most
