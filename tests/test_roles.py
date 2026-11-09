@@ -1,3 +1,4 @@
+import subprocess
 from concurrent.futures import Future
 from pathlib import Path
 
@@ -86,11 +87,25 @@ def test_the_beam_scout_finds_the_way_out_with_button_patterns(tmp_path: Path):
 
 def test_the_vision_scout_plays_the_plan_claude_writes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     runner = SegmentRunner(saving_environment(tmp_path))
-    monkeypatch.setattr(vision, "asked", lambda prompt, folder: 'Plan: [[6, ["A"]]]')
+    runner.emulator.buttons = ["A", None]
+    prompts: list[str] = []
+    monkeypatch.setattr(vision, "asked", lambda prompt, folder: prompts.append(prompt) or 'Plan: [[6, ["A"]]]')
 
     searched = vision.vision_search(runner, runner.power_on(), "Survive", None)
 
     assert [found.end.state for found in searched.crossings] == ["Boss"]
+    assert "Buttons: A." in prompts[0]
+
+
+def test_a_failed_claude_call_leaves_the_search_running(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+
+    def timed_out(prompt: str, folder: Path) -> str:
+        raise subprocess.TimeoutExpired("claude", vision.VISION_SECONDS)
+
+    monkeypatch.setattr(vision, "asked", timed_out)
+
+    assert vision.vision_search(runner, runner.power_on(), "Survive", None) == Searched([], None)
 
 
 def test_a_vision_plan_that_is_no_json_list_is_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

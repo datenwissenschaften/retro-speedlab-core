@@ -47,9 +47,16 @@ def vision_search(runner: SegmentRunner, start: Start, goal: str, live: WorkerLi
     with tempfile.TemporaryDirectory() as directory:
         folder = Path(directory)
         prompt = PROMPT.format(
-            image=screenshot(runner, folder), goal=goal, buttons=", ".join(runner.emulator.buttons), most=MOST_FRAMES
+            image=screenshot(runner, folder),
+            goal=goal,
+            buttons=", ".join(name for name in runner.emulator.buttons if name),
+            most=MOST_FRAMES,
         )
-        answer = asked(prompt, folder)
+        try:
+            answer = asked(prompt, folder)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            logger.warning(f"The vision scout got no plan for {start.state}: {error}")
+            return Searched([], None)
     try:
         frames = pressed(runner, planned(answer, start.state))[:MOST_FRAMES]
     except (ValueError, msgspec.ValidationError) as error:
