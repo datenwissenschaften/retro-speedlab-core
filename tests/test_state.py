@@ -52,3 +52,20 @@ def test_state_hooks_see_the_latest_ram():
 
     assert state.resets == 1
     assert state.step(_FakeRam(value=2)) == (2.0, True, False, None)
+
+
+class _Tracking(State):
+    goal = "Track"
+
+    def _on_reset(self) -> None:
+        self.seen = 0
+
+    def _see(self) -> None:
+        self.seen += self.ram.value
+
+
+def test_a_fresh_state_sees_its_first_ram_after_its_reset():
+    state = _Tracking()
+    state.reset(_FakeRam(value=1))
+
+    assert state.seen == 1
