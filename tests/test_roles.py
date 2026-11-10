@@ -116,6 +116,17 @@ def test_a_vision_plan_that_is_no_json_list_is_skipped(tmp_path: Path, monkeypat
     assert vision.vision_search(runner, runner.power_on(), "Survive", "- Hold A to jump", None) == Searched([], None)
 
 
+@pytest.mark.parametrize("answer", ["[]", '[[0, ["A"]]]'])
+def test_a_vision_plan_without_frames_leaves_the_search_running(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, answer: str
+):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    runner.emulator.buttons = ["A", "START"]
+    monkeypatch.setattr(vision, "asked", lambda prompt, folder: answer)
+
+    assert vision.vision_search(runner, runner.power_on(), "Survive", "- Hold A to jump", None) == Searched([], None)
+
+
 def test_a_repair_is_handed_over_only_while_the_route_still_starts_with_its_original_pieces():
     pool = RecordingPool()
     improver = Improver("fakes:FakeWrapper", Path("config.yaml"), pool, 1, SECONDS, None)
