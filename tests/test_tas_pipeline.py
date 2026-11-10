@@ -186,6 +186,7 @@ def test_verify_replays_every_part_from_its_own_start_and_rejects_one_that_break
 
     run.verify("fakes:FakeWrapper", config, routes("good", ("Boss", BOSS_FRAMES, False)))
     run.verify("fakes:FakeWrapper", config, routes("newest_refused", ("Survive", 1, False), ("Boss", 1, False)))
+    run.verify("fakes:FakeWrapper", config, routes("split_inside", ("Survive", BOSS_FRAMES, False), ("Boss", 1, False)))
 
     with pytest.raises(RuntimeError):
         run.verify("fakes:FakeWrapper", config, routes("older_broken", ("Boss", 1, False), ("Boss", 2, False)))

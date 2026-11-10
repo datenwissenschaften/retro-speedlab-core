@@ -62,6 +62,13 @@ def relabelled(runner: SegmentRunner, start: Start, segments: list[Segment]) -> 
     return kept
 
 
+def moved_on(runner: SegmentRunner, start: Start, segments: list[Segment]) -> list[Segment]:
+    return [
+        reached if stored.state in runner.order and runner.forward(stored.state, reached.state) else stored
+        for stored, reached in zip(segments, relabelled(runner, start, segments), strict=True)
+    ]
+
+
 def load_progress(path: Path) -> list[Segment]:
     return msgspec.msgpack.decode(path.read_bytes(), type=list[Segment]) if path.is_file() else []
 
