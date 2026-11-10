@@ -249,8 +249,10 @@ class Tas:
         self.runner.restore(start)
         return self.runner.remaining() is None
 
-    def closer(self, start: Start, found: Checkpoint) -> bool:
-        return self.nearer(start, found.remaining) if found.guided else self.unmapped(start)
+    def closer(self, start: Start, found: Checkpoint, barred: bool) -> bool:
+        if found.guided:
+            return self.nearer(start, found.remaining)
+        return not barred and self.unmapped(start)
 
     def advanced(self, leg: Leg, segments: list[Segment], chain: int) -> bool:
         self.runner.restore(self.start(leg, segments, len(segments)))
@@ -262,8 +264,8 @@ class Tas:
         self, leg: Leg, segments: list[Segment], start: Start, found: Checkpoint, patience: int | None
     ) -> list[Segment]:
         searches = self.searched(start.state, patience)
-        held = start.state == self.barred.get(leg.name) or searches >= turn_searches(patience)
-        if held and not self.closer(start, found):
+        barred = start.state == self.barred.get(leg.name)
+        if (barred or searches >= turn_searches(patience)) and not self.closer(start, found, barred):
             return self.wait_or_go_back(leg, segments, start, searches, patience)
         self.feed.event("checkpoint", start.state, found.frames)
         if found.remaining is not None:
