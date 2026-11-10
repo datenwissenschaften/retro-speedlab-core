@@ -365,7 +365,7 @@ def test_no_checkpoint_comes_back_in_a_state_the_search_just_left_one_behind(tmp
     assert tas.barred == {}
 
 
-def test_a_reward_checkpoint_goes_on_in_a_barred_state_the_route_map_does_not_cover(tmp_path: Path, monkeypatch):
+def test_a_reward_checkpoint_off_the_route_map_goes_on_after_the_first_turn(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
     found = searcher.Searcher.best
@@ -377,12 +377,36 @@ def test_a_reward_checkpoint_goes_on_in_a_barred_state_the_route_map_does_not_co
         return reward if len(calls) == 1 else found(self, start, bound, rounds)
 
     monkeypatch.setattr(searcher.Searcher, "best", best)
-    bar(tas.barred_file, FULL_RUN, "Survive")
+    for _ in range(BACKTRACK_SEARCHES):
+        tas.searched("Survive", None)
 
     segments = tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [], None, never_rest)
 
     assert [segment.state for segment in segments] == ["Survive", "Boss"]
     assert [event.kind for event in tas.feed.journal.journal.events][:2] == ["checkpoint", "found"]
+
+
+def test_going_back_off_the_route_map_reaches_the_way_into_a_state_that_keeps_finding_checkpoints(
+    tmp_path: Path, monkeypatch
+):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    reward = Checkpoint(Start("Boss", saved_state(BOSS_FRAMES + 1)), np.zeros((1, 2), np.int8), 20.0, None)
+    searched: list[str] = []
+
+    def best(self: searcher.Searcher, start: Start, bound: int, rounds: int) -> Checkpoint | None:
+        searched.append(start.state)
+        return reward if start.emulator_state == saved_state(BOSS_FRAMES) else None
+
+    monkeypatch.setattr(searcher.Searcher, "best", best)
+    leg = Leg("Level 1", runner.power_on(), "Exit")
+    segments = [Segment("Boss", [[0, 0]] * BOSS_FRAMES, saved_state(BOSS_FRAMES), False)]
+
+    for _ in range(2 * BACKTRACK_SEARCHES + 1):
+        segments = tas.extend(leg, segments, 1, never_rest)
+
+    assert segments == [] and searched[-1] == "Survive"
+    assert tas.barred == {"Level 1": "Boss"}
 
 
 def test_a_level_keeps_its_barred_state_when_another_level_goes_back_later(tmp_path: Path, monkeypatch):

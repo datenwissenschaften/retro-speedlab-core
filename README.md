@@ -113,9 +113,9 @@ A checkpoint is the reached cell with the fewest frames left on the route map:
 from a start on the map that cell must be at least 60 frames closer to the
 exit, from a start off the map any reached map cell will do; otherwise it is
 the cell with the most reward. A checkpoint on the map always moves closer to
-the exit, so it is also kept after the first turn and in a barred state. So is a
-reward checkpoint from a start off the map, since nothing there tells a dead end from
-progress; of several workers'
+the exit, so it is also kept after the first turn and in a barred state. A
+reward checkpoint from a start off the map is kept after the first turn too, but not in a
+barred state, so going back off the map reaches the way into that state; of several workers'
 checkpoints the one closest to the exit on the map wins, then the most reward.
 
 After every segment the whole movie is replayed from power-on; segments that do
