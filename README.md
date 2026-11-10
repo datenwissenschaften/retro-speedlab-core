@@ -143,7 +143,9 @@ same savestate, put to `/live/compare.mp4` and published as `speedrun.compare`
 with the state, both frame counts and the time. `improve` searches every segment
 again, bounded by its current frames; a faster crossing replaces it and the rest
 is searched anew. `verify` fails unless a progress file still replays with a
-game package.
+game package. A piece whose replay now reaches a later state, because the package
+split a state inside it, replays under that state, as it does when the search loads
+the package.
 
 ## Route memory
 

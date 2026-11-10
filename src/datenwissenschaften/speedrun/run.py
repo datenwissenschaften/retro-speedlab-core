@@ -31,7 +31,16 @@ from datenwissenschaften.speedrun.policy_start import (
     save_policy_start,
 )
 from datenwissenschaften.speedrun.report import course_of
-from datenwissenschaften.speedrun.routes import FULL_RUN, ROUTES_FILE, Leg, Routes, finished, load_progress, parts_of
+from datenwissenschaften.speedrun.routes import (
+    FULL_RUN,
+    ROUTES_FILE,
+    Leg,
+    Routes,
+    finished,
+    load_progress,
+    moved_on,
+    parts_of,
+)
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.speedrun.screen import Screen
 from datenwissenschaften.speedrun.search import ROUTE_CHECKPOINT, Checkpoint, Crossing
@@ -449,6 +458,7 @@ def verify(wrapper: str, config: Path, routes_file: Path) -> None:
         *((leg, routes.segments(leg.name)) for leg in legs),
         (Leg(FULL_RUN, power_on, None), load_progress(routes.progress)),
     ]:
+        segments = moved_on(runner, leg.entry, segments)
         verified = verified_segments(
             runner, leg.entry, segments, tas_dir(settings) / f"verify-{TAS_MOVIE}", None
         ).verified
