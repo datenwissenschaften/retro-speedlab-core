@@ -41,7 +41,7 @@ def pressed(runner: SegmentRunner, hint: Hint) -> np.ndarray:
                 raise ValueError(f"Hint for {hint.state} presses {name}, not one of {names}")
             buttons[names.index(name)] = 1
         frames.extend([buttons] * press.frames)
-    return np.asarray(frames, dtype=np.int8)
+    return np.asarray(frames, dtype=np.int8).reshape(-1, idle.size)
 
 
 def hinted(runner: SegmentRunner, candidates: list[np.ndarray], starts: list[Start]) -> tuple[int, Crossing] | None:
