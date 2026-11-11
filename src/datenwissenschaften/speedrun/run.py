@@ -43,7 +43,7 @@ from datenwissenschaften.speedrun.routes import (
 )
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.speedrun.screen import Screen
-from datenwissenschaften.speedrun.search import ROUTE_CHECKPOINT, Checkpoint, Crossing
+from datenwissenschaften.speedrun.search import HOLD_FRAMES, ROUTE_CHECKPOINT, Checkpoint, Crossing
 from datenwissenschaften.speedrun.searcher import Lead, Searcher
 from datenwissenschaften.speedrun.shown import SHOWN_FILE, worth_showing
 from datenwissenschaften.speedrun.stuck import (
@@ -157,11 +157,19 @@ class Tas:
         tried = [*lab, *([np.asarray(policy[start.state], dtype=np.int8)] if start.state in policy else [])]
         found = hinted(self.runner, tried, starts)
         if found is None:
+            if lab:
+                self.missed(start.state, len(lab), sum(entry.state == start.state for entry in starts))
             return None
         self.hinted.add((leg.name, start.state))
         index, crossing = found
         logger.info(f"A hint leads out of {start.state} into {crossing.end.state}")
         return segments[:index], crossing
+
+    def missed(self, state: str, hints: int, starts: int) -> None:
+        logger.warning(
+            f"No lab hint leads out of {state}: tried {hints} from {starts} of its starts, and none leaves it"
+            f" and then stands {HOLD_FRAMES} frames without buttons"
+        )
 
     def leave(self, state: str) -> None:
         stuck = load_stuck(self.stuck_file)

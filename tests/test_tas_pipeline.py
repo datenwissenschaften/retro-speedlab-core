@@ -41,7 +41,7 @@ from datenwissenschaften.speedrun.routes import (
 )
 from datenwissenschaften.speedrun.run import BACKTRACK_SEARCHES, never_rest
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
-from datenwissenschaften.speedrun.search import UNBOUNDED, Checkpoint, Crossing, Searched, shave
+from datenwissenschaften.speedrun.search import HOLD_FRAMES, UNBOUNDED, Checkpoint, Crossing, Searched, shave
 from datenwissenschaften.speedrun.stuck import (
     FAILURES_FILE,
     STUCK_FILE,
@@ -818,6 +818,20 @@ def test_the_lab_hint_leads_out_of_a_state_before_any_search(tmp_path: Path, mon
 
     assert [segment.state for segment in segments] == ["Boss"]
     assert UNBOUNDED not in bounds
+
+
+def test_the_search_log_tells_when_no_lab_hint_leads_out_of_a_state(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    tas.hints = [Hint("Survive", [Press(1, [])])]
+    monkeypatch.setattr(searcher.Searcher, "best", lambda self, start, bound, rounds: None)
+
+    tas.extend(Leg(FULL_RUN, runner.power_on(), "Boss"), [], 1, never_rest)
+
+    missed = [line for line in (tas.output / run.LOG_FILE).read_text().splitlines() if "No lab hint" in line]
+    assert len(missed) == 1
+    assert "out of Survive: tried 1 from 1 of its starts" in missed[0]
+    assert f"stands {HOLD_FRAMES} frames" in missed[0]
 
 
 def test_hints_are_read_from_next_to_the_config_and_name_real_buttons(tmp_path: Path):
