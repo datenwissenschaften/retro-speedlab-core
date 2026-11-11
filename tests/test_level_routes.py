@@ -197,3 +197,26 @@ def test_a_level_is_searched_until_it_is_beaten_before_the_next_one_starts(
         trainer.beat_levels()
 
     assert searched == ["Level 1", "Level 1", "Level 1"]
+
+
+def test_a_level_shows_its_new_pieces_while_it_is_still_searched(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
+    monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path, done: None)
+    monkeypatch.setattr(levels, "write_prior", lambda runner, kept, path: None)
+    monkeypatch.setattr(levels, "practised", pieces)
+    kept = routes(tmp_path)
+    kept.split(RUN[:1], POWER_ON)
+    calls: list = []
+
+    def extend(leg: Leg, segments: list[Segment], patience: int | None, rest: Callable[[], bool]) -> list[Segment]:
+        kept.save(leg, RUN[1:2])
+        rest()
+        raise OneRound
+
+    tas = trainer_tas(tmp_path, calls, extend, None)
+    tas.routes = kept
+    trainer = LevelTrainer(tas, kept, POWER_ON, NO_REEL, NO_MATCHING)
+    with pytest.raises(OneRound):
+        trainer.beat_levels()
+
+    assert calls == [("practised", {"Menu": 1}), ("practised", {"Menu": 1, "Level 1": 1})]
