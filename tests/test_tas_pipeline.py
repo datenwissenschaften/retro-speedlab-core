@@ -1,5 +1,6 @@
 import os
 from concurrent.futures import Future
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -950,3 +951,15 @@ def test_when_only_a_part_replays_the_movie_shows_that_part_without_the_broken_p
 
     assert [piece.state for piece in restarted.verified(leg, [*walked, broken, broken])] == [p.state for p in walked]
     assert replayed == [len(walked) + 2, len(walked)] and len(queued) == 1
+
+
+def test_a_replayed_piece_keeps_its_stored_state_unless_the_game_memory_differs(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    leg = Leg(FULL_RUN, runner.power_on(), "Boss")
+    walked = tas.extend(leg, [], None, never_rest)
+    drifted = [replace(piece, emulator_state=piece.emulator_state + b"sound") for piece in walked]
+    stale = [replace(piece, emulator_state=saved_state(0)) for piece in walked]
+
+    assert tas.verified(leg, drifted) == drifted
+    assert tas.verified(leg, stale) == walked
