@@ -405,6 +405,7 @@ def tas_run(wrapper: str, config: Path, pool: Executor, polishing: Executor) -> 
     logger.add(output / LOG_FILE)
     runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, MAIN_WORKER))
     course = course_of(runner, settings.speedrun.game)
+    logger.info(f"Game package loaded: {settings.speedrun.game.id} with {len(runner.classes)} states")
     journal = JournalStore(output / JOURNAL_FILE)
     experiment = start_experiment(settings, SEARCH_JOB)
     catalog = SpriteCatalog(sprites_dir(settings), load_knowledge(knowledge_path(settings.paths.game_dir)))

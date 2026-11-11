@@ -195,6 +195,17 @@ def test_verify_replays_every_part_from_its_own_start_and_rejects_one_that_break
         run.verify("fakes:FakeWrapper", config, routes("beaten_broken", ("Survive", 1, False), ("Boss", 1, True)))
 
 
+def test_the_search_log_tells_each_time_the_game_package_is_loaded(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    local_tas(tmp_path, monkeypatch, runner)
+    tas = local_tas(tmp_path, monkeypatch, runner)
+
+    loaded = [line for line in (tas.output / run.LOG_FILE).read_text().splitlines() if "Game package loaded" in line]
+
+    assert len(loaded) == 2
+    assert f"{tas.settings.speedrun.game.id} with {len(runner.classes)} states" in loaded[-1]
+
+
 def test_a_segment_without_a_way_out_is_marked_stuck_and_the_way_into_it_searched_again(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
