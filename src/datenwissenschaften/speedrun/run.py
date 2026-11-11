@@ -184,7 +184,7 @@ class Tas:
         movie = self.output / TAS_MOVIE
         replay = verified_segments(self.runner, leg.entry, segments, movie, self.feed.catalog)
         replayed = [
-            replace(segment, emulator_state=end)
+            segment if self.runner.alike(segment.emulator_state, end) else replace(segment, emulator_state=end)
             for segment, end in zip(segments[: replay.verified], replay.ends, strict=True)
         ]
         if replay.verified < len(segments):
