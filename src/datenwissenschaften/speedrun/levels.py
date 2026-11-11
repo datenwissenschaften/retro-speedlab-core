@@ -46,12 +46,16 @@ class LevelTrainer:
         self.reel.show()
         self.matching.refresh()
 
+    def rest(self, polisher: Polisher, part: Part) -> bool:
+        self.tas.feed.practised(practised(self.tas.runner, self.routes))
+        return polisher.rest(part)
+
     def beat_levels(self) -> None:
         self.share_practice()
         polisher = Polisher(self.tas, 0)
         while unbeaten := self.unbeaten():
             part = unbeaten[0]
-            self.tas.extend(self.leg(part), self.routes.segments(part.name), None, partial(polisher.rest, part))
+            self.tas.extend(self.leg(part), self.routes.segments(part.name), None, partial(self.rest, polisher, part))
             self.share_practice()
         logger.info(f"All {len(self.routes.parts)} parts are beaten one after the other")
 
