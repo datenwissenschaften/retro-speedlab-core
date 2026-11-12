@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 from fakes import saving_environment
 
-from datenwissenschaften.speedrun import vision
+from datenwissenschaften.speedrun import vision, workers
 from datenwissenschaften.speedrun.beam import beam_search
-from datenwissenschaften.speedrun.improver import SMALLEST_GAIN_FRAMES, Improver, Repair, shortenable
+from datenwissenschaften.speedrun.improver import CUT_FRAMES, SMALLEST_GAIN_FRAMES, Improver, Repair, cuts, shortenable
 from datenwissenschaften.speedrun.movie import Segment
 from datenwissenschaften.speedrun.routes import Leg
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
@@ -57,7 +57,7 @@ def test_polishers_keep_their_slots_busy_and_never_take_more():
     improver.keep_busy(leg(), segments)
 
     assert len(pool.jobs) == 2
-    assert all(job[3] == LONG - SMALLEST_GAIN_FRAMES for job in pool.jobs)
+    assert all(job[3] == [] and job[4] == LONG - SMALLEST_GAIN_FRAMES for job in pool.jobs)
 
 
 def test_a_faster_piece_is_handed_over_only_while_the_route_still_holds_it():
@@ -139,3 +139,37 @@ def test_a_repair_is_handed_over_only_while_the_route_still_starts_with_its_orig
     pool.futures[1].set_result(Searched([crossing("Exit", LONG + 1), crossing("Exit", LONG - 1)], None))
 
     assert [found.frames for _, found in improver.repaired(leg(), [*original, piece("Stage", LONG, 3)])] == [LONG - 1]
+
+
+def test_a_long_piece_is_cut_every_ten_seconds_and_short_ones_only_at_their_start():
+    assert cuts(piece("Boss", LONG, 1)) == [0]
+    assert cuts(piece("Boss", 3 * CUT_FRAMES, 1)) == [0, CUT_FRAMES, 2 * CUT_FRAMES]
+
+
+def test_polishers_pick_long_pieces_more_often(monkeypatch: pytest.MonkeyPatch):
+    pool = RecordingPool()
+    improver = Improver("fakes:FakeWrapper", Path("config.yaml"), pool, 1, SECONDS, None)
+    segments = [piece("Boss", LONG, 1), piece("Exit", 10 * LONG, 2)]
+    picked: list[list[int]] = []
+    monkeypatch.setattr("random.choices", lambda candidates, weights: picked.append(weights) or [candidates[1]])
+
+    improver.keep_busy(leg(), segments)
+
+    assert picked == [[LONG, 10 * LONG]]
+
+
+def test_a_tail_search_plays_the_head_first_and_hands_back_whole_pieces(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    starts: list[Start] = []
+    found = crossing("Boss", 2)
+    monkeypatch.setattr(workers, "worker_runner", lambda wrapper, config: runner)
+    monkeypatch.setattr(workers, "explore", lambda *job: starts.append(job[2]) or Searched([found], None))
+
+    searched = workers.explore_tail(
+        "fakes:FakeWrapper", tmp_path, runner.power_on(), [[0, 0]], 5, 1, SECONDS, None, "polisher"
+    )
+
+    assert searched.crossings[0].frames == 3
+    assert starts[0].state == "Survive"

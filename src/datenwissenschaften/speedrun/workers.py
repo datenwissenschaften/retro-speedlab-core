@@ -1,6 +1,9 @@
 import os
+from dataclasses import replace
 from functools import cache
 from pathlib import Path
+
+import numpy as np
 
 from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.environment.wrapper import state_class
@@ -66,3 +69,29 @@ def vision(wrapper: str, config: Path, start: Start, seed: int, live: Path | Non
 def worker_notes(config: Path) -> str:
     knowledge = load_knowledge(knowledge_path(load_config(config).paths.game_dir))
     return "\n".join(f"- {mechanic.title}: {mechanic.text}" for mechanic in knowledge.mechanics)
+
+
+def explore_tail(
+    wrapper: str,
+    config: Path,
+    start: Start,
+    head: list[list[int]],
+    bound: int,
+    seed: int,
+    seconds: float,
+    live: Path | None,
+    role: str,
+) -> Searched:
+    runner = worker_runner(wrapper, config)
+    runner.restore(start)
+    for buttons in head:
+        runner.press(np.asarray(buttons, dtype=np.int8))
+    cut = runner.here(start.state)
+    searched = explore(wrapper, config, cut, bound, seed, seconds, live, role)
+    if not head:
+        return searched
+    played = np.asarray(head, dtype=np.int8)
+    return Searched(
+        [replace(crossing, pressed=np.concatenate([played, crossing.pressed])) for crossing in searched.crossings],
+        None,
+    )

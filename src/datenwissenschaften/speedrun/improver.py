@@ -8,10 +8,11 @@ from datenwissenschaften.speedrun.movie import Segment
 from datenwissenschaften.speedrun.routes import Leg
 from datenwissenschaften.speedrun.runner import Start
 from datenwissenschaften.speedrun.search import Crossing, Searched
-from datenwissenschaften.speedrun.workers import explore
+from datenwissenschaften.speedrun.workers import explore, explore_tail
 
 SEED_SPACE = 2**31
 SMALLEST_GAIN_FRAMES = 30
+CUT_FRAMES = 600
 
 
 @dataclass(slots=True, frozen=True)
@@ -20,6 +21,7 @@ class Target:
     index: int
     start: Start
     piece: Segment
+    cut: int
 
 
 @dataclass(slots=True, frozen=True)
@@ -51,6 +53,10 @@ def shortenable(leg: Leg, segments: list[Segment]) -> list[int]:
     ]
 
 
+def cuts(piece: Segment) -> list[int]:
+    return list(range(0, len(piece.pressed) - 2 * SMALLEST_GAIN_FRAMES, CUT_FRAMES))
+
+
 def still_there(target: Target, leg: Leg, segments: list[Segment]) -> bool:
     if target.leg != leg.name or target.index >= len(segments):
         return False
@@ -80,21 +86,16 @@ class Improver:
 
     def keep_busy(self, leg: Leg, segments: list[Segment]) -> None:
         candidates = shortenable(leg, segments)
+        weights = [len(segments[index].pressed) for index in candidates]
         while candidates and len(self.running) + len(self.repairs) < self.polishers:
-            index = random.choice(candidates)
-            target = Target(leg.name, index, piece_start(leg, segments, index), segments[index])
-            bound = len(target.piece.pressed) - SMALLEST_GAIN_FRAMES
-            job = (
-                self.wrapper,
-                self.config,
-                target.start,
-                bound,
-                random.randrange(SEED_SPACE),
-                self.seconds,
-                self.live,
-                POLISHER,
-            )
-            self.running[self.pool.submit(explore, *job)] = target
+            index = random.choices(candidates, weights=weights)[0]
+            piece = segments[index]
+            target = Target(leg.name, index, piece_start(leg, segments, index), piece, random.choice(cuts(piece)))
+            bound = len(piece.pressed) - target.cut - SMALLEST_GAIN_FRAMES
+            head = piece.pressed[: target.cut]
+            seed = random.randrange(SEED_SPACE)
+            job = (self.wrapper, self.config, target.start, head, bound, seed, self.seconds, self.live, POLISHER)
+            self.running[self.pool.submit(explore_tail, *job)] = target
 
     def found(self, leg: Leg, segments: list[Segment]) -> list[tuple[int, Crossing]]:
         faster: list[tuple[int, Crossing]] = []
