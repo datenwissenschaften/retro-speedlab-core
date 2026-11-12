@@ -820,6 +820,18 @@ def test_the_lab_hint_leads_out_of_a_state_before_any_search(tmp_path: Path, mon
     assert UNBOUNDED not in bounds
 
 
+def test_after_a_restart_the_lab_hint_does_not_lead_back_into_the_barred_state(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    tas.hints = [Hint("Survive", [Press(BOSS_FRAMES, ["A"])])]
+    leg = Leg(FULL_RUN, runner.power_on(), None)
+    bar(tas.barred_file, FULL_RUN, "Boss")
+
+    assert tas.hint(leg, [], leg.entry) is None
+    unbar(tas.barred_file, FULL_RUN, "Boss")
+    assert tas.hint(leg, [], leg.entry) is not None
+
+
 def test_the_search_log_tells_when_no_lab_hint_leads_out_of_a_state(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)

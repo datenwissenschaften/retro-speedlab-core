@@ -156,6 +156,9 @@ class Tas:
         policy = load_policy_exits(self.output / POLICY_EXITS_FILE)
         tried = [*lab, *([np.asarray(policy[start.state], dtype=np.int8)] if start.state in policy else [])]
         found = hinted(self.runner, tried, starts)
+        if found is not None and found[1].end.state == self.barred.get(leg.name):
+            logger.info(f"A hint leads out of {start.state} back into barred {found[1].end.state}; searching instead")
+            return None
         if found is None:
             if lab:
                 self.missed(start.state, len(lab), sum(entry.state == start.state for entry in starts))
