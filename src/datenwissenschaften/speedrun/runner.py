@@ -114,13 +114,11 @@ class SegmentRunner:
         return self.emulator.get_ram()
 
     def alike(self, first: bytes, second: bytes) -> bool:
-        if first == second:
-            return True
-        memories = []
-        for emulator_state in (first, second):
-            restore_emulator_state(self.emulator, emulator_state)
-            memories.append(self.memory().copy())
-        return bool(np.array_equal(*memories))
+        return first == second or bool(np.array_equal(self.memory_at(first), self.memory_at(second)))
+
+    def memory_at(self, emulator_state: bytes) -> np.ndarray:
+        restore_emulator_state(self.emulator, emulator_state)
+        return self.memory().copy()
 
     def context(self) -> tuple[str, str]:
         state, position = self.wrapper.state_machine.state_name, self.ram.position()

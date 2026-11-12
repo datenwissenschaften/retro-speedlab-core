@@ -120,7 +120,7 @@ def test_the_search_follows_the_table_or_the_policy_part_of_the_time(line_env: P
 
 def place(x: int, score: float) -> Cell:
     trail = Trail(None, np.full((x, 1), RIGHT, dtype=np.int8))
-    return Cell(Start("Walk", x.to_bytes(2, "big", signed=True)), trail, x, 0, None, score, 0)
+    return Cell(Start("Walk", x.to_bytes(2, "big", signed=True), {}), trail, x, 0, None, score, 0)
 
 
 def save_places(tmp_path: Path, cells: list[Cell]) -> None:
