@@ -16,6 +16,19 @@ This project follows a strict engineering philosophy centered around:
 
 ---
 
+# Major Versions
+
+Major versions are clean breaks.
+
+- Remove superseded code instead of deprecating it.
+- Never add compatibility aliases, legacy import paths, migration layers, or fallback behavior.
+- Never read old configuration shapes, persisted schemas, or checkpoint formats.
+- Reject unsupported input explicitly and fail fast.
+- Update every internal caller to the current API in the same change.
+
+---
+
+
 # Extreme Programming (XP)
 
 Apply the principles of Extreme Programming throughout the project.
@@ -68,11 +81,7 @@ Prefer consistency over preference.
 
 The entire codebase should follow one consistent style.
 
-All code must pass:
-
-- `ruff check`
-- `ruff format`
-- `pyright` (strict, configured in `pyproject.toml`)
+All code must pass every check listed under This Repository.
 
 ---
 
@@ -104,7 +113,7 @@ Optimize for maintainability rather than short-term speed.
 
 Prefer WSL for running commands: `uv run pytest`, `uv run ruff`, deployments and SSH.
 
-The project's `.venv` is a Linux environment and `stable-retro` does not build on Windows.
+The project's `.venv` is a Linux environment.
 
 ---
 
@@ -395,19 +404,6 @@ Whenever code is modified:
 
 ---
 
-# Ruff
-
-Every change must pass:
-
-```bash
-ruff check
-ruff format
-```
-
-Follow Ruff's recommendations unless there is a compelling architectural reason not to.
-
----
-
 # Testing
 
 Tests are **not required** for this project.
@@ -433,7 +429,18 @@ Before considering work complete, verify:
 - Uses `pathlib`
 - Uses `python-box`
 - Uses `loguru`
-- Passes `ruff check`
-- Passes `ruff format`
-- Passes `pyright` in strict mode
+- Passes every check under This Repository
 - Leaves the codebase cleaner than it was found
+
+---
+
+# This Repository
+
+The TAS search, PPO policy, state machine and lab workflow that speedrun the LAB50 games. Generic for every game: nothing specific to one game.
+
+Checks, run in WSL:
+
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run pyright`
+- `uv run pytest -q`
