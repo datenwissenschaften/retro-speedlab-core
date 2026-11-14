@@ -3,8 +3,8 @@ from typing import Any, cast
 
 import numpy as np
 from numpy.typing import NDArray
+from speedlab_engine.console import Console
 
-from datenwissenschaften.environment.recording import restore_emulator_state
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper, known_lives, lost_life, phases, state_class
 from datenwissenschaften.ram import RamInfo
 from datenwissenschaften.route.route_map import CELL_SIZE, Needs
@@ -17,6 +17,12 @@ POSITIONED_KEY = 7
 ROUTE_SCALE = CELL_SIZE // CELL_PIXELS
 
 CellKey = tuple[object, ...]
+
+
+def restore_emulator_state(emulator: Console, emulator_state: bytes) -> None:
+    emulator.em.set_state(emulator_state)
+    emulator.data.reset()
+    emulator.data.update_ram()
 
 
 def route_cell(key: CellKey) -> RouteCell | None:
@@ -104,11 +110,6 @@ class SegmentRunner:
 
     def forward(self, origin: str, reached: str) -> bool:
         return self.order.index(reached) > self.order.index(origin)
-
-    def set_level(self, level: int) -> None:
-        if self.wrapper.level_address is None:
-            raise RuntimeError(f"{type(self.wrapper).__name__} names no level_address to load a level with")
-        self.emulator.data.memory.assign(self.wrapper.level_address, "|u1", level % 256)
 
     def memory(self) -> np.ndarray:
         return self.emulator.get_ram()

@@ -17,7 +17,7 @@ VISION_MODE = "plan"
 VISION_SECONDS = 120
 MOST_FRAMES = 600
 PAUSE = "START"
-PROMPT = """You play the NES game in the screenshot {image}. Read it with the Read tool.
+PROMPT = """You play the 8-bit game in the screenshot {image}. Read it with the Read tool.
 Goal right now: {goal}
 What is known about the game:
 {notes}

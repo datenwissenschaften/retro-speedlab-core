@@ -7,7 +7,9 @@ from types import SimpleNamespace
 import msgspec
 import numpy as np
 import pytest
-from fakes import FakeWrapper, SavingEmulator, fake_routes, saved_state, saving_environment, write_config
+from fakes import FAKE_VERSION, FakeWrapper, SavingEmulator, fake_routes, saved_state, saving_environment, write_config
+from speedlab_engine.cartridge import BUTTONS
+from speedlab_engine.movie import Movie, decode
 
 from datenwissenschaften.policy.prior import PolicyPrior
 from datenwissenschaften.speedrun import feed as feed_module
@@ -18,7 +20,7 @@ from datenwissenschaften.speedrun.hints import Hint, Press, hints_path, load_hin
 from datenwissenschaften.speedrun.improver import Improver
 from datenwissenschaften.speedrun.live import clear_reports
 from datenwissenschaften.speedrun.movie import Segment
-from datenwissenschaften.speedrun.paths import TAS_MOVIE, atomic_write
+from datenwissenschaften.speedrun.paths import atomic_write
 from datenwissenschaften.speedrun.policy_start import (
     POLICY_EXITS_FILE,
     POLICY_START_FILE,
@@ -98,7 +100,7 @@ def local_workers(monkeypatch, runner: SegmentRunner) -> None:
 
 
 def local_tas(tmp_path: Path, monkeypatch, runner: SegmentRunner) -> run.Tas:
-    monkeypatch.setattr(run, "make_environment", lambda wrapper_cls, settings, worker: runner.wrapper)
+    monkeypatch.setattr(run, "make_environment", lambda wrapper_cls, settings: runner.wrapper)
     monkeypatch.setattr(run, "SegmentRunner", lambda wrapper: runner)
     local_workers(monkeypatch, runner)
     return run.tas_run("fakes:FakeWrapper", write_config(tmp_path), SyncPool(), IdlePool())
@@ -138,10 +140,11 @@ def test_search_and_improve_write_a_verified_movie_and_keep_only_faster_segments
     assert [(segment.state, len(segment.pressed)) for segment in searched] == [("Boss", BOSS_FRAMES)]
     assert run.frames(improved) == BOSS_FRAMES
     assert run.frames(run.load_progress(tas.routes.progress)) == BOSS_FRAMES
-    assert (tas.output / TAS_MOVIE).read_bytes() == b"movie"
-    assert (tas.output / "screen.mp4").read_bytes() == b"movie"
-    assert (tas.output / "compare.mp4").read_bytes() == b"moviemovie"
-    assert (tmp_path / "cache" / "sprites" / "catalog.json").read_bytes() == b"{}"
+    shown = msgspec.msgpack.decode((tas.output / "screen.mp4").read_bytes(), type=Movie)
+    assert (shown.cartridge, shown.version, shown.start) == ("games.fake.cartridge", "1.0.0", saved_state(0))
+    assert decode(shown.frames).shape == (BOSS_FRAMES, len(BUTTONS))
+    pieces = [(tas.output / name).read_bytes() for name in ("compare-before.movie", "compare-after.movie")]
+    assert (tas.output / "compare.mp4").read_bytes() == b"".join(pieces)
 
 
 def test_a_movie_that_no_longer_reaches_its_segments_is_cut_back(tmp_path: Path, monkeypatch):
@@ -152,7 +155,7 @@ def test_a_movie_that_no_longer_reaches_its_segments_is_cut_back(tmp_path: Path,
     kept = tas.verified(Leg(FULL_RUN, power_on, "Boss"), [Segment("Boss", [[1, 0]], bytes([1]), False)])
 
     assert kept == []
-    assert movie.verified_segments(runner, power_on, [], tas.output / "again.bk2", None).verified == 0
+    assert movie.verified_segments(runner, power_on, []).verified == 0
     assert tas.searcher.best(power_on, 1, 1) is None
 
 
@@ -160,19 +163,18 @@ def test_a_start_that_is_left_in_its_first_frame_has_no_crossing(tmp_path: Path)
     runner = SegmentRunner(saving_environment(tmp_path))
     runner.power_on()
     pressed = np.array([[1, 0]] * 3, dtype=np.int8)
-    movie_path = tmp_path / "replay.bk2"
 
     assert search.replay(runner, Start("Survive", saved_state(2)), pressed) is None
     assert search.replay(runner, Start("Survive", saved_state(1)), pressed).frames == 2
     instant = [Segment("Boss", [[1, 0]], saved_state(3), False)]
-    assert movie.verified_segments(runner, Start("Survive", saved_state(2)), instant, movie_path, None).verified == 0
+    assert movie.verified_segments(runner, Start("Survive", saved_state(2)), instant).verified == 0
     walked = [Segment("Boss", [[1, 0]] * 2, saved_state(3), False)]
-    assert movie.verified_segments(runner, Start("Survive", saved_state(1)), walked, movie_path, None).verified == 1
+    assert movie.verified_segments(runner, Start("Survive", saved_state(1)), walked).verified == 1
 
 
 def test_verify_replays_every_part_from_its_own_start_and_rejects_one_that_breaks(tmp_path: Path, monkeypatch):
     runner = SegmentRunner(saving_environment(tmp_path))
-    monkeypatch.setattr(run, "make_environment", lambda wrapper_cls, settings, worker: runner.wrapper)
+    monkeypatch.setattr(run, "make_environment", lambda wrapper_cls, settings: runner.wrapper)
     config = write_config(tmp_path)
     entry = runner.power_on().emulator_state
 
@@ -181,6 +183,7 @@ def test_verify_replays_every_part_from_its_own_start_and_rejects_one_that_break
         route = Route(
             entry,
             [Segment(state, [[1, 0]] * frames, bytes([frames]), won) for state, frames, won in segments],
+            FAKE_VERSION,
         )
         atomic_write(path, msgspec.msgpack.encode({"Survive": route}))
         return path
@@ -203,7 +206,8 @@ def test_the_search_log_tells_each_time_the_game_package_is_loaded(tmp_path: Pat
     loaded = [line for line in (tas.output / run.LOG_FILE).read_text().splitlines() if "Game package loaded" in line]
 
     assert len(loaded) == 2
-    assert f"{tas.settings.speedrun.game.id} with {len(runner.classes)} states" in loaded[-1]
+    game = tas.settings.speedrun.game
+    assert f"{game.id} {game.version} with {len(runner.classes)} states" in loaded[-1]
 
 
 def test_a_segment_without_a_way_out_is_marked_stuck_and_the_way_into_it_searched_again(tmp_path: Path, monkeypatch):
@@ -262,7 +266,7 @@ def test_a_state_the_search_finds_its_way_back_into_stays_stuck_since_its_first_
 
 def test_workers_search_and_shave_from_a_savestate(tmp_path: Path, monkeypatch):
     env = saving_environment(tmp_path)
-    monkeypatch.setattr(workers, "make_environment", lambda wrapper_cls, settings, worker: env)
+    monkeypatch.setattr(workers, "make_environment", lambda wrapper_cls, settings: env)
     runner = workers.worker_runner.__wrapped__("fakes:FakeWrapper", write_config(tmp_path))
     start = runner.power_on()
     preferences = Preferences(ActionPrior(tmp_path / "prior.msgpack"), PolicyPrior(tmp_path / "policy.npz"))
@@ -296,7 +300,7 @@ def test_a_faster_piece_that_breaks_the_rest_of_the_run_is_not_taken(tmp_path: P
     segments = [Segment("Survive", [[1, 0]] * 4, bytes([4]), False), Segment("Boss", [[1, 0]], bytes([5]), False)]
     faster = Crossing(Start("Survive", bytes([2])), np.zeros((2, 2), np.int8), False, ("Survive", 0))
     monkeypatch.setattr(searcher.Searcher, "best", lambda self, start, bound, rounds: faster)
-    replayed = lambda runner, start, shorter, path, catalog: movie.Replay(1, {}, [bytes([2])])  # noqa: E731
+    replayed = lambda runner, start, shorter: movie.Replay(1, {}, [bytes([2])])  # noqa: E731
     monkeypatch.setattr(run, "verified_segments", replayed)
 
     assert tas.shorten(Leg(FULL_RUN, runner.power_on(), "Boss"), segments, 0) is segments
@@ -682,7 +686,7 @@ def test_every_level_with_pieces_gets_its_best_video_once_in_level_order(tmp_pat
         footage, "render_video", lambda paths, recordings: rendered.extend(recordings) or fake_render(paths, recordings)
     )
     parts = [Part("Survive", "Survive", "Boss"), Part("Level 1", "Boss", None)]
-    routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", parts)
+    routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", parts, FAKE_VERSION)
     routes.save(Leg("Level 1", Start("Boss", bytes([3])), None), [Segment("Boss", [[0, 0]] * 2, bytes([5]), False)])
     tas.feed.show([Segment("Boss", [[0, 0]], b"", False)], "Boss")
     shown = Reel(tas.settings, tas.feed, runner, routes)
@@ -699,14 +703,16 @@ def test_every_level_with_pieces_gets_its_best_video_once_in_level_order(tmp_pat
 
 def test_pieces_in_states_the_game_package_dropped_keep_their_place_under_the_state_they_reach_now(tmp_path: Path):
     runner = SegmentRunner(saving_environment(tmp_path))
-    routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Survive", "Survive", "Boss")])
+    routes = Routes(
+        tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Survive", "Survive", "Boss")], FAKE_VERSION
+    )
     gone = [Segment("Gone", [[0, 0]] * 1, bytes([1]), False), Segment("Boss", [[0, 0]] * 2, bytes([3]), False)]
     routes.save(Leg("Survive", Start("Survive", bytes([0])), "Boss"), gone)
-    save_progress(tmp_path / "progress.msgpack", gone)
+    save_progress(tmp_path / "progress.msgpack", gone, FAKE_VERSION)
 
     assert routes.relabel(runner) == ["Survive", FULL_RUN]
 
-    kept = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", routes.parts)
+    kept = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", routes.parts, FAKE_VERSION)
     assert [segment.state for segment in kept.segments("Survive")] == ["Survive", "Boss"]
     assert [segment.pressed for segment in kept.segments("Survive")] == [segment.pressed for segment in gone]
     assert [segment.state for segment in load_progress(tmp_path / "progress.msgpack")] == ["Survive", "Boss"]
@@ -715,14 +721,16 @@ def test_pieces_in_states_the_game_package_dropped_keep_their_place_under_the_st
 
 def test_pieces_that_reach_another_state_after_the_game_package_inserted_one_take_its_name(tmp_path: Path):
     runner = SegmentRunner(saving_environment(tmp_path))
-    routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Survive", "Survive", "Boss")])
+    routes = Routes(
+        tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Survive", "Survive", "Boss")], FAKE_VERSION
+    )
     routes.save(
         Leg("Survive", Start("Survive", bytes([0])), "Boss"), [Segment("Survive", [[0, 0]] * 3, bytes([3]), False)]
     )
 
     assert routes.relabel(runner) == ["Survive"]
 
-    kept = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", routes.parts)
+    kept = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", routes.parts, FAKE_VERSION)
     assert [segment.state for segment in kept.segments("Survive")] == ["Boss"]
     assert kept.relabel(runner) == []
 
@@ -734,6 +742,7 @@ def test_a_level_without_a_route_leaves_the_reel(tmp_path: Path, monkeypatch):
         tmp_path / "levels.msgpack",
         tmp_path / "progress.msgpack",
         [Part("Survive", "Survive", "Boss"), Part("Level 1", "Boss", None)],
+        FAKE_VERSION,
     )
     tas.feed.reeled("Level 1", {"number": 1, "part": "Level 1"})
 
@@ -921,11 +930,11 @@ def test_after_a_restart_the_stored_movie_is_shown_again(tmp_path: Path, monkeyp
 
 def test_a_piece_that_loses_a_life_on_the_way_does_not_replay(tmp_path: Path):
     script = [(3, 0), (3, 1), (0, 2), (3, 5)]
-    runner = SegmentRunner(FakeWrapper(SavingEmulator(tmp_path / "recordings", script), fake_routes(tmp_path)))
+    runner = SegmentRunner(FakeWrapper(SavingEmulator(script), fake_routes(tmp_path)))
     start = runner.power_on()
     through_death = [Segment("Boss", [[0, 0]] * 3, bytes([3]), False)]
 
-    assert movie.verified_segments(runner, start, through_death, tmp_path / "death.bk2", None).verified == 0
+    assert movie.verified_segments(runner, start, through_death).verified == 0
 
 
 class RecordingPool:
@@ -960,7 +969,7 @@ def test_a_faster_piece_whose_follower_breaks_has_the_follower_searched_again_an
     monkeypatch.setattr(
         run,
         "verified_segments",
-        lambda runner, start, candidate, *rest: movie.Replay(len(candidate), {}, [bytes([9])] * len(candidate)),
+        lambda runner, start, candidate: movie.Replay(len(candidate), {}, [bytes([9])] * len(candidate)),
     )
 
     monkeypatch.setattr(run.Tas, "verified", lambda self, leg, kept: kept)
@@ -977,9 +986,9 @@ def test_when_only_a_part_replays_the_movie_shows_that_part_without_the_broken_p
     replayed: list[int] = []
     verify = movie.verified_segments
 
-    def counted(runner, start, segments, path, catalog):
+    def counted(runner, start, segments):
         replayed.append(len(segments))
-        return verify(runner, start, segments, path, catalog)
+        return verify(runner, start, segments)
 
     monkeypatch.setattr(run, "verified_segments", counted)
     queued: list[object] = []

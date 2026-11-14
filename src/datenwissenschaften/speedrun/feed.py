@@ -7,6 +7,7 @@ import msgspec
 import wandb
 
 from datenwissenschaften.speedrun.journal import JournalStore
+from datenwissenschaften.speedrun.learned import Learned
 from datenwissenschaften.speedrun.live import clear_reports, read_reports
 from datenwissenschaften.speedrun.live_search import SearchRound, search_field
 from datenwissenschaften.speedrun.movie import Segment, frames
@@ -14,7 +15,6 @@ from datenwissenschaften.speedrun.report import SECTION, Course, report, splits
 from datenwissenschaften.speedrun.routes import PartProgress
 from datenwissenschaften.speedrun.search_stats import SearchStats
 from datenwissenschaften.speedrun.stuck import load_stuck
-from datenwissenschaften.sprites.catalog import SpriteCatalog
 from datenwissenschaften.ui.telemetry import publish_metadata
 
 PUBLISH_SECONDS = 5.0
@@ -30,10 +30,10 @@ class SpeedrunFeed:
         stuck: Path,
         lab_marker: Path,
         experiment: wandb.Run,
-        catalog: SpriteCatalog,
+        learned: Learned,
     ) -> None:
         self.course = course
-        self.catalog = catalog
+        self.learned = learned
         self.journal = journal
         self.live = live
         self.stuck = stuck
@@ -46,7 +46,6 @@ class SpeedrunFeed:
         self.screened: dict[str, dict[str, Any] | None] = {"movie": None, "compare": None}
         self.practice: dict[str, dict[str, Any]] = {}
         self.reel: dict[str, dict[str, Any]] = {}
-        self.reference: dict[str, dict[str, int]] = {}
         live.mkdir(parents=True, exist_ok=True)
 
     def show(self, segments: list[Segment], searching: str) -> None:
@@ -79,12 +78,6 @@ class SpeedrunFeed:
             self.practice = practice
         self.publish()
 
-    def referenced(self, progress: list[dict[str, int]]) -> None:
-        named = named_progress(list(self.course.levels), progress)
-        with self.lock:
-            self.reference = named
-        self.publish()
-
     def event(self, kind: str, state: str | None, frames: int | None) -> None:
         self.journal.event(kind, state, frames)
         self.stats.event(kind)
@@ -105,14 +98,18 @@ class SpeedrunFeed:
         with self.lock:
             summary, search, screened, practice = self.summary, self.search, self.screened, self.practice
             reel = sorted(self.reel.values(), key=lambda video: video[REEL_ORDER])
-            reference = self.reference
         if not summary:
             return
         reports = [] if search is None else read_reports(self.live)
         now = datetime.now(UTC)
         live = {"search": search_field(search, reports, now), "updated_at": now.isoformat(timespec="seconds")}
-        fields = {**summary, **screened, "practice": practice, "reel": reel, "reference_progress": reference}
-        fields = {**fields, **self.catalog.fields()}
+        fields = {
+            **summary,
+            **screened,
+            "practice": practice,
+            "reel": reel,
+            **self.learned.fields(),
+        }
         publish_metadata(SECTION, {**fields, **self.journal.fields(), **live})
 
     def notice_lab(self, was_running: bool) -> bool:
@@ -121,14 +118,6 @@ class SpeedrunFeed:
             stuck = load_stuck(self.stuck)
             self.event("lab", self.searching if stuck is None else stuck.state, None)
         return running
-
-
-def level_name(names: list[str], level: int) -> str:
-    return names[level] if 0 <= level < len(names) else f"Level {level + 1}"
-
-
-def named_progress(names: list[str], progress: list[dict[str, int]]) -> dict[str, dict[str, int]]:
-    return {level_name(names, row["level"]): {"matched": row["matched"], "frames": row["frames"]} for row in progress}
 
 
 def level_progress(part: PartProgress, frame_rate: float) -> dict[str, Any]:

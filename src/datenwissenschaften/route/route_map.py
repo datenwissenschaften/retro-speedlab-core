@@ -21,13 +21,12 @@ def load_route(path: Path) -> list[tuple[Cell, Needs, int]]:
     return [((row[0], row[1], row[2]), tuple(row[NEEDS_FROM:]), row[LEFT_COLUMN]) for row in rows]
 
 
-def merged(paths: tuple[Path, ...]) -> Remaining:
+def route_of(path: Path) -> Remaining:
     route: Remaining = {}
-    for path in paths:
-        if not path.is_file():
-            continue
-        for cell, needs, left in load_route(path):
-            route.setdefault(cell, []).append((needs, left))
+    if not path.is_file():
+        return route
+    for cell, needs, left in load_route(path):
+        route.setdefault(cell, []).append((needs, left))
     return route
 
 
@@ -46,15 +45,15 @@ def left_in(route: Remaining, cell: Cell | None, have: Needs) -> int | None:
 
 
 class RouteMap:
-    def __init__(self, paths: tuple[Path, ...]) -> None:
-        self.paths = paths
+    def __init__(self, path: Path) -> None:
+        self.path = path
         self.route: Remaining = {}
-        self.loaded: tuple[int | None, ...] = tuple(None for _ in paths)
+        self.loaded: int | None = None
 
     def reload(self) -> Remaining:
-        changed = tuple(changed_at(path) for path in self.paths)
+        changed = changed_at(self.path)
         if changed != self.loaded:
-            self.route, self.loaded = merged(self.paths), changed
+            self.route, self.loaded = route_of(self.path), changed
         return self.route
 
     def remaining(self, position: Position | None, have: Needs) -> int | None:

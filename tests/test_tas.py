@@ -3,6 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+from fakes import FAKE_VERSION
 
 from datenwissenschaften.policy.prior import PolicyPrior
 from datenwissenschaften.route.route_map import RouteMap
@@ -40,7 +41,7 @@ class LineRunner:
         self.wrapper = SimpleNamespace(
             action_table=np.zeros((3, 2, 1), dtype=np.int8),
             state_machine=self,
-            routes=RouteMap((Path("no-route.json"),)),
+            routes=RouteMap(Path("no-route.json")),
         )
 
     @property
@@ -160,7 +161,7 @@ def test_a_trail_replays_its_chunks_in_order():
 def test_progress_survives_a_restart_and_a_won_or_target_segment_finishes_the_run(tmp_path: Path):
     segments = [Segment("Play", [[0, 1]], b"state", False), Segment("Level2", [[1, 0]], b"later", False)]
 
-    save_progress(tmp_path / "progress.msgpack", segments)
+    save_progress(tmp_path / "progress.msgpack", segments, FAKE_VERSION)
 
     assert load_progress(tmp_path / "progress.msgpack") == segments
     assert load_progress(tmp_path / "missing.msgpack") == []

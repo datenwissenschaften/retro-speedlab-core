@@ -55,8 +55,7 @@ def test_the_movie_names_where_each_segment_starts_plays_and_what_it_reaches():
 
 def test_a_changed_movie_is_rendered_uploaded_with_its_memory_and_shown_once(tmp_path: Path):
     render.directory = tmp_path
-    recording, shown, uploads = tmp_path / "tas.bk2", [], []
-    recording.write_bytes(b"bk2")
+    recording, shown, uploads = b"movie", [], []
     movies = Screen("movie", render, flaky_upload([True], uploads), shown.append)
     movies.start()
 
@@ -64,8 +63,8 @@ def test_a_changed_movie_is_rendered_uploaded_with_its_memory_and_shown_once(tmp
     movies.queue(movie_cut(COURSE, LEG, SEGMENTS, recording, MEMORY))
     movies.settle()
 
-    version = hashlib.sha256(b"mp4:bk2").hexdigest()[:12]
-    assert uploads == [(b"mp4:bk2", version, {"movie-ram.json": MEMORY})]
+    version = hashlib.sha256(b"mp4:movie").hexdigest()[:12]
+    assert uploads == [(b"mp4:movie", version, {"movie-ram.json": MEMORY})]
     assert shown == [{"version": version, **movie_field("PowerOn", 60.0, SEGMENTS), "part": "Level 1"}]
 
 
@@ -75,7 +74,7 @@ def test_an_upload_is_retried_until_the_backend_takes_it(tmp_path: Path, monkeyp
     shown, uploads = [], []
     movies = Screen("movie", render, flaky_upload([False, True], uploads), shown.append)
 
-    movies._present(cut(b"bk2", {"frames": 1}))
+    movies._present(cut(b"movie", {"frames": 1}))
 
     assert len(uploads) == 1 and len(shown) == 1
 
@@ -95,7 +94,7 @@ def test_a_video_without_an_upload_is_shown_locally(tmp_path: Path):
     render.directory = tmp_path
     shown: list[dict] = []
 
-    Screen("compare", render, None, shown.append)._present(cut(b"bk2", {"frames": 1}))
+    Screen("compare", render, None, shown.append)._present(cut(b"movie", {"frames": 1}))
 
     assert shown[0]["frames"] == 1
 
@@ -106,7 +105,7 @@ def test_a_video_that_does_not_render_is_skipped():
 
     shown: list[dict] = []
 
-    Screen("movie", fail, None, shown.append)._present(cut(b"bk2", {"frames": 1}))
+    Screen("movie", fail, None, shown.append)._present(cut(b"movie", {"frames": 1}))
 
     assert shown == []
 
@@ -132,14 +131,14 @@ def test_the_movie_and_the_comparison_render_from_their_recordings(tmp_path: Pat
 def test_a_faster_piece_is_recorded_beside_the_old_one_from_the_same_start(tmp_path: Path, monkeypatch):
     pieces: list[tuple[bytes, int]] = []
 
-    def record_piece(runner: object, start: object, pressed: np.ndarray, movie: Path) -> bytes:
+    def recorded(runner: object, start: object, pressed: list[list[int]]) -> bytes:
         pieces.append((start, len(pressed)))
         return f"piece{len(pressed)}".encode()
 
-    monkeypatch.setattr(footage, "record_piece", record_piece)
+    monkeypatch.setattr(footage, "recorded", recorded)
     after = Crossing(SimpleNamespace(state="Boss"), np.zeros((2, 2), np.int8), False, ("Boss",))
 
-    compared = compare_cut(SimpleNamespace(), tmp_path, "start", SEGMENTS[1], after)
+    compared = compare_cut(SimpleNamespace(), "start", SEGMENTS[1], after)
 
     assert pieces == [("start", 3), ("start", 2)]
     assert compared.recordings == (b"piece3", b"piece2")

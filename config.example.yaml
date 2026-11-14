@@ -1,12 +1,11 @@
 paths:
-  roms: roms
-  integrations: integrations
+  collection: ../retro-speedlab-games
   models: working/models
   cache: working/cache
   lab_run: ../.lab-run
 
 training:
-  game: Airstriker-Genesis-v0
+  game: comet_courier
 
 log_level: INFO
 
@@ -33,11 +32,4 @@ speedrun:
   segment_seconds: 240
   policy: false
   policy_emulators: 3
-  id: airstriker-genesis-v0
-  title: Airstriker
-  platform: Genesis
   category: Any%
-  speedrun_com:
-    game: speedrun-com-game-id
-    category: speedrun-com-category-id
-    variables: {}

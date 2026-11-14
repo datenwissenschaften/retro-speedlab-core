@@ -4,7 +4,7 @@ from pathlib import Path
 import msgspec
 import numpy as np
 
-from datenwissenschaften.speedrun.movie import Segment
+from datenwissenschaften.speedrun.movie import Segment, verified_segments
 from datenwissenschaften.speedrun.paths import atomic_write
 from datenwissenschaften.speedrun.report import Course
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
@@ -46,6 +46,12 @@ class PartProgress(msgspec.Struct, frozen=True):
 class Route(msgspec.Struct, frozen=True):
     entry: bytes
     segments: list[Segment]
+    version: str
+
+
+class Progress(msgspec.Struct, frozen=True):
+    version: str
+    segments: list[Segment]
 
 
 def finished(segments: list[Segment], until: str | None) -> bool:
@@ -69,25 +75,41 @@ def moved_on(runner: SegmentRunner, start: Start, segments: list[Segment]) -> li
     ]
 
 
+def still_replaying(runner: SegmentRunner, start: Start, segments: list[Segment]) -> list[Segment]:
+    replay = verified_segments(runner, start, segments)
+    return [
+        replace(segment, emulator_state=end)
+        for segment, end in zip(segments[: replay.verified], replay.ends, strict=True)
+    ]
+
+
+def stored_progress(path: Path) -> Progress | None:
+    return msgspec.msgpack.decode(path.read_bytes(), type=Progress) if path.is_file() else None
+
+
 def load_progress(path: Path) -> list[Segment]:
-    return msgspec.msgpack.decode(path.read_bytes(), type=list[Segment]) if path.is_file() else []
+    progress = stored_progress(path)
+    return [] if progress is None else list(progress.segments)
 
 
-def save_progress(path: Path, segments: list[Segment]) -> None:
-    atomic_write(path, msgspec.msgpack.encode(segments))
+def save_progress(path: Path, segments: list[Segment], version: str) -> None:
+    atomic_write(path, msgspec.msgpack.encode(Progress(version, segments)))
 
 
 class Routes:
-    def __init__(self, path: Path, progress: Path, parts: list[Part]) -> None:
+    def __init__(self, path: Path, progress: Path, parts: list[Part], version: str) -> None:
         self.path = path
         self.progress = progress
         self.parts = parts
+        self.version = version
         self.routes = msgspec.msgpack.decode(path.read_bytes(), type=dict[str, Route]) if path.is_file() else {}
 
     def relabel(self, runner: SegmentRunner) -> list[str]:
         entries = {part.name: part.entry_state for part in self.parts}
         replayed = {
-            name: Route(route.entry, relabelled(runner, Start(entries[name], route.entry), list(route.segments)))
+            name: Route(
+                route.entry, relabelled(runner, Start(entries[name], route.entry), list(route.segments)), route.version
+            )
             for name, route in self.routes.items()
             if name in entries
         }
@@ -97,7 +119,7 @@ class Routes:
             atomic_write(self.path, msgspec.msgpack.encode(self.routes))
         progress = load_progress(self.progress)
         if (progress_replayed := relabelled(runner, runner.power_on(), progress)) != progress:
-            save_progress(self.progress, progress_replayed)
+            save_progress(self.progress, progress_replayed, self.version)
             changed.append(FULL_RUN)
         return changed
 
@@ -129,9 +151,9 @@ class Routes:
 
     def save(self, leg: Leg, segments: list[Segment]) -> None:
         if leg.name == FULL_RUN:
-            save_progress(self.progress, segments)
+            save_progress(self.progress, segments, self.version)
             return
-        self.routes = {**self.routes, leg.name: Route(leg.entry.emulator_state, segments)}
+        self.routes = {**self.routes, leg.name: Route(leg.entry.emulator_state, segments, self.version)}
         atomic_write(self.path, msgspec.msgpack.encode(self.routes))
 
     def view(self, name: str, segments: list[Segment]) -> list[Segment]:

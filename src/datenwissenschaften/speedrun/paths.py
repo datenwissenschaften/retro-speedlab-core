@@ -4,7 +4,6 @@ from pathlib import Path
 from datenwissenschaften.settings import RetroSpeedlabConfig
 
 TAS_DIR = "tas"
-TAS_MOVIE = "tas.bk2"
 PROGRESS_FILE = "progress.msgpack"
 ARCHIVES_DIR = "archives"
 

@@ -1,4 +1,3 @@
-import os
 from dataclasses import replace
 from functools import cache
 from pathlib import Path
@@ -26,7 +25,7 @@ from datenwissenschaften.workflow.wrapper import wrapper_class
 
 @cache
 def worker_runner(wrapper: str, config: Path) -> SegmentRunner:
-    return SegmentRunner(make_environment(wrapper_class(wrapper), load_config(config), os.getpid()))
+    return SegmentRunner(make_environment(wrapper_class(wrapper), load_config(config)))
 
 
 @cache

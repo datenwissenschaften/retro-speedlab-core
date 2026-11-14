@@ -5,7 +5,7 @@ from pathlib import Path
 
 import msgspec
 import numpy as np
-from fakes import FakeRam, FakeWrapper, SavingEmulator, fake_routes, saving_environment
+from fakes import FAKE_VERSION, FakeRam, FakeWrapper, SavingEmulator, fake_routes, saving_environment
 from test_tas import NO_PREFERENCES, START, LineRunner
 
 from datenwissenschaften.speedrun import archives as archives_module
@@ -46,7 +46,9 @@ def test_the_prior_prefers_what_worked_at_this_place_then_in_this_state(tmp_path
 
 def test_the_prior_learns_the_actions_of_the_stored_pieces(tmp_path: Path):
     runner = SegmentRunner(saving_environment(tmp_path))
-    routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Survive", "Survive", None)])
+    routes = Routes(
+        tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Survive", "Survive", None)], FAKE_VERSION
+    )
     routes.save(
         Leg("Survive", Start("Survive", bytes([0])), None), [Segment("Boss", [[1, 0], [0, 1], [1, 1]], b"", False)]
     )
@@ -83,7 +85,7 @@ class ClimbWrapper(FakeWrapper):
 
 
 def climbed_into_a_dip(tmp_path: Path) -> tuple[SegmentRunner, Exploration, Step]:
-    emulator = SavingEmulator(tmp_path / "recordings", [(3, 0), (3, 4), (3, 1), (3, 4), (3, 4)])
+    emulator = SavingEmulator([(3, 0), (3, 4), (3, 1), (3, 4), (3, 4)])
     runner = SegmentRunner(ClimbWrapper(emulator, fake_routes(tmp_path)))
     start = runner.power_on()
     explored = Exploration(

@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fakes import FakeRam, FakeWrapper, SavingEmulator, fake_routes
+from fakes import FAKE_VERSION, FakeRam, FakeWrapper, SavingEmulator, fake_routes
 
 from datenwissenschaften.route.position import Position
 from datenwissenschaften.speedrun.movie import Segment
@@ -14,7 +14,6 @@ from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.states.levels import level_states
 
 SCRIPT = [(3, 0), (3, 1), (3, 5), (3, 6), (3, 6)]
-LEVEL_ADDRESS = 0xAA
 
 
 def at(level: int, progress: int) -> SimpleNamespace:
@@ -53,20 +52,17 @@ class LevelRam(FakeRam):
 
 class LevelWrapper(FakeWrapper):
     ram_info_cls = LevelRam
-    level_address = LEVEL_ADDRESS
-    level_count = 2
 
 
-def level_runner(tmp_path: Path) -> tuple[SegmentRunner, list[tuple[int, int]]]:
-    emulator = SavingEmulator(tmp_path / "recordings", SCRIPT)
-    pokes: list[tuple[int, int]] = []
-    emulator.data.memory = SimpleNamespace(assign=lambda address, kind, value: pokes.append((address, value)))
-    return SegmentRunner(LevelWrapper(emulator, fake_routes(tmp_path))), pokes
+def level_runner(tmp_path: Path) -> SegmentRunner:
+    return SegmentRunner(LevelWrapper(SavingEmulator(SCRIPT), fake_routes(tmp_path)))
 
 
 def test_a_beaten_part_tells_the_route_map_how_many_frames_each_place_is_from_its_end(tmp_path: Path):
-    runner, _ = level_runner(tmp_path)
-    routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Survive", "Survive", "Boss")])
+    runner = level_runner(tmp_path)
+    routes = Routes(
+        tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Survive", "Survive", "Boss")], FAKE_VERSION
+    )
     routes.save(
         Leg("Survive", Start("Survive", bytes([0])), "Boss"), [Segment("Boss", [[1, 0]] * 3, bytes([3]), False)]
     )
@@ -79,8 +75,10 @@ def test_a_beaten_part_tells_the_route_map_how_many_frames_each_place_is_from_it
 
 
 def test_an_unbeaten_part_reports_how_far_it_got_and_leaves_the_route_map_as_it_was(tmp_path: Path):
-    runner, _ = level_runner(tmp_path)
-    routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Survive", "Survive", "Boss")])
+    runner = level_runner(tmp_path)
+    routes = Routes(
+        tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Survive", "Survive", "Boss")], FAKE_VERSION
+    )
     routes.save(
         Leg("Survive", Start("Survive", bytes([0])), "Boss"), [Segment("Survive", [[1, 0]] * 2, bytes([2]), False)]
     )
@@ -96,8 +94,10 @@ def test_an_unbeaten_part_reports_how_far_it_got_and_leaves_the_route_map_as_it_
 
 
 def test_a_beaten_part_without_places_replaces_a_route_map_that_no_beaten_part_backs(tmp_path: Path):
-    runner, _ = level_runner(tmp_path)
-    routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Menu", "Survive", "Boss")])
+    runner = level_runner(tmp_path)
+    routes = Routes(
+        tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [Part("Menu", "Survive", "Boss")], FAKE_VERSION
+    )
     routes.save(Leg("Menu", Start("Survive", bytes([1])), "Boss"), [Segment("Boss", [[1, 0]], bytes([2]), False)])
     path = tmp_path / "route.json"
     path.write_text("[[0, 29, 14, 4538, 0]]", encoding="utf-8")
@@ -108,9 +108,9 @@ def test_a_beaten_part_without_places_replaces_a_route_map_that_no_beaten_part_b
 
 
 def test_a_part_whose_start_is_not_where_the_part_before_ends_was_loaded(tmp_path: Path):
-    runner, _ = level_runner(tmp_path)
+    runner = level_runner(tmp_path)
     parts = [Part("Menu", "Survive", "Boss"), Part("Level 2", "Boss", None)]
-    routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", parts)
+    routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", parts, FAKE_VERSION)
     routes.save(Leg("Menu", Start("Survive", bytes([0])), "Boss"), [Segment("Boss", [[1, 0]], bytes([3]), False)])
     routes.save(Leg("Level 2", Start("Boss", bytes([1])), None), [Segment("Boss", [[1, 0]], bytes([4]), False)])
 

@@ -5,7 +5,7 @@ build-backend = "poetry.core.masonry.api"
 [project]
 name = "datenwissenschaften"
 version = "3.0.171"
-description = "Core library for Retro Speedlab: AI speedruns of retro games, found on save states and proven from power-on."
+description = "Core library for Retro Speedlab: AI speedruns of its own 8-bit games, found on save states and proven from power-on."
 readme = "README.md"
 authors = [
     { name = "datenwissenschaften", email = "martin.franke@datenwissenschaften.com" }
@@ -16,7 +16,7 @@ dependencies = [
     "numpy==2.5.1",
     "opencv-python==4.13.0.92",
     "pyyaml==6.0.3",
-    "stable-retro==1.0.1",
+    "retro-speedlab-engine @ git+https://github.com/datenwissenschaften/retro-speedlab-engine.git@main",
     "loguru==0.7.3",
     "httpx==0.28.1",
     "python-box==7.4.1",
@@ -28,7 +28,6 @@ dependencies = [
     "langfuse==5.1.0",
     "opentelemetry-sdk==1.45.2",
     "wandb==0.31.0",
-    "yt-dlp==2026.10.21",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -38,7 +37,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
 ]
-keywords = ["speedrun", "tool-assisted-speedrun", "retro-gaming", "stable-retro"]
+keywords = ["speedrun", "tool-assisted-speedrun", "retro-gaming", "pyxel"]
 
 [project.urls]
 Homepage = "https://speedlab.datenwissenschaften.com"
@@ -55,6 +54,9 @@ dev = [
     "pytest-cov (>=7.1.0,<8.0.0)",
     "pyright==1.1.408",
 ]
+
+[tool.uv.sources]
+retro-speedlab-engine = { path = "../retro-speedlab-engine", editable = true }
 
 [tool.ruff]
 line-length = 120

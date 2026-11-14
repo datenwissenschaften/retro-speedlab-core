@@ -5,8 +5,6 @@ from pathlib import Path
 
 from loguru import logger
 
-from datenwissenschaften.reference.fetch import ensure_reference
-from datenwissenschaften.reference.matching import ReferenceMatching
 from datenwissenschaften.route.paths import route_path
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.speedrun.polish import Polisher
@@ -19,15 +17,14 @@ from datenwissenschaften.speedrun.runner import Start
 
 
 class LevelTrainer:
-    def __init__(self, tas: Tas, routes: Routes, power_on: Start, reel: Reel, matching: ReferenceMatching) -> None:
+    def __init__(self, tas: Tas, routes: Routes, power_on: Start, reel: Reel) -> None:
         self.tas = tas
         self.reel = reel
-        self.matching = matching
         self.routes = routes
         self.power_on = power_on
         if not routes.path.is_file():
             routes.split(load_progress(routes.progress), power_on)
-            save_progress(routes.progress, [])
+            save_progress(routes.progress, [], routes.version)
 
     def leg(self, part: Part) -> Leg:
         entry = self.routes.entry(part, self.power_on)
@@ -44,7 +41,6 @@ class LevelTrainer:
         write_prior(self.tas.runner, self.routes, self.tas.output / PRIOR_FILE)
         self.tas.feed.practised(done)
         self.reel.show()
-        self.matching.refresh()
 
     def rest(self, polisher: Polisher, part: Part) -> bool:
         self.tas.feed.practised(practised(self.tas.runner, self.routes))
@@ -92,13 +88,11 @@ def search_forever(wrapper: str, config: Path) -> None:
     with worker_pool(frontier_workers(settings)) as pool, worker_pool(settings.speedrun.polishers) as polishing:
         tas = tas_run(wrapper, config, pool, polishing)
         reel = Reel(settings, tas.feed, tas.runner, tas.routes)
-        matching = ReferenceMatching(wrapper, config, pool, tas.feed)
-        LevelTrainer(tas, tas.routes, tas.runner.power_on(), reel, matching).forever()
+        LevelTrainer(tas, tas.routes, tas.runner.power_on(), reel).forever()
 
 
 def speedrun_forever(wrapper: str, config: Path) -> None:
     settings = load_config(config)
-    ensure_reference(settings)
     if not settings.speedrun.policy:
         search_forever(wrapper, config)
         return

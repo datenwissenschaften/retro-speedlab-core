@@ -4,20 +4,20 @@ from typing import Any
 import pytest
 import yaml
 from box.exceptions import BoxKeyError
+from speedlab_engine.collection import DEMO_COLLECTION
 
-from datenwissenschaften.settings import GameSettings, SpeedrunComSource, SpeedrunSettings, load_config
+from datenwissenschaften.settings import GameSettings, SpeedrunSettings, load_config
 
 
 def _document() -> dict[str, Any]:
     return {
         "paths": {
-            "roms": "roms",
-            "integrations": "integrations",
+            "collection": str(DEMO_COLLECTION),
             "models": "models",
             "cache": "cache",
             "lab_run": "lab-run",
         },
-        "training": {"game": "TestGame"},
+        "training": {"game": "walk"},
         "upload": {"url": "https://example.test", "api_key": None},
         "ui": {"enable": True, "release": "local"},
         "twitch": {"enabled": True},
@@ -31,11 +31,7 @@ def _document() -> dict[str, Any]:
             "segment_seconds": 60,
             "policy": False,
             "policy_emulators": 3,
-            "id": "testgame-v0",
-            "title": "Test Game",
-            "platform": "NES",
             "category": "Warpless",
-            "speedrun_com": {"game": "m1z0mmd0", "category": "5dwpnllk", "variables": {"p85pg00l": "qyz5gr71"}},
         },
         "log_level": "info",
     }
@@ -50,10 +46,9 @@ def _write(tmp_path: Path, document: dict[str, Any]) -> Path:
 def test_complete_config_loads(tmp_path: Path):
     config = load_config(_write(tmp_path, _document()))
 
-    assert config.training.game == "TestGame"
+    assert (config.training.game, config.training.cartridge) == ("walk", "games.walk.cartridge")
     assert config.lab.stall_minutes == 30
-    source = SpeedrunComSource("m1z0mmd0", "5dwpnllk", {"p85pg00l": "qyz5gr71"})
-    game = GameSettings("testgame-v0", "Test Game", "NES", "Warpless", source)
+    game = GameSettings("walk", 1, "Walk", "1.0.0", "DEMO", "Warpless")
     assert config.speedrun == SpeedrunSettings(3, 2, 2, 1, 2, 60.0, False, 3, game)
     assert config.upload.api_key is None
     assert config.log_level == "INFO"
@@ -62,8 +57,7 @@ def test_complete_config_loads(tmp_path: Path):
 def test_paths_resolve_relative_to_the_config_file(tmp_path: Path):
     config = load_config(_write(tmp_path, _document()))
 
-    assert config.paths.roms_path == (tmp_path / "roms").resolve()
-    assert config.paths.integrations_dir == (tmp_path / "integrations").resolve()
+    assert config.paths.collection == DEMO_COLLECTION.resolve()
     assert config.paths.models_dir == (tmp_path / "models").resolve()
     assert config.paths.cache_dir == (tmp_path / "cache").resolve()
     assert config.paths.lab_run_marker == (tmp_path / "lab-run").resolve()
@@ -92,14 +86,32 @@ def test_twitch_must_be_switched_on_or_off_explicitly(tmp_path: Path):
 
 def test_keys_the_core_no_longer_reads_are_ignored(tmp_path: Path):
     document = _document()
-    document["speedrun"] |= {"guide": True, "tasvideos": 1694}
+    document["speedrun"] |= {"guide": True, "speedrun_com": {"game": "m1z0mmd0"}}
 
     assert load_config(_write(tmp_path, document)) == load_config(_write(tmp_path, _document()))
 
 
-def test_the_record_sources_are_named_explicitly(tmp_path: Path):
+def test_the_game_must_be_listed_in_the_collection(tmp_path: Path):
     document = _document()
-    document["speedrun"]["speedrun_com"]["category"] = 5
+    document["training"]["game"] = "comet_courier"
 
-    with pytest.raises(RuntimeError, match="speedrun.speedrun_com.category"):
+    with pytest.raises(LookupError, match="DEMO lists 0 games named comet_courier"):
+        load_config(_write(tmp_path, document))
+
+
+@pytest.mark.parametrize(
+    ("section", "key", "value", "named"),
+    [
+        ("speedrun", "policy", "no", "speedrun.policy"),
+        ("speedrun", "scouts", 0, "speedrun.scouts"),
+        ("speedrun", "backtrackers", -1, "speedrun.backtrackers"),
+        ("speedrun", "segment_seconds", 0, "speedrun.segment_seconds"),
+        ("upload", "api_key", " ", "upload.api_key"),
+    ],
+)
+def test_a_malformed_value_is_named_when_the_config_loads(tmp_path: Path, section: str, key: str, value, named: str):
+    document = _document()
+    document[section][key] = value
+
+    with pytest.raises(RuntimeError, match=named):
         load_config(_write(tmp_path, document))

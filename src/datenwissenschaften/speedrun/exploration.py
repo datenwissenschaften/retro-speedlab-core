@@ -54,7 +54,7 @@ class Exploration:
         self.archive: dict[CellKey, Cell] = archive.cells
         self.crossings: list[Crossing] = []
         self.guided = False
-        self.guided_by: tuple[int | None, ...] = ()
+        self.guided_by: int | None = None
         known = [cell.remaining for cell in self.archive.values() if cell.remaining is not None]
         self.closest = min(known, default=None)
 

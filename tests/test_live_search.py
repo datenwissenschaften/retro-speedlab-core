@@ -5,12 +5,14 @@ from types import SimpleNamespace
 import cv2
 import numpy as np
 import pytest
-from fakes import NO_EXPERIMENT, fake_catalog, fake_environment, write_config
+from fakes import NO_EXPERIMENT, fake_environment, write_config
 
+from datenwissenschaften.knowledge import NO_KNOWLEDGE
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.speedrun import feed as feed_module
 from datenwissenschaften.speedrun.feed import SpeedrunFeed
 from datenwissenschaften.speedrun.journal import JournalStore, Split, clock
+from datenwissenschaften.speedrun.learned import Learned
 from datenwissenschaften.speedrun.live import WorkerLive, WorkerReport, clear_reports, read_reports
 from datenwissenschaften.speedrun.live_search import SearchRound, search_field
 from datenwissenschaften.speedrun.mosaic import compose, shown_tiles, tile
@@ -191,11 +193,13 @@ def test_the_report_names_the_game_its_levels_goals_objectives_and_both_timings(
         {"level": "state", "text": "Eat a pibbley"},
     ]
     assert speedrun["game"] == {
-        "id": "fakegame-v0",
-        "title": "Fake Game",
-        "platform": "NES",
+        "id": "walk",
+        "slug": "walk",
+        "number": 1,
+        "title": "Walk",
+        "version": "1.0.0",
+        "collection": "DEMO",
         "category": "Any%",
-        "sources": {"speedrun_com": {"game": "fake", "category": "any", "variables": {"level": "one"}}},
     }
     assert speedrun["timing"] == {"power_on_seconds": 3.0, "start_seconds": 2.5, "start_frame": 30}
     assert report(played, [], [], {}, "Menu", None)["timing"]["start_seconds"] is None
@@ -227,7 +231,7 @@ def test_the_feed_publishes_the_movie_with_the_live_search_and_notices_a_lab_run
         tmp_path / "stuck.json",
         marker,
         NO_EXPERIMENT,
-        fake_catalog(tmp_path),
+        Learned(NO_KNOWLEDGE, []),
     )
     segments = [Segment("Play", [[0, 1]] * 60, b"", False), Segment("Level2", [[0, 0]] * 60, b"", False)]
 
@@ -260,7 +264,7 @@ def test_the_feed_publishes_nothing_before_it_has_a_run_to_show(tmp_path: Path, 
         tmp_path / "stuck.json",
         tmp_path / ".lab-run",
         NO_EXPERIMENT,
-        fake_catalog(tmp_path),
+        Learned(NO_KNOWLEDGE, []),
     )
 
     feed.publish()
@@ -306,7 +310,7 @@ def test_the_feed_publishes_how_far_every_level_got_in_seconds(tmp_path: Path, m
         tmp_path / "stuck.json",
         tmp_path / ".lab-run",
         NO_EXPERIMENT,
-        fake_catalog(tmp_path),
+        Learned(NO_KNOWLEDGE, []),
     )
     feed.show([Segment("Play", [[0, 1]] * 60, b"", False)], "Play")
 
@@ -322,29 +326,4 @@ def test_the_feed_publishes_how_far_every_level_got_in_seconds(tmp_path: Path, m
             "details": {"weight": 12},
             "seconds": 1.5,
         }
-    }
-
-
-def test_the_feed_publishes_how_much_of_the_reference_video_each_level_matched(tmp_path: Path, monkeypatch):
-    published: list[dict] = []
-    monkeypatch.setattr(feed_module, "publish_metadata", lambda section, values: published.append(values))
-    journal = JournalStore(tmp_path / "journal.json")
-    feed = SpeedrunFeed(
-        course(tmp_path),
-        journal,
-        tmp_path / "live",
-        tmp_path / "stuck.json",
-        tmp_path / ".lab-run",
-        NO_EXPERIMENT,
-        fake_catalog(tmp_path),
-    )
-    feed.show([Segment("Play", [[0, 1]] * 60, b"", False)], "Play")
-    before = published[-1]["reference_progress"]
-
-    feed.referenced([{"level": 0, "matched": 40, "frames": 300}, {"level": 7, "matched": 0, "frames": 90}])
-
-    assert before == {}
-    assert published[-1]["reference_progress"] == {
-        next(iter(course(tmp_path).levels)): {"matched": 40, "frames": 300},
-        "Level 8": {"matched": 0, "frames": 90},
     }

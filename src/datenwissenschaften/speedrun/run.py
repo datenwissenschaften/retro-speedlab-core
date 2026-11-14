@@ -13,7 +13,6 @@ from loguru import logger
 
 from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.experiments import start_experiment
-from datenwissenschaften.knowledge import knowledge_path, load_knowledge
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, RetroSpeedlabPaths, load_config
 from datenwissenschaften.speedrun.feed import SpeedrunFeed, publish_every
@@ -21,9 +20,10 @@ from datenwissenschaften.speedrun.footage import compare_cut, movie_cut, render_
 from datenwissenschaften.speedrun.hints import Hint, hinted, hints_path, load_hints, pressed
 from datenwissenschaften.speedrun.improver import Improver, Repair
 from datenwissenschaften.speedrun.journal import JOURNAL_FILE, JournalStore
+from datenwissenschaften.speedrun.learned import learned_of
 from datenwissenschaften.speedrun.live import LIVE_DIR
-from datenwissenschaften.speedrun.movie import Segment, frames, verified_segments
-from datenwissenschaften.speedrun.paths import PROGRESS_FILE, TAS_MOVIE, tas_dir
+from datenwissenschaften.speedrun.movie import Segment, frames, pieces_pressed, recorded, verified_segments
+from datenwissenschaften.speedrun.paths import PROGRESS_FILE, tas_dir
 from datenwissenschaften.speedrun.policy_start import (
     POLICY_EXITS_FILE,
     POLICY_START_FILE,
@@ -61,7 +61,7 @@ from datenwissenschaften.speedrun.stuck import (
     unbar,
 )
 from datenwissenschaften.speedrun.turns import TURN_FILE, Turn, save_turn, turn_of
-from datenwissenschaften.sprites.catalog import SpriteCatalog, sprites_dir
+from datenwissenschaften.speedrun.versions import upgrade
 from datenwissenschaften.ui.relay import relay_key
 from datenwissenschaften.ui.video_upload import VideoUpload
 from datenwissenschaften.workflow.wrapper import wrapper_class
@@ -72,10 +72,8 @@ BACKTRACK_SEARCHES = 3
 PRACTICE_BACKTRACK_TURNS = 3
 IMPROVE_ROUNDS = 1
 
-MAIN_WORKER = 0
 SEARCH_JOB = "search"
 MATH_THREADS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")
-TRIAL_MOVIE = f"trial-{TAS_MOVIE}"
 
 Footage = Callable[[RetroSpeedlabPaths, Path, tuple[bytes, ...]], Path]
 
@@ -192,16 +190,16 @@ class Tas:
         return segments
 
     def verified(self, leg: Leg, segments: list[Segment]) -> list[Segment]:
-        movie = self.output / TAS_MOVIE
-        replay = verified_segments(self.runner, leg.entry, segments, movie, self.feed.catalog)
+        replay = verified_segments(self.runner, leg.entry, segments)
         replayed = [
             segment if self.runner.alike(segment.emulator_state, end) else replace(segment, emulator_state=end)
             for segment, end in zip(segments[: replay.verified], replay.ends, strict=True)
         ]
         if replay.verified < len(segments):
             logger.warning(f"Only {replay.verified} of {len(segments)} segments of {leg.name} replay; searching again")
-            replay = verified_segments(self.runner, leg.entry, replayed, movie, self.feed.catalog)
+            replay = verified_segments(self.runner, leg.entry, replayed)
         if frames(replayed) and self.showable(leg, replayed):
+            movie = recorded(self.runner, leg.entry, pieces_pressed(replayed))
             self.movie.queue(movie_cut(self.feed.course, leg, replayed, movie, replay.memory))
         return replayed
 
@@ -346,14 +344,12 @@ class Tas:
     def swapped(self, leg: Leg, segments: list[Segment], index: int, crossing: Crossing) -> list[Segment]:
         faster = self.rebuilt(leg, segments, [*segments[:index], segment_of(crossing)])
         if faster is not segments:
-            self.compare.queue(
-                compare_cut(self.runner, self.output, self.start(leg, segments, index), segments[index], crossing)
-            )
+            self.compare.queue(compare_cut(self.runner, self.start(leg, segments, index), segments[index], crossing))
         return faster
 
     def rebuilt(self, leg: Leg, segments: list[Segment], head: list[Segment]) -> list[Segment]:
         candidate = [*head, *segments[len(head) :]]
-        replay = verified_segments(self.runner, leg.entry, candidate, self.output / TRIAL_MOVIE, None)
+        replay = verified_segments(self.runner, leg.entry, candidate)
         if replay.verified < len(head):
             logger.info(f"A faster piece {len(head) - 1} of {leg.name} does not replay from its start; it stays")
             return segments
@@ -414,14 +410,20 @@ def tas_run(wrapper: str, config: Path, pool: Executor, polishing: Executor) -> 
     output = tas_dir(settings)
     output.mkdir(parents=True, exist_ok=True)
     logger.add(output / LOG_FILE)
-    runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, MAIN_WORKER))
+    runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings))
     course = course_of(runner, settings.speedrun.game)
-    logger.info(f"Game package loaded: {settings.speedrun.game.id} with {len(runner.classes)} states")
+    game = settings.speedrun.game
+    logger.info(f"Game package loaded: {game.id} {game.version} with {len(runner.classes)} states")
     journal = JournalStore(output / JOURNAL_FILE)
     experiment = start_experiment(settings, SEARCH_JOB)
-    catalog = SpriteCatalog(sprites_dir(settings), load_knowledge(knowledge_path(settings.paths.game_dir)))
     feed = SpeedrunFeed(
-        course, journal, output / LIVE_DIR, output / STUCK_FILE, settings.paths.lab_run_marker, experiment, catalog
+        course,
+        journal,
+        output / LIVE_DIR,
+        output / STUCK_FILE,
+        settings.paths.lab_run_marker,
+        experiment,
+        learned_of(settings),
     )
     lab_running = settings.paths.lab_run_marker.exists()
     stopped = threading.Event()
@@ -430,7 +432,8 @@ def tas_run(wrapper: str, config: Path, pool: Executor, polishing: Executor) -> 
     publishing.start()
     movie, compare = screen(settings, feed, "movie", render_movie), screen(settings, feed, "compare", render_compare)
     searcher = Searcher(wrapper, config, settings, pool, feed)
-    routes = Routes(output / ROUTES_FILE, output / PROGRESS_FILE, parts_of(course))
+    routes = Routes(output / ROUTES_FILE, output / PROGRESS_FILE, parts_of(course), game.version)
+    upgrade(routes, runner)
     if relabelled := routes.relabel(runner):
         logger.warning(
             f"Pieces of {', '.join(relabelled)} reach other states with this game package; they keep their place"
@@ -460,10 +463,9 @@ def verify(wrapper: str, config: Path, routes_file: Path) -> None:
     settings = load_config(config)
     setup_logging(settings.log_level)
     hints = load_hints(hints_path(config))
-    runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings, MAIN_WORKER))
-    routes = Routes(
-        routes_file, routes_file.with_name(PROGRESS_FILE), parts_of(course_of(runner, settings.speedrun.game))
-    )
+    runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings))
+    parts = parts_of(course_of(runner, settings.speedrun.game))
+    routes = Routes(routes_file, routes_file.with_name(PROGRESS_FILE), parts, settings.speedrun.game.version)
     power_on = runner.power_on()
     legs = [Leg(part.name, start, part.exit) for part in routes.parts if (start := routes.entry(part, power_on))]
     for leg, segments in [
@@ -471,9 +473,7 @@ def verify(wrapper: str, config: Path, routes_file: Path) -> None:
         (Leg(FULL_RUN, power_on, None), load_progress(routes.progress)),
     ]:
         segments = moved_on(runner, leg.entry, segments)
-        verified = verified_segments(
-            runner, leg.entry, segments, tas_dir(settings) / f"verify-{TAS_MOVIE}", None
-        ).verified
+        verified = verified_segments(runner, leg.entry, segments).verified
         if verified < kept_on_verify(leg, segments):
             raise RuntimeError(f"Only {verified} of {len(segments)} segments of {leg.name} replay with {wrapper}")
         if verified < len(segments):

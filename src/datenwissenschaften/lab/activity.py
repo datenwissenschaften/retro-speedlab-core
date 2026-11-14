@@ -6,7 +6,7 @@ from typing import Any
 import msgspec
 
 RECENT_ACTIONS = 6
-SHOWN_DIRECTORIES = frozenset({"src", "tests", "integrations"})
+SHOWN_DIRECTORIES = frozenset({"src", "tests", "games", "shared", "speedrun"})
 SAFE_PART = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
 THINKING = "thinking"
 WORKING = "working"

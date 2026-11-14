@@ -2,11 +2,14 @@
 
 [![CI](https://github.com/datenwissenschaften/retro-speedlab-core/actions/workflows/ci.yml/badge.svg)](https://github.com/datenwissenschaften/retro-speedlab-core/actions/workflows/ci.yml) ![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg) [![Last commit](https://img.shields.io/github/last-commit/datenwissenschaften/retro-speedlab-core)](https://github.com/datenwissenschaften/retro-speedlab-core/commits/main) [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE) ![Ruff](https://img.shields.io/badge/lint-Ruff-D7FF64.svg) [![codecov](https://codecov.io/gh/datenwissenschaften/retro-speedlab-core/graph/badge.svg)](https://codecov.io/gh/datenwissenschaften/retro-speedlab-core)
 
-Tool-assisted speedrun search for classic video games. The engine searches the
-fastest movie of buttons to press on every frame from power-on, verifies that it
-replays, and streams the run to [Retro Speedlab](https://www.retrospeedlab.com).
-Game packages supply the game knowledge (RAM map, states, rewards, actions);
-this repository turns it into a speedrun.
+Tool-assisted speedrun search for Retro Speedlab's own 8-bit games. The search
+finds the fastest movie of buttons to press on every frame from power-on,
+verifies that it replays, and streams the run to
+[Retro Speedlab](https://www.retrospeedlab.com). The games are Python
+cartridges of a game collection that run on
+[retro-speedlab-engine](https://github.com/datenwissenschaften/retro-speedlab-engine);
+the collection's search package supplies the RAM map, states, rewards and
+actions, and this repository turns them into a speedrun.
 
 ## Highlights
 
@@ -14,7 +17,7 @@ this repository turns it into a speedrun.
   title screen; levels are states of one full-game run
 - **Level by level**: the search stays on the earliest unbeaten level until it is
   beaten, starting where the route of the level before it ends, then moves on
-- **Three search modes per segment** on many emulator processes: Go-Explore
+- **Three search modes per segment** on many console processes: Go-Explore
   walks, a breadth-first frontier search over short input combinations and a
   Monte Carlo tree search
 - **Learned guidance**: RAM values never seen before, a move table learned from
@@ -23,7 +26,7 @@ this repository turns it into a speedrun.
   new segment counts
 - **Route memory** from the practised levels guides the search towards each
   level's exit
-- `.bk2` movie and MP4 video of the verified run
+- Movie (`.movie`) and MP4 video with sound of the verified run
 - **Live relay** of the newest verified segment, the run's time, level splits
   and the lab's status to the Retro Speedlab backend
 - **Lab runs**: when the search is stuck or stalls, Claude Code improves the
@@ -33,10 +36,10 @@ this repository turns it into a speedrun.
 
 ```mermaid
 flowchart TD
-    Game["Game package<br/>RAM · States · Rewards · Actions"]
-    Env["Stable Retro emulator<br/>StateMachineGymWrapper"]
+    Game["Game collection<br/>cartridge · RAM · States · Rewards · Actions"]
+    Env["retro-speedlab-engine console<br/>StateMachineGymWrapper"]
     Search["Segment search<br/>one worker per process"]
-    Movie["Verified movie<br/>progress.msgpack · tas.bk2 · screen.mp4"]
+    Movie["Verified movie<br/>progress.msgpack · screen.movie · screen.mp4"]
     Relay["Live relay<br/>snapshot · whole movie"]
     Lab["Lab run<br/>agent/daily.sh"]
 
@@ -120,19 +123,19 @@ checkpoints the one closest to the exit on the map wins, then the most reward.
 
 After every segment the whole movie is replayed from power-on; segments that do
 not reproduce are searched again. `cache/tas/progress.msgpack` lets a run
-resume, `cache/tas/tas.bk2` is the verified movie, `screen.mp4` its video and
+resume, `cache/tas/screen.movie` is the verified movie, `screen.mp4` its video and
 `search.log` the search's log. `metadata.speedrun` tells the stream the run's
 time from power-on and from Start, its segments, the level splits (from
 `GameWrapper.levels`, with the part before the first level split under the
-first state's name, `opening`), each state's `goal`, the game and its record
-sources, the engine's events, milestones and time history (`journal.json`) and
+first state's name, `opening`), each state's `goal`, the game, the engine's events, milestones and time history (`journal.json`) and
 the segment being searched. While a segment is searched every worker writes its
 cells and frames to `live/<seed>.msgpack` every 2 s and its latest frame at half
 size to `live/<seed>.jpg` once a second; the main process folds the reports into
 `search` every 5 s and the relay puts a mosaic of the first nine workers' frames
 (seed order, row by row, seeds in `X-Seeds`) to `/live/attempts.jpg` once a
 second. Whenever the verified movie changes a background thread renders it from
-power-on to an H.264 MP4 at twice the NES resolution, puts it to
+power-on with the engine to an H.264 MP4 at twice the console's resolution with
+the game's sound, puts it to
 `/live/movie.mp4` in parts, puts the game memory sampled every 6 frames of the
 power-on replay to `/live/movie-ram.json` and publishes `speedrun.movie`: its
 version (the first 12 hex digits of its SHA-256), frames, seconds, frame rate
@@ -149,7 +152,7 @@ the package.
 
 ## Route memory
 
-`cache/reference/route.json` lists, per 16 px cell of every beaten level, how
+`cache/route.json` lists, per 16 px cell of every beaten level, how
 many frames the level's route still needed from there to its exit, and is
 rewritten whenever a level's route changes. A row may end in what the run had there, in
 the game's `dynamics()` order (Snake Rattle 'n Roll: weight, pieces on the scale,
@@ -157,91 +160,40 @@ speed); such a row counts only for a snake that has at least as much, so the map
 leads over nibbleys and power-ups too. The search weights cells on the route by
 the fewest frames left to the exit.
 
-## Reference run
-
-On its first start the search downloads the video of the top verified human run
-on the game's speedrun.com leaderboard (`speedrun.speedrun_com`: game, category
-and variables) with [yt-dlp](https://github.com/yt-dlp/yt-dlp) to
-`cache/reference/video.*` and extracts 4 frames per second to
-`cache/reference/frames/<seconds>s.png` for the lab. It fails when that run has
-no video. Delete `cache/reference/frames` to fetch the run again.
-
-The video is never read on its own: its frames are compared with screens the
-emulator rendered. At startup and every time the route memory is rewritten (after
-each beaten level and each improve round) one worker of the pool, unless the
-previous matching still runs, renders one frame after every placed cell of the
-search archives (`cache/tas/archives`, one save state per state and cell key) and
-caches the screen with its RAM position, level and `dynamics()` in
-`cache/reference/screens.msgpack`, so only new places are rendered. Video frames
-lose their black border (found from every tenth frame) and are cached in
-`cache/reference/frames.npz`. Both become 32x30 thumbnails. Rows that barely
-change across a level's emulator screens (HUD, borders: below a quarter of the
-median row spread) are left out, and the distance is 1 minus the Pearson
-correlation of the remaining pixels, so brightness and contrast of the capture do
-not count. The video splits into levels at dark score screens of at least 3 s, and
-a frame is compared only with the emulator screens of its level. It counts as
-matched only if its best distance is at most 0.2 and the best screen of a distinct
-place (another area or more than one 16 px cell away) is at least 0.1 further;
-every other frame stays unmatched, also when the level knows no second place.
-`cache/reference/matches.json` holds
-
-```json
-{
-  "levels": [{"level": 0, "frames": 640, "matched": 212,
-              "waypoints": [{"seconds": 31.25, "cell": [3, 4, 9], "state": "Play"}]}],
-  "matches": [{"seconds": 31.25, "state": "Play", "level": 0, "area": 3, "x": 70,
-               "y": 150, "cell": [3, 4, 9], "distance": 0.08}]
-}
-```
-
-where `frames` counts the level's frames that are not dark and the waypoints are
-the matched cells in video order, one per change of cell.
-`cache/reference/video_route.json` is a route memory file
-(`[area, x // 16, y // 16, frame, frames_left, *dynamics]`): per cell and dynamics
-the fewest emulator frames (at the emulator's frame rate) from the frame to the end
-of its level in the video, carrying what the human had there; the route map
-merges it with `route.json`. The stream gets `metadata.speedrun.reference_progress`,
-`[{"level": 0, "matched": 212, "frames": 640}]`, and `search.log` a line per level.
-
 ## Sprites and game knowledge
 
-The engine reads what the NES draws, not what a picture looks like: every
-FCEUmm savestate holds the PPU's object memory (`SPRA`, 64 sprites of y, tile,
-attributes and x) and its control register (`PPUR`, bit 5 for 8x16 sprites).
-FCEUmm runs vertical blank and the game's sprite DMA before it draws a frame,
-so the object memory at the end of a frame is exactly the one on screen. No
-game setting is needed. Sprites whose 8x8 or 8x16 boxes touch or overlap form
-one object; an object is identified by its signature, the first 8 hex digits
-of a BLAKE2b hash of its sorted tile and palette pairs, so it keeps its
-signature wherever it moves and whichever way it faces.
+Every cartridge names its sprites (`SPRITES`: name to image bank, x, y, width
+and height). Once per game version the engine renders each to a PNG with
+colour 0 transparent into `cache/sprites/<version>/`, and
+`metadata.speedrun.sprites` publishes them as `[{signature, name, png}]`, the
+PNG base64-encoded and `signature` the sprite's name.
 
-Every 6 frames of each verified replay of the run and of the level reel, the
-objects on screen go into the sprite catalog `cache/sprites/`:
-`<signature>.png` is the object cut out of the screen when it was first seen,
-`catalog.json` maps each signature to when (UTC), in which level
-(`RamInfo.level()`) and state it was first seen and how often since. Every
-rendered video is drawn at twice the NES resolution with a thin box and a short
-label around each object: the player's name in yellow, a named sprite in cyan,
-`?` in pink.
-
-Names come from the game package's optional `knowledge.yaml` next to its
-`config.yaml`, which the lab writes for the website's "What the AI learned"
-page. A missing file is empty knowledge; a malformed one stops the run with the
-file and the field named. Every key is required:
+Names and the rest of the lab's knowledge come from the optional
+`knowledge.yaml` next to `config.yaml`, which the lab writes for the website's
+"What the AI learned" page. A missing file is empty knowledge; a malformed one
+stops the run with the file and the field named. Every key is required, and a
+`sprite` names one of the cartridge's `SPRITES`:
 
 ```yaml
-mechanics: [{title: Weight, text: Each nibbley eaten makes the snake heavier.}]
-player: {name: Rattle, text: The red snake., sprite: bda9d2fe}  # or null
-enemies: [{name: Bigfoot, text: Stomps the snake flat., sprite: null, levels: [1, 2]}]
-powerups: [{name: Clock, text: Stops the timer., sprite: null, effect: More time}]
-levels: [{name: Level 1, goal: Ring the bell, route: Up the stairs, hazards: [water]}]
-ram: [{address: 0x00A5, name: weight, meaning: Nibbleys eaten, verified: true}]
+mechanics: [{title: Thrust, text: Holding A burns fuel.}]
+player: {name: Courier, text: The comet courier., sprite: courier}  # or null
+enemies: [{name: Drone, text: Flies at the courier., sprite: drone, levels: [1, 2]}]
+powerups: [{name: Fuel, text: Fills the tank., sprite: null, effect: More fuel}]
+levels: [{name: Level 1, goal: Deliver the parcel, route: Over the ridge, hazards: [rocks]}]
+ram: [{address: 0x0010, name: fuel, meaning: Fuel left, verified: true}]
 ```
 
-`metadata.speedrun.knowledge` publishes the file as it reads, and
-`metadata.speedrun.sprites` the 48 most seen catalog entries:
-`[{signature, name, image, first_seen, first_level, first_state, seen}]`, with
-`name` from the knowledge or `null` and `image` the PNG as a data URI.
+`metadata.speedrun.knowledge` publishes the file as it reads.
+
+## Game versions
+
+Games improve over time, and every stored route and the full run remember the
+cartridge `VERSION` they were found on. When the search starts on another
+version it replays every stored piece from the start the current version
+gives it, keeps each piece that still reaches its state, cuts the route at the
+first one that breaks and searches on from there; one log line tells how many
+pieces still replay. `metadata.speedrun.game` names the collection, the game's
+number, slug, title and version.
 
 ## PPO policy
 
@@ -331,8 +283,8 @@ The published package and import path are `datenwissenschaften`.
 
 ## Minimal usage
 
-This repository does not ship a playable game; a game package supplies the RAM
-layout, states, rewards and actions:
+This repository does not ship a game; the collection's search package supplies
+the RAM layout, states, rewards and actions of each cartridge:
 
 ```python
 import numpy as np
@@ -340,20 +292,20 @@ import numpy as np
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 
 
-class AirstrikerWrapper(StateMachineGymWrapper[AirstrikerRam]):
-    start_state_cls = SurviveAndScore
-    state_classes = (SurviveAndScore,)
-    ram_info_cls = AirstrikerRam
-    action_table = np.array([[[1] + [0] * 11, [0] * 12, [0] * 12, [0] * 12]], dtype=np.int8)
+class CourierWrapper(StateMachineGymWrapper[CourierRam]):
+    start_state_cls = Deliver
+    state_classes = (Deliver,)
+    ram_info_cls = CourierRam
+    action_table = np.array([[[0, 0, 0, 0, 0, 0, 0, 1, 0]] * 8, [[0] * 9] * 8], dtype=np.int8)
     levels = ()
 ```
 
 ```bash
-python -m datenwissenschaften.speedrun.run search airstriker:AirstrikerWrapper config.yaml SurviveAndScore
+python -m datenwissenschaften.speedrun.run search speedrun.comet_courier.wrapper:CourierWrapper config.yaml Deliver
 ```
 
-Every state sets a one-line `goal`. The ROM is imported through Stable Retro
-from `paths.roms`; the engine's own test suite needs no ROM.
+Every state sets a one-line `goal`. Actions press the console's buttons in its
+order `B, -, SELECT, START, UP, DOWN, LEFT, RIGHT, A`.
 
 ## Configuration
 
@@ -362,18 +314,17 @@ raise an error when the configuration is loaded.
 
 | Key | Meaning |
 |-----|---------|
-| `paths.roms`, `paths.integrations` | ROMs and custom Stable Retro integrations |
+| `paths.collection` | The game collection: `collection.yaml` and `games/<slug>/cartridge.py` |
 | `paths.models` | Route memory per state |
-| `paths.cache` | The search's movie, progress, stuck marker, journal, live reports and log under `tas/`, the sprite catalog under `sprites/` |
+| `paths.cache` | The search's movie, progress, stuck marker, journal, live reports and log under `tas/`, the rendered sprites under `sprites/<version>/` |
 | `paths.lab_run` | Marker file of a running lab run |
-| `training.game` | Stable Retro game id |
+| `training.game` | The game's slug in the collection; its cartridge is `games.<slug>.cartridge` |
 | `upload.url`, `upload.api_key` | Retro Speedlab API; `null` disables the relay |
 | `ui.enable`, `ui.release` | Live relay on or off and the release label shown on stream |
 | `twitch.enabled` | Whether the stream page goes live on Twitch |
 | `agent.stall_minutes` | Minutes without a new piece, a faster movie or a lab run before the `lab` task starts one |
 | `speedrun.workers`, `speedrun.segment_seconds` | Search processes and seconds per segment round |
-| `speedrun.id`, `speedrun.title`, `speedrun.platform` | The game as the stream names it |
-| `speedrun.category`, `speedrun.speedrun_com` | The category run and where its records and the lab's reference run are read: speedrun.com game, category and variables |
+| `speedrun.category` | The category run |
 | `log_level` | Loguru log level |
 
 ## Testing
@@ -382,7 +333,7 @@ raise an error when the configuration is loaded.
 uv run pytest --cov=datenwissenschaften --cov-fail-under=95
 ```
 
-Tests run on a scripted emulator, so they need no ROM.
+Tests run on a scripted console and on the engine's demo collection.
 
 ## Development
 
@@ -395,8 +346,10 @@ uv run ruff format --check .
 
 - **Retro Speedlab Core** (this repository): the engine: segment search,
   verified movies, the live relay and the lab workflow.
-- **Game packages**: one repository per game with its RAM map, states,
-  rewards, actions and Dokku deployment, improved by lab runs.
+- **[retro-speedlab-engine](https://github.com/datenwissenschaften/retro-speedlab-engine)**:
+  the 8-bit console the games run on, their movies, videos and browser builds.
+- **retro-speedlab-games**: the game collection with every cartridge and its
+  RAM map, states, rewards and actions, improved by lab runs.
 - **[retrospeedlab.com](https://www.retrospeedlab.com)**: the lab's website,
   showing the stream and the speedrun.
 

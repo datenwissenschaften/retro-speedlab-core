@@ -4,12 +4,12 @@ from typing import Any
 
 import yaml
 from box import Box
+from speedlab_engine.collection import cartridge_name, listed, load_collection
 
 
 @dataclass(frozen=True)
 class RetroSpeedlabPaths:
-    roms_path: Path
-    integrations_dir: Path
+    collection: Path
     models_dir: Path
     cache_dir: Path
     lab_run_marker: Path
@@ -19,6 +19,7 @@ class RetroSpeedlabPaths:
 @dataclass(frozen=True)
 class TrainingSettings:
     game: str
+    cartridge: str
 
 
 @dataclass(frozen=True)
@@ -40,19 +41,13 @@ class LabSettings:
 
 
 @dataclass(frozen=True)
-class SpeedrunComSource:
-    game: str
-    category: str
-    variables: dict[str, str]
-
-
-@dataclass(frozen=True)
 class GameSettings:
     id: str
+    number: int
     title: str
-    platform: str
+    version: str
+    collection: str
     category: str
-    speedrun_com: SpeedrunComSource
 
 
 @dataclass(frozen=True)
@@ -85,17 +80,18 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
         raise RuntimeError(f"Configuration file not found: {config_path}")
     document: Any = Box(yaml.safe_load(config_path.read_text(encoding="utf-8")), box_dots=False)
     base_dir = config_path.parent
+    collection = _path(document.paths.collection, base_dir)
+    slug = _text(document.training.game, "training.game")
     ui = document.ui
     return RetroSpeedlabConfig(
         paths=RetroSpeedlabPaths(
-            roms_path=_path(document.paths.roms, base_dir),
-            integrations_dir=_path(document.paths.integrations, base_dir),
+            collection=collection,
             models_dir=_path(document.paths.models, base_dir),
             cache_dir=_path(document.paths.cache, base_dir),
             lab_run_marker=_path(document.paths.lab_run, base_dir),
             game_dir=base_dir,
         ),
-        training=TrainingSettings(game=_text(document.training.game, "training.game")),
+        training=TrainingSettings(game=slug, cartridge=cartridge_name(slug)),
         upload=UploadSettings(
             url=_text(document.upload.url, "upload.url"),
             api_key=_optional_text(document.upload.api_key, "upload.api_key"),
@@ -115,28 +111,17 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             segment_seconds=_positive_number(document.speedrun.segment_seconds, "speedrun.segment_seconds"),
             policy=_boolean(document.speedrun.policy, "speedrun.policy"),
             policy_emulators=_positive_int(document.speedrun.policy_emulators, "speedrun.policy_emulators"),
-            game=_game(document.speedrun),
+            game=_game(collection, slug, document.speedrun),
         ),
         log_level=_text(document.log_level, "log_level").upper(),
     )
 
 
-def _game(speedrun: Any) -> GameSettings:
-    source = speedrun.speedrun_com
-    return GameSettings(
-        id=_text(speedrun.id, "speedrun.id"),
-        title=_text(speedrun.title, "speedrun.title"),
-        platform=_text(speedrun.platform, "speedrun.platform"),
-        category=_text(speedrun.category, "speedrun.category"),
-        speedrun_com=SpeedrunComSource(
-            game=_text(source.game, "speedrun.speedrun_com.game"),
-            category=_text(source.category, "speedrun.speedrun_com.category"),
-            variables={
-                _text(variable, "speedrun.speedrun_com.variables"): _text(value, f"speedrun.speedrun_com.{variable}")
-                for variable, value in source.variables.items()
-            },
-        ),
-    )
+def _game(collection: Path, slug: str, speedrun: Any) -> GameSettings:
+    games = load_collection(collection)
+    game = listed(games, slug)
+    category = _text(speedrun.category, "speedrun.category")
+    return GameSettings(game.slug, game.number, game.title, game.version, games.title, category)
 
 
 def _text(value: Any, name: str) -> str:

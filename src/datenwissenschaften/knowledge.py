@@ -53,10 +53,9 @@ class Knowledge(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
     powerups: list[Powerup]
     levels: list[Level]
     ram: list[RamValue]
-    sprites: dict[str, str]
 
 
-NO_KNOWLEDGE = Knowledge([], None, [], [], [], [], {})
+NO_KNOWLEDGE = Knowledge([], None, [], [], [], [])
 
 
 def knowledge_path(game_dir: Path) -> Path:
@@ -70,16 +69,6 @@ def load_knowledge(path: Path) -> Knowledge:
         return msgspec.convert(yaml.safe_load(path.read_text(encoding="utf-8")), type=Knowledge)
     except (yaml.YAMLError, msgspec.ValidationError) as error:
         raise RuntimeError(f"{path} is not valid game knowledge: {error}") from error
-
-
-def sprite_names(knowledge: Knowledge) -> dict[str, str]:
-    named = [knowledge.player, *knowledge.enemies, *knowledge.powerups]
-    entries = {entry.sprite: entry.name for entry in named if entry is not None and entry.sprite is not None}
-    return {**knowledge.sprites, **entries}
-
-
-def player_sprite(knowledge: Knowledge) -> str | None:
-    return None if knowledge.player is None else knowledge.player.sprite
 
 
 def knowledge_field(knowledge: Knowledge) -> dict[str, Any]:

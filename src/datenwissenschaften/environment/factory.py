@@ -1,28 +1,19 @@
-from datetime import UTC, datetime
-
-import stable_retro as retro
+from speedlab_engine.console import Console
 
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
 from datenwissenschaften.ram import RamInfo
-from datenwissenschaften.roms import import_roms
-from datenwissenschaften.route.paths import route_path, video_route_path
+from datenwissenschaften.route.paths import route_path
 from datenwissenschaften.route.route_map import RouteMap
 from datenwissenschaften.settings import RetroSpeedlabConfig
 
-POWER_ON = "PowerOn"
-SESSION_STAMP = "%Y%m%dT%H%M%S"
-
 
 def make_environment(
-    wrapper_cls: type[StateMachineGymWrapper[RamInfo]], config: RetroSpeedlabConfig, worker: int
+    wrapper_cls: type[StateMachineGymWrapper[RamInfo]], config: RetroSpeedlabConfig
 ) -> StateMachineGymWrapper[RamInfo]:
-    import_roms(config.paths.roms_path, config.paths.integrations_dir)
-    env = retro.make(
-        config.training.game,
-        retro.State.NONE,
-        render_mode="rgb_array",
-        use_restricted_actions=retro.Actions.ALL,
-    )
-    env.initial_state = env.em.get_state()
-    env.statename = f"{POWER_ON}-{datetime.now(UTC):{SESSION_STAMP}}-{worker}"
-    return wrapper_cls(env, RouteMap((route_path(config), video_route_path(config))))
+    console = Console(config.paths.collection, config.training.cartridge)
+    listed = config.speedrun.game.version
+    if console.version != listed:
+        raise RuntimeError(
+            f"{config.training.cartridge} is version {console.version}, but the collection lists {listed}"
+        )
+    return wrapper_cls(console, RouteMap(route_path(config)))

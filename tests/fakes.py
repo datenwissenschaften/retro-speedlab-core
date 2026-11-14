@@ -4,24 +4,19 @@ from types import SimpleNamespace
 
 import numpy as np
 import wandb
+from speedlab_engine.cartridge import BUTTONS
+from speedlab_engine.collection import DEMO_COLLECTION
 
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
-from datenwissenschaften.knowledge import NO_KNOWLEDGE
 from datenwissenschaften.ram import RamInfo, ram
 from datenwissenschaften.route.route_map import RouteMap
-from datenwissenschaften.sprites.catalog import SpriteCatalog
 from datenwissenschaften.states.state import State
 
 FRAME_RATE = 60.0
+FAKE_VERSION = "1.0.0"
 NO_EXPERIMENT = wandb.init(project="tests", mode="disabled")
 SAVING_SCRIPT = [(3, 0), (3, 1), (3, 2), (3, 5), (3, 6), (3, 6), (3, 6), (3, 6)]
-HIDDEN_SPRITE = bytes([0xEF, 0, 0, 0])
-NO_SPRITES = HIDDEN_SPRITE * 64
-
-
-def fceu_state(prefix: bytes, oam: bytes, control: int) -> bytes:
-    sprites = b"SPRA" + len(oam).to_bytes(4, "little") + oam
-    return prefix + sprites + b"PPUR" + (4).to_bytes(4, "little") + bytes([control, 0, 0, 0])
+FAKE_BUTTONS = ["A", "START"]
 
 
 @dataclass
@@ -57,19 +52,16 @@ class Boss(State[FakeRam]):
 
 
 def saved_state(position: int) -> bytes:
-    return fceu_state(bytes([position]), NO_SPRITES, 0)
+    return bytes([position])
 
 
 class FakeEmulator:
-    def __init__(self, movie_path: Path, script: list[tuple[int, int]]) -> None:
-        self.movie_path = str(movie_path)
-        self.movie_id = 0
-        self.gamename = "FakeGame-v0"
-        self.statename = "Level1.state"
-        self.buttons = ["A", "START"]
-        self.movie = SimpleNamespace(set_state=lambda state: None)
+    def __init__(self, script: list[tuple[int, int]]) -> None:
+        self.gamename = "games.fake.cartridge"
+        self.version = FAKE_VERSION
+        self.buttons = FAKE_BUTTONS
         self.em = SimpleNamespace(
-            get_state=lambda: fceu_state(b"emulator", NO_SPRITES, 0),
+            get_state=lambda: b"emulator",
             set_state=lambda state: None,
             get_screen_rate=lambda: FRAME_RATE,
             get_screen=lambda: np.zeros((4, 4, 3), np.uint8),
@@ -79,32 +71,26 @@ class FakeEmulator:
         self.position = 0
         self.pressed: list[np.ndarray] = []
 
-    def reset(self) -> tuple[np.ndarray, dict]:
-        self.movie_id += 1
+    def reset(self) -> None:
         self.position = 0
-        return np.zeros((2, 2, 3), np.uint8), {}
 
-    def step(self, action):
+    def step(self, action) -> None:
         self.pressed.append(np.asarray(action))
         self.position = min(self.position + 1, len(self.script) - 1)
-        return np.zeros((2, 2, 3), np.uint8), 0.0, False, False, {}
 
     def get_ram(self) -> np.ndarray:
         return np.asarray(self.script[self.position], dtype=np.uint8)
 
-    def stop_record(self) -> None:
-        self.movie_path = None
-
-    def auto_record(self, path: str) -> None:
-        self.movie_path = path
-
-    def render(self) -> np.ndarray:
-        return np.zeros((4, 4, 3), np.uint8)
+    def action_to_array(self, action: np.ndarray) -> list[np.ndarray]:
+        mask = np.zeros(len(BUTTONS), dtype=np.uint8)
+        for name, pressed in zip(FAKE_BUTTONS, action, strict=True):
+            mask[BUTTONS.index(name)] = pressed
+        return [mask]
 
 
 class SavingEmulator(FakeEmulator):
-    def __init__(self, movie_path: Path, script: list[tuple[int, int]]) -> None:
-        super().__init__(movie_path, script)
+    def __init__(self, script: list[tuple[int, int]]) -> None:
+        super().__init__(script)
         self.em.get_state = lambda: saved_state(self.position)
         self.em.set_state = self._load
         self.em.step = self._advance
@@ -116,16 +102,6 @@ class SavingEmulator(FakeEmulator):
     def _advance(self) -> None:
         self.position = min(self.position + 1, len(self.script) - 1)
 
-    def action_to_array(self, action: np.ndarray) -> list[np.ndarray]:
-        return [np.asarray(action, dtype=np.uint8)]
-
-    def reset(self) -> tuple[np.ndarray, dict]:
-        observation = super().reset()
-        if self.movie_path:
-            Path(self.movie_path).mkdir(parents=True, exist_ok=True)
-            (Path(self.movie_path) / f"{self.gamename}-Level1-{self.movie_id - 1:06d}.bk2").write_bytes(b"movie")
-        return observation
-
 
 class FakeWrapper(StateMachineGymWrapper[FakeRam]):
     start_state_cls = Survive
@@ -133,26 +109,18 @@ class FakeWrapper(StateMachineGymWrapper[FakeRam]):
     ram_info_cls = FakeRam
     action_table = np.array([[[1, 0]], [[0, 1]]], dtype=np.int8)
     levels = ()
-    level_address = None
-    level_count = 1
 
 
 def fake_environment(tmp_path: Path, script: list[tuple[int, int]]) -> FakeWrapper:
-    emulator = FakeEmulator(tmp_path / "recordings", script)
-    return FakeWrapper(emulator, fake_routes(tmp_path))
+    return FakeWrapper(FakeEmulator(script), fake_routes(tmp_path))
 
 
 def saving_environment(tmp_path: Path) -> FakeWrapper:
-    emulator = SavingEmulator(tmp_path / "recordings", SAVING_SCRIPT)
-    return FakeWrapper(emulator, fake_routes(tmp_path))
-
-
-def fake_catalog(tmp_path: Path) -> SpriteCatalog:
-    return SpriteCatalog(tmp_path / "sprites", NO_KNOWLEDGE)
+    return FakeWrapper(SavingEmulator(SAVING_SCRIPT), fake_routes(tmp_path))
 
 
 def fake_routes(tmp_path: Path) -> RouteMap:
-    return RouteMap((tmp_path / "reference" / "route.json",))
+    return RouteMap(tmp_path / "route.json")
 
 
 def write_config(tmp_path: Path) -> Path:
@@ -161,8 +129,8 @@ def write_config(tmp_path: Path) -> Path:
     config_path.write_text(
         "\n".join(
             [
-                "paths: {roms: roms, integrations: integrations, models: models, cache: cache, lab_run: lab-run}",
-                "training: {game: FakeGame-v0}",
+                f"paths: {{collection: '{DEMO_COLLECTION}', models: models, cache: cache, lab_run: lab-run}}",
+                "training: {game: walk}",
                 "upload: {url: 'https://upload.test', api_key: null}",
                 "ui: {enable: false, release: local}",
                 "twitch: {enabled: true}",
@@ -176,11 +144,7 @@ def write_config(tmp_path: Path) -> Path:
                 "  segment_seconds: 0.05",
                 "  policy: false",
                 "  policy_emulators: 1",
-                "  id: fakegame-v0",
-                "  title: Fake Game",
-                "  platform: NES",
                 "  category: Any%",
-                "  speedrun_com: {game: fake, category: any, variables: {level: one}}",
                 "log_level: INFO",
             ]
         ),

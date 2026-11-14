@@ -3,6 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fakes import FAKE_VERSION
 
 from datenwissenschaften.speedrun import levels
 from datenwissenschaften.speedrun.levels import LevelTrainer
@@ -21,7 +22,6 @@ from datenwissenschaften.speedrun.runner import Start
 COURSE = SimpleNamespace(first="Menu", levels={"Level 1": ("Play", "Heavy"), "Level 2": ("Level2", "Boss2")})
 POWER_ON = Start("Menu", b"on")
 NO_REEL = SimpleNamespace(show=lambda: None)
-NO_MATCHING = SimpleNamespace(refresh=lambda: None)
 RUN = [
     Segment("Play", [[1]] * 3, b"play", False),
     Segment("Heavy", [[1]] * 4, b"heavy", False),
@@ -35,7 +35,7 @@ class OneRound(Exception):
 
 
 def routes(tmp_path: Path) -> Routes:
-    return Routes(tmp_path / ROUTES_FILE, tmp_path / "progress.msgpack", parts_of(COURSE))
+    return Routes(tmp_path / ROUTES_FILE, tmp_path / "progress.msgpack", parts_of(COURSE), FAKE_VERSION)
 
 
 def test_a_game_splits_into_its_opening_and_levels_each_ending_where_the_next_one_starts():
@@ -125,7 +125,7 @@ def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_th
             raise OneRound
         return segments
 
-    trainer = LevelTrainer(trainer_tas(tmp_path, calls, extend, improve), kept, POWER_ON, NO_REEL, NO_MATCHING)
+    trainer = LevelTrainer(trainer_tas(tmp_path, calls, extend, improve), kept, POWER_ON, NO_REEL)
     with pytest.raises(OneRound):
         trainer.forever()
 
@@ -165,7 +165,7 @@ def test_levels_are_beaten_one_after_the_other_each_from_where_the_level_before_
     def improve(leg: Leg, segments: list[Segment]) -> list[Segment]:
         raise OneRound
 
-    trainer = LevelTrainer(trainer_tas(tmp_path, [], extend, improve), kept, POWER_ON, NO_REEL, NO_MATCHING)
+    trainer = LevelTrainer(trainer_tas(tmp_path, [], extend, improve), kept, POWER_ON, NO_REEL)
     with pytest.raises(OneRound):
         trainer.forever()
 
@@ -192,7 +192,7 @@ def test_a_level_is_searched_until_it_is_beaten_before_the_next_one_starts(
             raise OneRound
         return segments
 
-    trainer = LevelTrainer(trainer_tas(tmp_path, [], extend, None), kept, POWER_ON, NO_REEL, NO_MATCHING)
+    trainer = LevelTrainer(trainer_tas(tmp_path, [], extend, None), kept, POWER_ON, NO_REEL)
     with pytest.raises(OneRound):
         trainer.beat_levels()
 
@@ -215,7 +215,7 @@ def test_a_level_shows_its_new_pieces_while_it_is_still_searched(tmp_path: Path,
 
     tas = trainer_tas(tmp_path, calls, extend, None)
     tas.routes = kept
-    trainer = LevelTrainer(tas, kept, POWER_ON, NO_REEL, NO_MATCHING)
+    trainer = LevelTrainer(tas, kept, POWER_ON, NO_REEL)
     with pytest.raises(OneRound):
         trainer.beat_levels()
 

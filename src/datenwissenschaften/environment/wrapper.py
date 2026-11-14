@@ -2,7 +2,7 @@ from typing import Any, ClassVar, Generic, TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
-from stable_retro import RetroEnv
+from speedlab_engine.console import Console
 
 from datenwissenschaften.environment.levels import Levels, level_map
 from datenwissenschaften.ram import RamInfo
@@ -43,10 +43,8 @@ class StateMachineGymWrapper(Generic[T]):
     ram_info_cls: type[T]
     action_table: NDArray[np.int8]
     levels: Levels
-    level_address: int | None
-    level_count: int
 
-    def __init__(self, env: RetroEnv, routes: RouteMap) -> None:
+    def __init__(self, env: Console, routes: RouteMap) -> None:
         if self.action_table.ndim != ACTION_TABLE_DIMENSIONS:
             raise ValueError("action_table must have the shape (actions, frames, buttons).")
         level_map(self.levels, self.state_classes)

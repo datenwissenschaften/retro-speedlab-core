@@ -5,7 +5,7 @@ import msgspec
 from datenwissenschaften.settings import RetroSpeedlabConfig
 from datenwissenschaften.speedrun.feed import SpeedrunFeed
 from datenwissenschaften.speedrun.footage import MOVIE_MEMORY, movie_field, render_movie
-from datenwissenschaften.speedrun.movie import verified_segments
+from datenwissenschaften.speedrun.movie import pieces_pressed, recorded, verified_segments
 from datenwissenschaften.speedrun.paths import tas_dir
 from datenwissenschaften.speedrun.routes import Part, Routes
 from datenwissenschaften.speedrun.run import video_upload
@@ -13,7 +13,6 @@ from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.speedrun.screen import Cut, Screen
 
 REEL_DIR = "levels"
-ROUTE_MOVIE = "route.bk2"
 
 
 def level_video(number: int) -> str:
@@ -51,8 +50,8 @@ class Reel:
     def cut(self, part: Part, number: int, key: bytes) -> Cut:
         segments = self.routes.segments(part.name)
         start = Start(part.entry_state, self.routes.routes[part.name].entry)
-        movie = self.directory / str(number) / ROUTE_MOVIE
-        replay = verified_segments(self.runner, start, segments, movie, self.feed.catalog)
+        replay = verified_segments(self.runner, start, segments)
+        movie = recorded(self.runner, start, pieces_pressed(segments))
         field = movie_field(start.state, self.feed.course.frame_rate, segments)
         shown = {**field, "part": part.name, "number": number, "video": level_video(number)}
-        return Cut(key, (movie.read_bytes(),), shown, {MOVIE_MEMORY: replay.memory})
+        return Cut(key, (movie,), shown, {MOVIE_MEMORY: replay.memory})

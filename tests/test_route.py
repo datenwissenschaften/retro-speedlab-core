@@ -26,7 +26,7 @@ def write_route(path: Path, rows: list[list[object]]) -> None:
 
 def test_a_cell_on_the_route_tells_how_many_frames_are_left(tmp_path: Path):
     write_route(tmp_path / "reference" / "route.json", [[1, 0, 0, 0, 2], [1, 1, 0, 1, 1]])
-    routes = RouteMap((tmp_path / "reference" / "route.json",))
+    routes = RouteMap(tmp_path / "reference" / "route.json")
 
     assert routes.remaining(at(3, 5), ()) == 2
     assert routes.remaining(at(17, 0), ()) == 1
@@ -36,7 +36,7 @@ def test_a_cell_on_the_route_tells_how_many_frames_are_left(tmp_path: Path):
 
 def test_a_cell_counts_only_when_the_snake_has_what_the_route_needs_there(tmp_path: Path):
     write_route(tmp_path / "reference" / "route.json", [[1, 0, 0, 10, 300, 0, 0, 0], [1, 0, 0, 90, 5, 9, 4, 1]])
-    routes = RouteMap((tmp_path / "reference" / "route.json",))
+    routes = RouteMap(tmp_path / "reference" / "route.json")
 
     assert routes.remaining(at(0, 0), (0, 0, 0)) == 300
     assert routes.remaining(at(0, 0), (9, 4, 0)) == 300
@@ -46,24 +46,13 @@ def test_a_cell_counts_only_when_the_snake_has_what_the_route_needs_there(tmp_pa
 
 
 def test_without_a_route_file_there_is_no_route(tmp_path: Path):
-    assert RouteMap((tmp_path / "route.json", tmp_path / "other.json")).remaining(at(0, 0), ()) is None
-
-
-def test_two_maps_merge_and_the_fewer_frames_left_win(tmp_path: Path):
-    first, second = tmp_path / "reference" / "route.json", tmp_path / "reference" / "other.json"
-    write_route(first, [[1, 0, 0, 0, 9], [1, 1, 0, 0, 4]])
-    second.write_text(json.dumps([[1, 0, 0, 0, 3], [1, 1, 0, 0, 8], [1, 2, 0, 0, 6]]), encoding="utf-8")
-    routes = RouteMap((first, second))
-
-    assert [routes.remaining(at(x, 0), ()) for x in (0, 16, 32, 48)] == [3, 4, 6, None]
-    first.unlink()
-    assert [routes.remaining(at(x, 0), ()) for x in (0, 16, 32, 48)] == [3, 8, 6, None]
+    assert RouteMap(tmp_path / "route.json").remaining(at(0, 0), ()) is None
 
 
 def test_the_route_counts_the_frames_left_until_its_level_ends_and_keeps_the_fastest(tmp_path: Path):
     steps = [(0, 1, 0, 0), (1, 1, 16, 0), (2, 1, 0, 0), (3, 1, 32, 0), (200, 2, 0, 0), (201, 2, 16, 0)]
     write_route(tmp_path / "reference" / "route.json", list(route_rows(steps)))
-    routes = RouteMap((tmp_path / "reference" / "route.json",))
+    routes = RouteMap(tmp_path / "reference" / "route.json")
 
     assert [routes.remaining(at(x, 0), ()) for x in (0, 16, 32)] == [1, 2, 0]
     assert routes.remaining(Position(2, 0, 0, 0, False), ()) == 1
@@ -78,7 +67,7 @@ def test_a_positioned_cell_key_names_its_route_cell_and_other_keys_none():
 def test_archived_cells_take_their_distance_from_the_newest_route_map(tmp_path: Path):
     path = tmp_path / "reference" / "route.json"
     write_route(path, [[1, 0, 0, 0, 5]])
-    runner = SimpleNamespace(wrapper=SimpleNamespace(routes=RouteMap((path,))), restore=lambda start: None)
+    runner = SimpleNamespace(wrapper=SimpleNamespace(routes=RouteMap(path)), restore=lambda start: None)
     key = ("Play", 1, 1, 1, 0, False, ())
     start = Start("Play", b"")
     archive = Archive({key: Cell(start, None, 0, 0, None, 0.0, 0)}, cast(RamNovelty, None))

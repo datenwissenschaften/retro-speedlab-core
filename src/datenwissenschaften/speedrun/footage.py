@@ -2,11 +2,10 @@ from pathlib import Path
 from typing import Any
 
 import msgspec
-import numpy as np
 
 from datenwissenschaften.settings import RetroSpeedlabPaths
 from datenwissenschaften.speedrun.journal import now
-from datenwissenschaften.speedrun.movie import Segment, record_piece
+from datenwissenschaften.speedrun.movie import Segment, recorded
 from datenwissenschaften.speedrun.paths import atomic_write
 from datenwissenschaften.speedrun.report import Course
 from datenwissenschaften.speedrun.routes import Leg
@@ -15,10 +14,9 @@ from datenwissenschaften.speedrun.screen import Cut
 from datenwissenschaften.speedrun.search import Crossing
 from datenwissenschaften.speedrun.video import render_video, stack_videos
 
-SCREEN_MOVIE = "screen.bk2"
+SCREEN_MOVIE = "screen.movie"
 MOVIE_MEMORY = "movie-ram.json"
-PIECE_MOVIE = "piece.bk2"
-COMPARE_PIECES = ("compare-before.bk2", "compare-after.bk2")
+COMPARE_PIECES = ("compare-before.movie", "compare-after.movie")
 COMPARE_VIDEO = "compare.mp4"
 
 
@@ -32,15 +30,14 @@ def movie_field(first: str, frame_rate: float, segments: list[Segment]) -> dict[
     return {"frames": played, "seconds": played / frame_rate, "frame_rate": frame_rate, "segments": cuts}
 
 
-def movie_cut(course: Course, leg: Leg, segments: list[Segment], recording: Path, memory: dict[str, Any]) -> Cut:
+def movie_cut(course: Course, leg: Leg, segments: list[Segment], recording: bytes, memory: dict[str, Any]) -> Cut:
     key = msgspec.msgpack.encode([leg.name, *(segment.pressed for segment in segments)])
     field = {**movie_field(leg.entry.state, course.frame_rate, segments), "part": leg.name}
-    return Cut(key, (recording.read_bytes(),), field, {MOVIE_MEMORY: memory})
+    return Cut(key, (recording,), field, {MOVIE_MEMORY: memory})
 
 
-def compare_cut(runner: SegmentRunner, directory: Path, start: Start, before: Segment, after: Crossing) -> Cut:
-    pieces = (np.asarray(before.pressed, dtype=np.int8), after.pressed)
-    recordings = tuple(record_piece(runner, start, pressed, directory / PIECE_MOVIE) for pressed in pieces)
+def compare_cut(runner: SegmentRunner, start: Start, before: Segment, after: Crossing) -> Cut:
+    recordings = (recorded(runner, start, before.pressed), recorded(runner, start, after.pressed.tolist()))
     field = {"state": after.end.state, "before_frames": len(before.pressed), "after_frames": after.frames, "at": now()}
     return Cut(b"".join(recordings), recordings, field, {})
 
