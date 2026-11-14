@@ -12,52 +12,50 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    env:
+      UV_NO_SYNC: "1"
+    defaults:
+      run:
+        working-directory: retro-speedlab-core
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          path: retro-speedlab-core
+
+      - uses: actions/checkout@v4
+        with:
+          repository: datenwissenschaften/retro-speedlab-engine
+          ssh-key: ${{ secrets.ENGINE_DEPLOY_KEY }}
+          path: retro-speedlab-engine
+
+      - uses: astral-sh/setup-uv@v6
 
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Install Poetry
-        run: |
-          curl -sSL https://install.python-poetry.org | python3 -
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          $HOME/.local/bin/poetry config virtualenvs.in-project true
-
       - name: Install dependencies
-        run: poetry install
+        run: uv sync --frozen
 
       - name: Install the vision extra for CPU
         run: |
-          vision=$(python3 -c "import tomllib; print(*tomllib.load(open('pyproject.toml', 'rb'))['project']['optional-dependencies']['vision'])")
-          torch=$(printf '%s\n' $vision | grep '^torch==')
-          poetry run pip install --index-url https://download.pytorch.org/whl/cpu $torch
-          poetry run pip install $vision
+          uv pip install --index-url https://download.pytorch.org/whl/cpu torch==2.9.1
+          uv pip install stable-baselines3==2.9.2
 
       - name: Lint (ruff check)
-        run: poetry run ruff check .
+        run: uv run ruff check .
 
       - name: Format check (ruff format)
-        run: poetry run ruff format --check .
+        run: uv run ruff format --check .
 
       - name: Type check (pyright)
-        run: poetry run pyright
+        run: uv run pyright
 
       - name: Test (pytest)
-        run: poetry run pytest -q --cov --cov-report=term-missing --cov-report=xml
+        run: uv run pytest -q --cov --cov-report=term-missing --cov-report=xml
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.xml
+          files: retro-speedlab-core/coverage.xml
           fail_ci_if_error: true
-
-      - name: Package import smoke test
-        run: poetry run python -c "import datenwissenschaften; print(datenwissenschaften.__file__)"
-
