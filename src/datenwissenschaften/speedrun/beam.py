@@ -23,7 +23,7 @@ class Node:
 
 def macros(runner: SegmentRunner) -> list[np.ndarray]:
     names = list(runner.emulator.buttons)
-    idle = np.zeros_like(runner.wrapper.current_action_table()[0][0], dtype=np.int8)
+    idle = np.zeros_like(runner.wrapper.action_table[0][0], dtype=np.int8)
     found: list[np.ndarray] = []
     for chord, hold in itertools.product(CHORDS, HOLDS):
         if any(name not in names for name in chord):

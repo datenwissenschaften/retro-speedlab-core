@@ -52,8 +52,5 @@ class StateMachineGymWrapper(Generic[T]):
         self.routes = routes
         self.state_machine = StateMachine[T](self.start_state_cls)
 
-    def current_action_table(self) -> NDArray[np.int8]:
-        return self.action_table
-
     def read_ram(self) -> T:
         return self.ram_info_cls.from_ram(self.env.get_ram())

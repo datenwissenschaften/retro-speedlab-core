@@ -100,7 +100,7 @@ class SegmentRunner:
         machine = self.wrapper.state_machine
         pressed: list[NDArray[np.int8]] = []
         alive, won, reward = True, False, 0.0
-        for buttons in self.wrapper.current_action_table()[action]:
+        for buttons in self.wrapper.action_table[action]:
             pressed.append(buttons)
             alive, won, frame_reward = self.press(buttons)
             reward += frame_reward

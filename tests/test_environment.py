@@ -29,7 +29,6 @@ def test_the_wrapper_reads_the_ram_of_its_emulator(tmp_path: Path):
     env = fake_environment(tmp_path, [(3, 7)])
 
     assert env.read_ram() == FakeRam(3, 7)
-    assert env.current_action_table() is env.action_table
 
 
 def test_phases_run_from_the_start_state_without_repeats():

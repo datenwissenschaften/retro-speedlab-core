@@ -32,7 +32,7 @@ def load_hints(path: Path) -> list[Hint]:
 
 def pressed(runner: SegmentRunner, hint: Hint) -> np.ndarray:
     names = list(runner.emulator.buttons)
-    idle = np.zeros_like(runner.wrapper.current_action_table()[0][0], dtype=np.int8)
+    idle = np.zeros_like(runner.wrapper.action_table[0][0], dtype=np.int8)
     frames: list[NDArray[np.int8]] = []
     for press in hint.presses:
         buttons = idle.copy()

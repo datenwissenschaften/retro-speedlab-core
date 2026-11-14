@@ -26,7 +26,7 @@ def decisions(runner: SegmentRunner, start: Start, pressed: np.ndarray) -> Itera
     runner.restore(start)
     index = 0
     while index < len(pressed):
-        table = runner.wrapper.current_action_table()
+        table = runner.wrapper.action_table
         context = runner.context()
         action = matching_action(table, pressed[index : index + table.shape[1]])
         step = 1 if action is None else table.shape[1]
