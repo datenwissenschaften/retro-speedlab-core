@@ -9,13 +9,15 @@ from fakes import write_config
 from datenwissenschaften.lab.reports import REPORTS_DIR, publish, publish_reports
 from datenwissenschaften.settings import load_config
 
-GAME = "Game-Nes-v0"
+GAME = "game"
+OTHER_GAME = "other"
 
 
-def backend(published: list[str], refused: set[str], puts: list[tuple[str, dict]]) -> httpx.Client:
+def backend(published: dict[str, list[str]], refused: set[str], puts: list[tuple[str, dict]]) -> httpx.Client:
     def answer(request: httpx.Request) -> httpx.Response:
         if request.method == "GET":
-            return httpx.Response(200, json=[{"game": GAME, "name": name} for name in published])
+            slug = request.url.path.split("/")[2]
+            return httpx.Response(200, json=[{"game": slug, "name": name} for name in published[slug]])
         name = request.url.path.rsplit("/", 1)[-1]
         if name in refused:
             return httpx.Response(500)
@@ -32,7 +34,9 @@ def test_only_reports_the_website_does_not_have_yet_are_published(tmp_path: Path
         (reports / name).write_text(f"# {name}", encoding="utf-8")
     puts: list[tuple[str, dict]] = []
 
-    publish(backend(["2026-10-29T1910.md"], {"2026-10-29T2320.md"}, puts), GAME, "Game", tmp_path)
+    published = {GAME: ["2026-10-29T1910.md"], OTHER_GAME: ["2026-10-29T2350.md"]}
+
+    publish(backend(published, {"2026-10-29T2320.md"}, puts), GAME, "Game", tmp_path)
 
     assert puts == [(f"/reports/{GAME}/2026-10-29T2350.md", {"title": "Game", "text": "# 2026-10-29T2350.md"})]
 

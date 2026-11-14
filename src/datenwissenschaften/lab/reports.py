@@ -12,9 +12,9 @@ TIMEOUT_SECONDS = 120.0
 
 
 def unpublished(client: httpx.Client, game: str, project: Path) -> list[Path]:
-    response = client.get("/reports")
+    response = client.get(f"/games/{game}/reports")
     response.raise_for_status()
-    published = {report["name"] for report in response.json() if report["game"] == game}
+    published = {report["name"] for report in response.json()}
     return [path for path in sorted((project / REPORTS_DIR).glob(f"*{REPORT_SUFFIX}")) if path.name not in published]
 
 
