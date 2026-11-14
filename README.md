@@ -272,7 +272,8 @@ run is logged as not traced.
 With `ui.enable: true` and an upload key, the search relays to the Retro
 Speedlab backend (`upload.url`) every few seconds the snapshot (the published
 metadata and the release) and the search's newest frame; the whole verified movie
-goes up whenever it changes. The stream view at
+goes up whenever it changes. With `ui.live: false` the search is off the stream: it
+puts only its snapshot to `/games/{game}/snapshot`, so the website shows its run while another game streams. The stream view at
 [stream.retrospeedlab.com](https://stream.retrospeedlab.com), opened with the
 stream key (`?api_key=`), plays them for OBS.
 Core itself serves nothing.
@@ -332,6 +333,7 @@ raise an error when the configuration is loaded.
 | `training.game` | The game's slug in the collection; its cartridge is `games.<slug>.cartridge` |
 | `upload.url`, `upload.api_key` | Retro Speedlab API; `null` disables the relay |
 | `ui.enable`, `ui.release` | Live relay on or off and the release label shown on stream |
+| `ui.live` | The search on stream relays to `/live`; any other search only reports its run to `/games/{game}/snapshot` |
 | `twitch.enabled` | Whether the stream page goes live on Twitch |
 | `agent.stall_minutes` | Minutes without a new piece, a faster movie or a lab run before the `lab` task starts one |
 | `speedrun.scouts`, `speedrun.backtrackers`, `speedrun.beam_scouts`, `speedrun.vision_scouts`, `speedrun.polishers` | Search processes of each role |

@@ -16,7 +16,7 @@ def start_relay(settings: RetroSpeedlabConfig) -> None:
     if not settings.ui.enabled:
         return
     live = tas_dir(settings) / LIVE_DIR
-    LiveRelay(settings.upload.url, relay_key(settings.upload), settings.ui, live).start()
+    LiveRelay(settings.upload.url, relay_key(settings.upload), settings.ui, live, settings.speedrun.game.id).start()
 
 
 def watch_lab(marker: Path, stopped: threading.Event) -> None:

@@ -19,7 +19,7 @@ def _document() -> dict[str, Any]:
         },
         "training": {"game": "walk"},
         "upload": {"url": "https://example.test", "api_key": None},
-        "ui": {"enable": True, "release": "local"},
+        "ui": {"enable": True, "live": True, "release": "local"},
         "twitch": {"enabled": True},
         "agent": {"stall_minutes": 30},
         "speedrun": {

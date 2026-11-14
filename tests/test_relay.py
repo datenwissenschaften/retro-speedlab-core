@@ -11,19 +11,25 @@ from datenwissenschaften.speedrun.mosaic import tile
 from datenwissenschaften.ui import relay, telemetry, video_upload
 from datenwissenschaften.ui.video_upload import VideoUpload
 
-SETTINGS = UISettings(True, "2026.10.08-1", True)
+RELAY_URL = "https://api.test"
+SETTINGS = UISettings(True, True, "2026.10.08-1", True)
+BACKGROUND = UISettings(True, False, "2026.10.08-1", True)
 
 
 headers: list[httpx.Headers] = []
 
 
 def backend(requests: list[tuple[str, str, bytes]]) -> httpx.Client:
+    return api(requests, "https://api.test/live")
+
+
+def api(requests: list[tuple[str, str, bytes]], base_url: str) -> httpx.Client:
     def answer(request: httpx.Request) -> httpx.Response:
         requests.append((request.method, request.url.path, request.content))
         headers.append(request.headers)
         return httpx.Response(204)
 
-    return httpx.Client(base_url="https://api.test/live", transport=httpx.MockTransport(answer))
+    return httpx.Client(base_url=base_url, transport=httpx.MockTransport(answer))
 
 
 def test_the_movie_goes_up_in_parts_below_the_waf_body_limit(monkeypatch, tmp_path: Path):
@@ -73,16 +79,26 @@ def test_the_snapshot_goes_up_gzipped(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(relay, "stream_snapshot", lambda settings: {"metadata": {}})
     requests: list[tuple[str, str, bytes]] = []
 
-    relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path)._push_snapshot(backend(requests))
+    relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path, "walk")._push_snapshot(api(requests, RELAY_URL))
 
     assert [(method, path) for method, path, _ in requests] == [("PUT", "/live/snapshot")]
     assert json.loads(gzip.decompress(requests[0][2])) == {"metadata": {}}
 
 
+def test_a_game_off_the_stream_reports_its_run_to_its_own_page_only(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(relay, "stream_snapshot", lambda settings: {"metadata": {}})
+    requests: list[tuple[str, str, bytes]] = []
+    pusher = relay.LiveRelay("https://api.test", "key", BACKGROUND, tmp_path, "walk")
+
+    pusher._push_snapshot(api(requests, RELAY_URL))
+
+    assert [(method, path) for method, path, _ in requests] == [("PUT", "/games/walk/snapshot")]
+
+
 def test_the_relay_keeps_pushing_after_the_backend_is_unreachable_until_it_stops(monkeypatch, tmp_path: Path):
     outcomes = [httpx.ConnectError("down"), None, None]
     pushes: list[httpx.Client] = []
-    pusher = relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path)
+    pusher = relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path, "walk")
 
     def push(client: httpx.Client) -> None:
         pushes.append(client)
@@ -97,7 +113,7 @@ def test_the_relay_keeps_pushing_after_the_backend_is_unreachable_until_it_stops
     assert len(pushes) == 3
 
 
-def test_the_relay_starts_one_thread_each_for_the_snapshot_and_the_attempts(monkeypatch, tmp_path: Path):
+def test_the_relay_starts_one_thread_each_for_the_snapshot_and_only_on_stream_the_attempts(monkeypatch, tmp_path: Path):
     started: list[str] = []
 
     class Thread:
@@ -109,9 +125,10 @@ def test_the_relay_starts_one_thread_each_for_the_snapshot_and_the_attempts(monk
 
     monkeypatch.setattr(relay.threading, "Thread", Thread)
 
-    relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path).start()
+    relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path, "walk").start()
+    relay.LiveRelay("https://api.test", "key", BACKGROUND, tmp_path, "walk").start()
 
-    assert started == ["relay_push_snapshot", "relay_push_attempts"]
+    assert started == ["relay_push_snapshot", "relay_push_attempts", "relay_push_snapshot"]
 
 
 def test_published_metadata_replaces_its_section():
@@ -122,14 +139,14 @@ def test_published_metadata_replaces_its_section():
 
 
 def test_the_live_attempts_mosaic_goes_up_once_per_change_with_its_seeds(tmp_path: Path):
-    pusher = relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path)
+    pusher = relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path, "walk")
     requests: list[tuple[str, str, bytes]] = []
 
-    pusher._push_attempts(backend(requests))
+    pusher._push_attempts(api(requests, RELAY_URL))
     for seed in (9, 3):
         (tmp_path / f"{seed}.jpg").write_bytes(tile(np.zeros((8, 8, 3), np.uint8)))
-    pusher._push_attempts(backend(requests))
-    pusher._push_attempts(backend(requests))
+    pusher._push_attempts(api(requests, RELAY_URL))
+    pusher._push_attempts(api(requests, RELAY_URL))
 
     assert [(method, path) for method, path, _ in requests] == [("PUT", "/live/attempts.jpg")]
     assert requests[0][2][:2] == b"\xff\xd8" and headers[-1]["X-Seeds"] == "3,9"
@@ -140,4 +157,4 @@ def test_an_oversized_attempts_mosaic_fails_fast(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(relay, "ATTEMPTS_BYTES", 3)
 
     with pytest.raises(ValueError, match="more than 3"):
-        relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path)._push_attempts(backend([]))
+        relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path, "walk")._push_attempts(backend([]))

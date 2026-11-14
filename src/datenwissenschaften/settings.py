@@ -31,6 +31,7 @@ class UploadSettings:
 @dataclass(frozen=True)
 class UISettings:
     enabled: bool
+    live: bool
     release: str
     twitch: bool
 
@@ -98,6 +99,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
         ),
         ui=UISettings(
             enabled=_boolean(ui.enable, "ui.enable"),
+            live=_boolean(ui.live, "ui.live"),
             release=_text(ui.release, "ui.release"),
             twitch=_boolean(document.twitch.enabled, "twitch.enabled"),
         ),

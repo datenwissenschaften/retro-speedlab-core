@@ -132,7 +132,7 @@ def write_config(tmp_path: Path) -> Path:
                 f"paths: {{collection: '{DEMO_COLLECTION}', models: models, cache: cache, lab_run: lab-run}}",
                 "training: {game: walk}",
                 "upload: {url: 'https://upload.test', api_key: null}",
-                "ui: {enable: false, release: local}",
+                "ui: {enable: false, live: true, release: local}",
                 "twitch: {enabled: true}",
                 "agent: {stall_minutes: 30}",
                 "speedrun:",

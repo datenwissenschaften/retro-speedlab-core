@@ -18,6 +18,7 @@ upload:
 
 ui:
   enable: true
+  live: true
   release: local
 
 twitch:

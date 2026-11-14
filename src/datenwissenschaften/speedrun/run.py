@@ -384,7 +384,9 @@ def publish(tas: Tas, segments: list[Segment]) -> None:
 
 
 def video_upload(settings: RetroSpeedlabConfig, name: str) -> VideoUpload | None:
-    return VideoUpload(settings.upload.url, relay_key(settings.upload), name) if settings.ui.enabled else None
+    if not settings.ui.enabled or not settings.ui.live:
+        return None
+    return VideoUpload(settings.upload.url, relay_key(settings.upload), name)
 
 
 def screen(settings: RetroSpeedlabConfig, feed: SpeedrunFeed, name: str, render: Footage) -> Screen:

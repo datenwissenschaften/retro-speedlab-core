@@ -17,6 +17,8 @@ RELAY_SECONDS = 3.0
 ATTEMPTS_SECONDS = 1.0
 ATTEMPTS_BYTES = 300 * 1024
 TIMEOUT_SECONDS = 120.0
+LIVE_SNAPSHOT = "/live/snapshot"
+LIVE_ATTEMPTS = "/live/attempts.jpg"
 
 
 def _datenwissenschaften_version() -> str:
@@ -35,21 +37,28 @@ def relay_key(upload: UploadSettings) -> str:
     return upload.api_key
 
 
+def relay_client(url: str, api_key: str) -> httpx.Client:
+    return httpx.Client(base_url=url, headers={"X-API-Key": api_key}, timeout=TIMEOUT_SECONDS)
+
+
 def backend_client(url: str, api_key: str) -> httpx.Client:
-    return httpx.Client(base_url=f"{url}/live", headers={"X-API-Key": api_key}, timeout=TIMEOUT_SECONDS)
+    return relay_client(f"{url}/live", api_key)
 
 
 class LiveRelay:
-    def __init__(self, url: str, api_key: str, ui: UISettings, live: Path) -> None:
+    def __init__(self, url: str, api_key: str, ui: UISettings, live: Path, game: str) -> None:
         self.url = url
         self.api_key = api_key
         self.ui = ui
         self.live = live
+        self.snapshot_path = LIVE_SNAPSHOT if ui.live else f"/games/{game}/snapshot"
         self.attempts_shown: bytes | None = None
         self.stopped = threading.Event()
 
     def start(self) -> None:
-        pushes = ((self._push_snapshot, RELAY_SECONDS), (self._push_attempts, ATTEMPTS_SECONDS))
+        pushes = [(self._push_snapshot, RELAY_SECONDS)]
+        if self.ui.live:
+            pushes.append((self._push_attempts, ATTEMPTS_SECONDS))
         for push, seconds in pushes:
             name = f"relay{push.__name__}"
             threading.Thread(target=self._repeat, args=(push, seconds), name=name, daemon=True).start()
@@ -59,7 +68,7 @@ class LiveRelay:
 
     def _repeat(self, push: Callable[[httpx.Client], None], seconds: float) -> None:
         failing = False
-        with backend_client(self.url, self.api_key) as client:
+        with relay_client(self.url, self.api_key) as client:
             while not self.stopped.is_set():
                 try:
                     push(client)
@@ -73,7 +82,7 @@ class LiveRelay:
                 self.stopped.wait(seconds)
 
     def _push_snapshot(self, client: httpx.Client) -> None:
-        _put_document(client, "/snapshot", stream_snapshot(self.ui))
+        _put_document(client, self.snapshot_path, stream_snapshot(self.ui))
 
     def _push_attempts(self, client: httpx.Client) -> None:
         mosaic = compose(self.live)
@@ -82,7 +91,7 @@ class LiveRelay:
         if len(mosaic.jpeg) > ATTEMPTS_BYTES:
             raise ValueError(f"The live attempts mosaic has {len(mosaic.jpeg)} bytes, more than {ATTEMPTS_BYTES}")
         headers = {"Content-Type": "image/jpeg", "X-Seeds": ",".join(map(str, mosaic.seeds))}
-        client.put("/attempts.jpg", content=mosaic.jpeg, headers=headers).raise_for_status()
+        client.put(LIVE_ATTEMPTS, content=mosaic.jpeg, headers=headers).raise_for_status()
         self.attempts_shown = mosaic.jpeg
 
 

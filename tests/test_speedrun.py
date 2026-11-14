@@ -11,7 +11,7 @@ from datenwissenschaften.workflow import speedrun as speedrun_module
 
 def test_the_stream_relay_runs_only_with_the_ui_and_needs_a_key(tmp_path: Path, monkeypatch):
     started: list[str] = []
-    relay = lambda url, key, ui, live: SimpleNamespace(start=lambda: started.append(url))  # noqa: E731
+    relay = lambda url, key, ui, live, game: SimpleNamespace(start=lambda: started.append(url))  # noqa: E731
     monkeypatch.setattr(speedrun_module, "LiveRelay", relay)
     settings = load_config(write_config(tmp_path))
     with_ui = dataclasses.replace(settings, ui=dataclasses.replace(settings.ui, enabled=True))
