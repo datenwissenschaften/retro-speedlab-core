@@ -9,7 +9,7 @@ from speedlab_engine.cartridge import BUTTONS
 from speedlab_engine.movie import Movie, decode
 
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
-from datenwissenschaften.ram import RamInfo, ram
+from datenwissenschaften.ram import RamInfo, Shown, ram
 from datenwissenschaften.route.position import Position
 from datenwissenschaften.speedrun import run, workers
 from datenwissenschaften.speedrun.routes import FULL_RUN, Leg
@@ -27,6 +27,7 @@ def held(name: str | None) -> np.ndarray:
 
 @dataclass
 class WalkRam(RamInfo):
+    shown = {"x": Shown("X", False)}
     x: int = ram(0)
     won: int = ram(1)
 

@@ -1,5 +1,6 @@
 import hashlib
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -7,6 +8,7 @@ import httpx
 import numpy as np
 import pytest
 
+from datenwissenschaften.ram import RamInfo, Shown, ram
 from datenwissenschaften.route.position import Position
 from datenwissenschaften.speedrun import footage
 from datenwissenschaften.speedrun.footage import compare_cut, movie_cut, movie_field, render_compare, render_movie
@@ -150,16 +152,29 @@ def test_a_faster_piece_is_recorded_beside_the_old_one_from_the_same_start(tmp_p
     assert "at" in compared.field
 
 
-def test_the_movie_memory_names_each_value_once_and_fails_when_the_names_change():
-    located = SimpleNamespace(describe=lambda: {"lives": 3}, position=lambda: Position(2, 10, 20, 5, False))
-    lost = SimpleNamespace(describe=lambda: {"lives": 2}, position=lambda: None)
+@dataclass
+class StageRam(RamInfo):
+    shown = {"stage": Shown("Stage", True), "lives": Shown("Lives", False), "x": Shown("X", False)}
+    stage: int = ram(0)
+    lives: int = ram(1)
 
-    memory = memory_field([memory_sample(located), memory_sample(lost)])
+    def describe(self) -> dict[str, int]:
+        return {"stage": self.stage, "lives": self.lives}
 
-    assert memory == {
-        "every": 6,
-        "keys": ["lives", "area", "x", "y", "height"],
-        "samples": [[3, 2, 10, 20, 5], [2, None, None, None, None]],
-    }
+    def position(self) -> Position | None:
+        return Position(self.stage, 10, 20, 5, False) if self.lives else None
+
+
+@dataclass
+class UndeclaredRam(RamInfo):
+    lives: int = ram(0)
+
+
+def test_the_movie_memory_shows_the_declared_fields_by_label_and_counts_indexes_from_one():
+    memory = memory_field([memory_sample(StageRam(0, 3)), memory_sample(StageRam(1, 0))])
+
+    assert memory == {"every": 6, "keys": ["Stage", "Lives", "X"], "samples": [[1, 3, 10], [2, 0, None]]}
+    with pytest.raises(TypeError, match="UndeclaredRam must declare shown"):
+        memory_sample(UndeclaredRam(3))
     with pytest.raises(ValueError, match="memory"):
         memory_field([{"lives": 3}, {"score": 1}])

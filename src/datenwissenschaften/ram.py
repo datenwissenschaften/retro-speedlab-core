@@ -1,5 +1,5 @@
-from dataclasses import field, fields, is_dataclass
-from typing import Any, Self, final
+from dataclasses import dataclass, field, fields, is_dataclass
+from typing import Any, ClassVar, Self, final
 
 from datenwissenschaften.route.position import Position
 
@@ -18,7 +18,34 @@ def seen(unseen: Any) -> Any:
     return field(default=unseen, metadata={"screen": True})
 
 
+@dataclass(slots=True, frozen=True)
+class Shown:
+    label: str
+    index: bool
+
+    def value(self, raw: int | None) -> int | None:
+        if raw is None or not self.index:
+            return raw
+        return raw + 1
+
+
+def viewed(shown: dict[str, Shown], raw: dict[str, int | None]) -> dict[str, int | None]:
+    missing = [key for key in shown if key not in raw]
+    if missing:
+        raise ValueError(f"The game memory has no {missing} to show viewers, only {list(raw)}")
+    return {field.label: field.value(raw[key]) for key, field in shown.items()}
+
+
 class RamInfo:
+    shown: ClassVar[dict[str, Shown]]
+
+    @classmethod
+    @final
+    def shown_fields(cls) -> dict[str, Shown]:
+        if not hasattr(cls, "shown"):
+            raise TypeError(f"{cls.__name__} must declare shown: the game memory viewers see, by label")
+        return cls.shown
+
     @classmethod
     @final
     def ram_map(cls) -> dict[str, tuple[int, int]]:
