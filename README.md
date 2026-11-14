@@ -6,9 +6,8 @@ Tool-assisted speedrun search for Retro Speedlab's own 8-bit games. The search
 finds the fastest movie of buttons to press on every frame from power-on,
 verifies that it replays, and streams the run to
 [Retro Speedlab](https://www.retrospeedlab.com). The games are Python
-cartridges of a game collection that run on
-[retro-speedlab-engine](https://github.com/datenwissenschaften/retro-speedlab-engine);
-the collection's search package supplies the RAM map, states, rewards and
+cartridges of LAB50, a game collection an AI writes, that run on
+retro-speedlab-engine, a deterministic 8-bit console; the collection's search package supplies the RAM map, states, rewards and
 actions, and this repository turns them into a speedrun.
 
 ## Highlights
@@ -17,11 +16,13 @@ actions, and this repository turns them into a speedrun.
   title screen; levels are states of one full-game run
 - **Level by level**: the search stays on the earliest unbeaten level until it is
   beaten, starting where the route of the level before it ends, then moves on
-- **Three search modes per segment** on many console processes: Go-Explore
-  walks, a breadth-first frontier search over short input combinations and a
-  Monte Carlo tree search
+- **Worker roles on many console processes**: Go-Explore scouts (walks, a
+  breadth-first frontier search over short input combinations and a Monte Carlo
+  tree search), backtrackers, beam scouts, optional vision scouts and polishers
+  that search beaten levels again for fewer frames
 - **Learned guidance**: RAM values never seen before, a move table learned from
-  every stored piece, and a PPO policy that trains on the GPU
+  every stored piece and, with `speedrun.policy` on, a PPO policy that trains on
+  the GPU
 - **Every segment is verified**: the whole movie replays from power-on before a
   new segment counts
 - **Route memory** from the practised levels guides the search towards each
@@ -29,8 +30,8 @@ actions, and this repository turns them into a speedrun.
 - Movie (`.movie`) and MP4 video with sound of the verified run
 - **Live relay** of the newest verified segment, the run's time, level splits
   and the lab's status to the Retro Speedlab backend
-- **Lab runs**: when the search is stuck or stalls, Claude Code improves the
-  game package on its own branch
+- **Lab task**: when the search stalls, Claude Code improves the game package on
+  its own branch; the LAB50 runner does not start it
 
 ## Architecture
 
@@ -41,13 +42,13 @@ flowchart TD
     Search["Segment search<br/>one worker per process"]
     Movie["Verified movie<br/>progress.msgpack · screen.movie · screen.mp4"]
     Relay["Live relay<br/>snapshot · whole movie"]
-    Lab["Lab run<br/>agent/daily.sh"]
+    Lab["Lab task, not started by the LAB50 runner<br/>agent/daily.sh"]
 
     Game --> Env
     Env --> Search
     Search --> Movie
     Movie --> Relay
-    Movie -- "stuck or stalled" --> Lab
+    Movie -- "stalled" --> Lab
     Lab --> Game
 ```
 
@@ -58,18 +59,18 @@ power-on for any game package and improves it forever:
 
 ```bash
 python -m datenwissenschaften.speedrun.run search <wrapper> <config> <until-state>
-python -m datenwissenschaften.speedrun.run improve <wrapper> <config>
-python -m datenwissenschaften.speedrun.run verify <wrapper> <config> <progress>
+python -m datenwissenschaften.speedrun.run verify <wrapper> <config> <routes>
 ```
 
-The run is split at the state machine's transitions. Each segment is searched on
-`speedrun.workers` emulator processes over an archive that keeps the fastest
+The run is split at the state machine's transitions. Each segment is searched by
+`speedrun.scouts` Go-Explore scouts, each on its own console process, over an
+archive that keeps the fastest
 savestate per cell (state, 8 px position, height, airborne and
 `RamInfo.dynamics()`, the game's coarse view of whatever moves nearby). A cell
 also keeps the state's memory, so a search that goes on from it earns reward as
 the unbroken trail would, never again for ground it already scored, and a life
 lost on the trail stays lost. The archive on disk keeps that memory too; a stored
-cell without it is not loaded. Three modes share each search by time:
+cell without it is not loaded. Three modes share each scout's search by time:
 
 - **Go-Explore walks** (60 %) branch from rarely visited cells with short input
   bursts; half the time they start from the tenth of cells that earned the most
@@ -80,17 +81,24 @@ cell without it is not loaded. Three modes share each search by time:
 - **Monte Carlo tree search** (20 %) expands the moves with the best upper
   confidence bound and scores short rollouts by reward and new cells.
 
+Alongside the scouts, `speedrun.backtrackers` backtrackers search the same way
+from an earlier start of a chain of checkpoints, `speedrun.beam_scouts` beam
+scouts keep the 24 best nodes of button chords held for 6, 12 and 24 frames,
+and `speedrun.vision_scouts` vision scouts let Claude Haiku (`claude -p`) plan
+the next seconds from a screenshot. `speedrun.polishers` polishers search
+stored pieces again from cut points inside them, bounded by fewer frames.
+
 Cells gain weight for RAM byte values never seen before in the segment and for
 being close to the exit on the route memory. Walks and rollouts follow a move
 table learned from every stored piece (`cache/tas/prior.msgpack`) 30 % of the
-time and the PPO policy 20 % of the time. A full archive drops its least
+time and, once it has trained, the PPO policy 20 % of the time. A full archive drops its least
 promising cell. Each search process keeps 1000 cells of the last 12 starts it
 explored, half with the most reward and half the rarest, and saves them to
 `cache/tas/archives/<start>/<process>.msgpack`: a later search from the same
 start goes on where the last one stopped, and after a restart the processes'
 files are merged. Before it searches a state, the TAS replays the hints for it
-from each of its starts in that state: the game package's `hints.json` (written
-by the lab, `[{"state": ..., "presses": [[frames, [buttons]]]}]`) and the
+from each of its starts in that state: `hints.json` next to the configuration
+(the lab's hints, `[{"state": ..., "presses": [[frames, [buttons]]]}]`) and the
 shortest way out the PPO policy found (`cache/tas/policy_exits.msgpack`); a hint
 that crosses and holds becomes the next piece. A crossing into a later state ends a branch and counts only when
 the new state holds; deaths and backward transitions drop it. Of the three
@@ -127,7 +135,7 @@ resume, `cache/tas/screen.movie` is the verified movie, `screen.mp4` its video a
 `search.log` the search's log. `metadata.speedrun` tells the stream the run's
 time from power-on and from Start, its segments, the level splits (from
 `GameWrapper.levels`, with the part before the first level split under the
-first state's name, `opening`), each state's `goal`, the game, the engine's events, milestones and time history (`journal.json`) and
+first state's name, `opening`), each state's `goal`, the game, the search's events, milestones and time history (`journal.json`) and
 the segment being searched. While a segment is searched every worker writes its
 cells and frames to `live/<seed>.msgpack` every 2 s and its latest frame at half
 size to `live/<seed>.jpg` once a second; the main process folds the reports into
@@ -140,12 +148,12 @@ the game's sound, puts it to
 power-on replay to `/live/movie-ram.json` and publishes `speedrun.movie`: its
 version (the first 12 hex digits of its SHA-256), frames, seconds, frame rate
 and each segment's state, the state it reaches and its start frame, so the
-stream plays the whole run in sync with its splits. When `improve` finds a
-faster segment, the old and the new piece are rendered side by side from the
-same savestate, put to `/live/compare.mp4` and published as `speedrun.compare`
-with the state, both frame counts and the time. `improve` searches every segment
-again, bounded by its current frames; a faster crossing replaces it and the rest
-is searched anew. `verify` fails unless a progress file still replays with a
+stream plays the whole run in sync with its splits. Once every level is beaten,
+the search goes over every segment again, bounded by its current frames; a
+faster crossing replaces it only when the movie still replays, and the old and
+the new piece are rendered side by side from the same savestate, put to
+`/live/compare.mp4` and published as `speedrun.compare` with the state, both
+frame counts and the time. `verify` fails unless a routes file still replays with a
 game package. A piece whose replay now reaches a later state, because the package
 split a state inside it, replays under that state, as it does when the search loads
 the package.
@@ -155,9 +163,8 @@ the package.
 `cache/route.json` lists, per 16 px cell of every beaten level, how
 many frames the level's route still needed from there to its exit, and is
 rewritten whenever a level's route changes. A row may end in what the run had there, in
-the game's `dynamics()` order (Snake Rattle 'n Roll: weight, pieces on the scale,
-speed); such a row counts only for a snake that has at least as much, so the map
-leads over nibbleys and power-ups too. The search weights cells on the route by
+the game's `dynamics()` order; such a row counts only for a run that has at
+least as much, so the map leads over pickups and power-ups too. The search weights cells on the route by
 the fewest frames left to the exit.
 
 ## Sprites and game knowledge
@@ -169,8 +176,8 @@ colour 0 transparent into `cache/sprites/<version>/`, and
 PNG base64-encoded and `signature` the sprite's name.
 
 Names and the rest of the lab's knowledge come from the optional
-`knowledge.yaml` next to `config.yaml`, which the lab writes for the website's
-"What the AI learned" page. A missing file is empty knowledge; a malformed one
+`knowledge.yaml` next to `config.yaml`, the lab's file of what the AI learned
+about the game. A missing file is empty knowledge; a malformed one
 stops the run with the file and the field named. Every key is required, and a
 `sprite` names one of the cartridge's `SPRITES`:
 
@@ -197,14 +204,15 @@ number, slug, title and version.
 
 ## PPO policy
 
-With `speedrun.policy`, a separate process trains a policy with
+The policy is off in `config.example.yaml` and in the LAB50 runner. With `speedrun.policy` and the
+optional `vision` dependencies (PyTorch and Stable-Baselines3), a separate process trains a policy with
 [Stable-Baselines3](https://stable-baselines3.readthedocs.io) PPO on the GPU, always from the start
 the search is working on (`cache/tas/policy_start.msgpack`). `policy.env.PolicyEnv` is a
-[Gymnasium](https://gymnasium.farama.org) environment around one emulator: RAM in, a button
+[Gymnasium](https://gymnasium.farama.org) environment around one console: RAM in, a button
 combination out. Its reward is the state's reward, RAM values never seen on that level, a bonus
 for the exit and a penalty for a death; an episode ends on the exit, a death, another state or
 after 128 decisions. `speedrun.policy_emulators` environments play in parallel in a
-`SubprocVecEnv`. After every round of 1024 decisions per emulator the policy network (two tanh
+`SubprocVecEnv`. After every round of 1024 decisions per console the policy network (two tanh
 layers of 256) is exported to `cache/tas/policy.npz`, which the search workers read with numpy,
 the shortest episode that left the state is kept for the search to replay, and the round's
 reward, exits, entropy and value fit go to Weights & Biases.
@@ -218,15 +226,15 @@ once five new reports landed in `agent/reports/` since its last review; the
 stream shows its lessons as `metadata.critic`. Then it starts a lab run
 (`agent/daily.sh` of the game package) once no level stored a piece, the movie
 did not improve and no lab run ended for `agent.stall_minutes` minutes, as the
-journal records them; a checkpoint is no piece. Claude Code works
-for `agent.minutes` minutes on its own git worktree of the game package, and its
-branch ships only when its checks pass and the current movie still replays with
+journal records them; a checkpoint is no piece. Claude Code works on its own
+git worktree of the game package, and its branch ships only when its checks pass and the current movie still replays with
 it (`speedrun.run verify`). The lead session delegates to the subagents defined in the
 game package's `.claude/agents/`; the stream shows each member's role, state and
 latest step and every hand-off with its short task, the lead's latest actions
 (only the kind of action and the source files it touches), its commit subjects
 with URLs and secret-like words hidden, and the lines it changed. Every task
-runs locally with `flyte run --local`.
+runs locally. The LAB50 runner starts only `speedrun`, and the games
+repository has no `agent/` scripts, so no lab runs happen today.
 
 ### Experiments
 
@@ -261,16 +269,18 @@ run is logged as not traced.
 
 ## Live relay
 
-With `ui.enable: true` and an upload key, the engine relays to the Retro
+With `ui.enable: true` and an upload key, the search relays to the Retro
 Speedlab backend (`upload.url`) every few seconds the snapshot (the published
 metadata and the release) and the search's newest frame; the whole verified movie
-goes up whenever it changes. The website's `/stream` page, opened with the stream
-key (`?api_key=`), plays them for OBS.
-The engine itself serves nothing.
+goes up whenever it changes. The stream view at
+[stream.retrospeedlab.com](https://stream.retrospeedlab.com), opened with the
+stream key (`?api_key=`), plays them for OBS.
+Core itself serves nothing.
 
 ## Installation
 
-Retro Speedlab Core requires **Python 3.12**.
+Retro Speedlab Core requires **Python 3.12** and the private
+retro-speedlab-engine checked out next to it.
 
 ```bash
 git clone https://github.com/datenwissenschaften/retro-speedlab-core.git
@@ -279,7 +289,8 @@ uv sync
 cp config.example.yaml config.yaml
 ```
 
-The published package and import path are `datenwissenschaften`.
+The package and import path are `datenwissenschaften`. It is not published to
+PyPI; the runner installs it from this repository.
 
 ## Minimal usage
 
@@ -315,7 +326,7 @@ raise an error when the configuration is loaded.
 | Key | Meaning |
 |-----|---------|
 | `paths.collection` | The game collection: `collection.yaml` and `games/<slug>/cartridge.py` |
-| `paths.models` | Route memory per state |
+| `paths.models` | Required, but nothing reads it |
 | `paths.cache` | The search's movie, progress, stuck marker, journal, live reports and log under `tas/`, the rendered sprites under `sprites/<version>/` |
 | `paths.lab_run` | Marker file of a running lab run |
 | `training.game` | The game's slug in the collection; its cartridge is `games.<slug>.cartridge` |
@@ -323,35 +334,42 @@ raise an error when the configuration is loaded.
 | `ui.enable`, `ui.release` | Live relay on or off and the release label shown on stream |
 | `twitch.enabled` | Whether the stream page goes live on Twitch |
 | `agent.stall_minutes` | Minutes without a new piece, a faster movie or a lab run before the `lab` task starts one |
-| `speedrun.workers`, `speedrun.segment_seconds` | Search processes and seconds per segment round |
+| `speedrun.scouts`, `speedrun.backtrackers`, `speedrun.beam_scouts`, `speedrun.vision_scouts`, `speedrun.polishers` | Search processes of each role |
+| `speedrun.segment_seconds` | Seconds per segment round |
+| `speedrun.policy`, `speedrun.policy_emulators` | PPO policy on or off and its parallel environments |
 | `speedrun.category` | The category run |
 | `log_level` | Loguru log level |
 
 ## Testing
 
 ```bash
-uv run pytest --cov=datenwissenschaften --cov-fail-under=95
+uv run pytest -q --cov
 ```
 
-Tests run on a scripted console and on the engine's demo collection.
+Coverage must stay at 95 % or more. Tests run on a scripted console and on a
+demo cartridge.
 
 ## Development
 
 ```bash
 uv run ruff check .
 uv run ruff format --check .
+uv run pyright
 ```
 
 ## Relationship to Retro Speedlab
 
-- **Retro Speedlab Core** (this repository): the engine: segment search,
-  verified movies, the live relay and the lab workflow.
-- **[retro-speedlab-engine](https://github.com/datenwissenschaften/retro-speedlab-engine)**:
-  the 8-bit console the games run on, their movies, videos and browser builds.
-- **retro-speedlab-games**: the game collection with every cartridge and its
-  RAM map, states, rewards and actions, improved by lab runs.
-- **[retrospeedlab.com](https://www.retrospeedlab.com)**: the lab's website,
-  showing the stream and the speedrun.
+- **Retro Speedlab Core** (this repository): the TAS search, verified movies,
+  the live relay and the lab workflow.
+- **retro-speedlab-engine** (private): the 8-bit console the games run on,
+  their movies, videos and browser builds.
+- **retro-speedlab-games** (private): LAB50, the game collection an AI writes,
+  with every cartridge and its RAM map, states, rewards and actions.
+- **retro-speedlab-runner** (private): runs the search for every LAB50 game in
+  turn on black-omen.
+- **[retrospeedlab.com](https://www.retrospeedlab.com)**: the website with the
+  live run; the stream view is at
+  [stream.retrospeedlab.com](https://stream.retrospeedlab.com).
 
 ## License
 
