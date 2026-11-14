@@ -8,7 +8,7 @@ from speedlab_engine.cartridge import BUTTONS
 from speedlab_engine.collection import DEMO_COLLECTION
 
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
-from datenwissenschaften.ram import RamInfo, ram
+from datenwissenschaften.ram import RamInfo, Shown, ram
 from datenwissenschaften.route.route_map import RouteMap
 from datenwissenschaften.states.state import State
 
@@ -21,6 +21,7 @@ FAKE_BUTTONS = ["A", "START"]
 
 @dataclass
 class FakeRam(RamInfo):
+    shown = {"lives": Shown("Lives", False), "score": Shown("Score", False)}
     lives: int = ram(0)
     score: int = ram(1)
 

@@ -48,6 +48,7 @@ class StateMachineGymWrapper(Generic[T]):
         if self.action_table.ndim != ACTION_TABLE_DIMENSIONS:
             raise ValueError("action_table must have the shape (actions, frames, buttons).")
         level_map(self.levels, self.state_classes)
+        self.ram_info_cls.shown_fields()
         self.env = env
         self.routes = routes
         self.state_machine = StateMachine[T](self.start_state_cls)

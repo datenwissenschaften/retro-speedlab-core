@@ -6,7 +6,7 @@ import numpy as np
 from speedlab_engine.movie import Movie, encode
 
 from datenwissenschaften.environment.wrapper import known_lives, lost_life
-from datenwissenschaften.ram import RamInfo
+from datenwissenschaften.ram import RamInfo, viewed
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.speedrun.search import left_at_once
 
@@ -35,8 +35,10 @@ def frames(segments: list[Segment]) -> int:
 def memory_sample(ram: RamInfo) -> dict[str, int | None]:
     position = ram.position()
     if position is None:
-        return {**ram.describe(), "area": None, "x": None, "y": None, "height": None}
-    return {**ram.describe(), "area": position.area, "x": position.x, "y": position.y, "height": position.height}
+        located: dict[str, int | None] = {"area": None, "x": None, "y": None, "height": None}
+    else:
+        located = {"area": position.area, "x": position.x, "y": position.y, "height": position.height}
+    return viewed(type(ram).shown_fields(), {**ram.describe(), **located})
 
 
 def memory_field(samples: list[dict[str, int | None]]) -> dict[str, Any]:

@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 
 from datenwissenschaften.route.rows import LEVEL_GAP_FRAMES, Step, route_rows
+from datenwissenschaften.speedrun.movie import memory_sample
 from datenwissenschaften.speedrun.paths import atomic_write
 from datenwissenschaften.speedrun.routes import Part, PartProgress, Route, Routes, finished
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
@@ -31,7 +32,7 @@ def progress_of(runner: SegmentRunner, routes: Routes, part: Part) -> PartProgre
         sum(len(segment.pressed) for segment in played),
         finished(played, part.exit),
         routes.loaded(part),
-        runner.ram.describe(),
+        {label: value for label, value in memory_sample(runner.ram).items() if value is not None},
     )
 
 

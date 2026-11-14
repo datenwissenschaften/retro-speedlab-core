@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
-from datenwissenschaften.ram import RamInfo, ram, ram_array, seen
+from datenwissenschaften.ram import RamInfo, Shown, ram, ram_array, seen, viewed
 
 
 @dataclass
@@ -52,3 +52,15 @@ def test_a_game_without_known_ram_meanings_reports_none():
     ram_info = Unknown.from_ram(bytes(16))
 
     assert (ram_info.position(), ram_info.remaining_lives(), ram_info.dynamics()) == (None, None, ())
+
+
+def test_shown_fields_name_the_memory_viewers_see_and_fail_when_undeclared():
+    @dataclass(frozen=True)
+    class Declared(RamInfo):
+        shown = {"level": Shown("Level", True)}
+
+    with pytest.raises(ValueError, match="no \['level'\] to show viewers"):
+        viewed(Declared.shown_fields(), {"lives": 3})
+    with pytest.raises(TypeError, match="_SampleRam must declare shown"):
+        _SampleRam.shown_fields()
+    assert viewed(Declared.shown_fields(), {"level": 0}) == {"Level": 1}
