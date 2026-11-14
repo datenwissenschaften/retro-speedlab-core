@@ -336,7 +336,9 @@ class Tas:
         return segments
 
     def shorten(self, leg: Leg, segments: list[Segment], index: int) -> list[Segment]:
-        crossing = self.searcher.best(self.start(leg, segments, index), len(segments[index].pressed), IMPROVE_ROUNDS)
+        start = self.start(leg, segments, index)
+        self.feed.show(self.routes.view(leg.name, segments), start.state)
+        crossing = self.searcher.best(start, len(segments[index].pressed), IMPROVE_ROUNDS)
         if not isinstance(crossing, Crossing) or crossing.frames >= len(segments[index].pressed):
             return segments
         return self.swapped(leg, segments, index, crossing)

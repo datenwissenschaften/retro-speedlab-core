@@ -134,9 +134,12 @@ def test_search_and_improve_write_a_verified_movie_and_keep_only_faster_segments
     leg = Leg(FULL_RUN, runner.power_on(), "Boss")
 
     searched = tas.extend(leg, [], None, never_rest)
+    shortening: list[str] = []
+    monkeypatch.setattr(tas.feed, "show", lambda segments, searching: shortening.append(searching))
     improved = tas.improve(leg, [Segment("Boss", [[1, 0]] * 6, bytes([6]), False)])
     run.publish(tas, improved)
 
+    assert shortening == ["Survive", "Boss"]
     assert [(segment.state, len(segment.pressed)) for segment in searched] == [("Boss", BOSS_FRAMES)]
     assert run.frames(improved) == BOSS_FRAMES
     assert run.frames(run.load_progress(tas.routes.progress)) == BOSS_FRAMES

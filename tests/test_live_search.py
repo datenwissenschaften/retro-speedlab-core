@@ -286,6 +286,21 @@ def test_the_part_before_the_first_level_is_split_like_a_level(tmp_path: Path):
     assert report(played, segments, [], {}, "Level2", None)["opening"] == "Menu"
 
 
+def test_a_won_run_splits_its_last_level(tmp_path: Path):
+    game = load_config(write_config(tmp_path)).speedrun.game
+    played = Course({"Level 1": ("Play", "Door"), "Level 2": ("Level2", "Boss")}, "Menu", 60.0, {}, 1, game)
+    segments = [
+        Segment("Play", [[0, 1]] * 60, b"", False),
+        Segment("Door", [[0, 0]] * 30, b"", False),
+        Segment("Level2", [[0, 0]] * 30, b"", False),
+        Segment("Boss", [[0, 0]] * 60, b"", True),
+    ]
+    beaten = [Split("Menu", 1.0, 1.0), Split("Level 1", 2.0, 1.0)]
+
+    assert splits(played, segments) == [*beaten, Split("Level 2", 3.0, 1.0)]
+    assert splits(played, [*segments[:-1], Segment("Boss", [[0, 0]] * 60, b"", False)]) == beaten
+
+
 def test_checkpoint_pieces_never_end_a_level(tmp_path: Path):
     game = load_config(write_config(tmp_path)).speedrun.game
     played = Course({"Level 1": ("Play", "Door"), "Level 2": ("Level2",)}, "Menu", 60.0, {}, 1, game)
