@@ -30,6 +30,8 @@ from datenwissenschaften.speedrun.policy_start import (
     load_policy_exits,
     save_policy_start,
 )
+from datenwissenschaften.speedrun.rebase import rebased
+from datenwissenschaften.speedrun.record import RECORD_FILE, Record
 from datenwissenschaften.speedrun.report import course_of
 from datenwissenschaften.speedrun.routes import (
     FULL_RUN,
@@ -118,6 +120,7 @@ class Tas:
     movie: Screen
     compare: Screen
     improver: Improver
+    record: Record
     hints: list[Hint]
     hinted: set[tuple[str, str]]
 
@@ -184,9 +187,12 @@ class Tas:
         else:
             self.stuck_file.unlink(missing_ok=True)
 
+    def show(self, leg: Leg, segments: list[Segment], searching: str) -> None:
+        self.feed.show(self.record.shown(self.routes.view(leg.name, segments)), searching)
+
     def keep(self, leg: Leg, segments: list[Segment], searching: str) -> list[Segment]:
         self.routes.save(leg, segments)
-        self.feed.show(self.routes.view(leg.name, segments), searching)
+        self.show(leg, segments, searching)
         return segments
 
     def verified(self, leg: Leg, segments: list[Segment]) -> list[Segment]:
@@ -223,7 +229,7 @@ class Tas:
             if patience is not None:
                 self.resume_stuck(start.state)
             save_policy_start(self.output / POLICY_START_FILE, start)
-            self.feed.show(self.routes.view(leg.name, segments), start.state)
+            self.show(leg, segments, start.state)
             hint = self.hint(leg, segments, start)
             if hint is None:
                 segments, found = self.frontier(leg, segments)
@@ -248,7 +254,7 @@ class Tas:
             logger.info(
                 f"{start.state} -> {found.end.state} in {found.frames} frames; {leg.name} at {frames(segments)}"
             )
-        self.feed.show(self.routes.view(leg.name, segments), segments[-1].state)
+        self.show(leg, segments, segments[-1].state)
         return segments
 
     def searched(self, state: str, patience: int | None) -> int:
@@ -337,7 +343,7 @@ class Tas:
 
     def shorten(self, leg: Leg, segments: list[Segment], index: int) -> list[Segment]:
         start = self.start(leg, segments, index)
-        self.feed.show(self.routes.view(leg.name, segments), start.state)
+        self.show(leg, segments, start.state)
         crossing = self.searcher.best(start, len(segments[index].pressed), IMPROVE_ROUNDS)
         if not isinstance(crossing, Crossing) or crossing.frames >= len(segments[index].pressed):
             return segments
@@ -358,13 +364,26 @@ class Tas:
         if replay.verified < len(candidate):
             self.repair(leg, segments, candidate[: replay.verified], replay.ends)
             return segments
-        if frames(candidate) >= frames(segments):
+        replayed = [replace(piece, emulator_state=end) for piece, end in zip(candidate, replay.ends, strict=True)]
+        if frames(replayed) >= frames(segments) or not self.rebase(leg, replayed[-1].emulator_state):
             return segments
-        saved = frames(segments) - frames(candidate)
+        saved = frames(segments) - frames(replayed)
         logger.info(f"{leg.name} is {saved} frames faster from piece {len(head) - 1} into {head[-1].state}")
-        self.feed.event("improved", head[-1].state, frames(candidate))
+        self.feed.event("improved", head[-1].state, frames(replayed))
         self.feed.stats.trimmed(saved)
-        return self.keep(leg, self.verified(leg, candidate), candidate[-1].state)
+        return self.keep(leg, self.verified(leg, replayed), replayed[-1].state)
+
+    def rebase(self, leg: Leg, end: bytes) -> bool:
+        if leg.name == FULL_RUN:
+            return True
+        moved = rebased(self.runner, self.routes, leg.name, None, end)
+        if moved is None:
+            logger.info(
+                f"{leg.name} is faster but a beaten level after it no longer replays from its new end; it stays"
+            )
+            return False
+        self.routes.move(moved)
+        return True
 
     def repair(self, leg: Leg, segments: list[Segment], replayed: list[Segment], ends: list[bytes]) -> None:
         played = len(replayed)
@@ -445,8 +464,9 @@ def tas_run(wrapper: str, config: Path, pool: Executor, polishing: Executor) -> 
     improver = Improver(
         wrapper, config, polishing, settings.speedrun.polishers, settings.speedrun.segment_seconds, feed.live
     )
+    record = Record(output / RECORD_FILE, runner, game.version)
     hints = load_hints(hints_path(config))
-    return Tas(settings, runner, searcher, routes, feed, movie, compare, improver, hints, set())
+    return Tas(settings, runner, searcher, routes, feed, movie, compare, improver, record, hints, set())
 
 
 @app.command()
@@ -455,7 +475,7 @@ def search(wrapper: str, config: Path, until: str) -> None:
     with worker_pool(frontier_workers(settings)) as pool, worker_pool(settings.speedrun.polishers) as polishing:
         tas = tas_run(wrapper, config, pool, polishing)
         leg = Leg(FULL_RUN, tas.runner.power_on(), until)
-        publish(tas, tas.extend(leg, load_progress(tas.routes.progress), None, never_rest))
+        publish(tas, tas.extend(leg, load_progress(tas.routes.progress) or tas.record.segments, None, never_rest))
 
 
 def kept_on_verify(leg: Leg, segments: list[Segment]) -> int:

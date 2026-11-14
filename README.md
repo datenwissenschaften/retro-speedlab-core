@@ -132,7 +132,13 @@ checkpoints the one closest to the exit on the map wins, then the most reward.
 After every segment the whole movie is replayed from power-on; segments that do
 not reproduce are searched again. `cache/tas/progress.msgpack` lets a run
 resume, `cache/tas/screen.movie` is the verified movie, `screen.mp4` its video and
-`search.log` the search's log. `metadata.speedrun` tells the stream the run's
+`search.log` the search's log. The fastest won run from power-on is the record,
+`cache/tas/record.msgpack`: it is replayed from power-on before it is kept and again
+at every start, and `metadata.speedrun` shows it until a faster run replays. When a
+level gets faster, every beaten level after it is replayed from its new end and
+moved there, or the faster level is not taken; a level whose start no longer is where
+the level before it ends starts there again with the pieces that still replay.
+`metadata.speedrun` tells the stream the run's
 time from power-on and from Start, its segments, the level splits (from
 `GameWrapper.levels`, with the part before the first level split under the
 first state's name, `opening`), each state's `goal`, the game, the search's events, milestones and time history (`journal.json`) and
@@ -199,7 +205,9 @@ cartridge `VERSION` they were found on. When the search starts on another
 version it replays every stored piece from the start the current version
 gives it, keeps each piece that still reaches its state, cuts the route at the
 first one that breaks and searches on from there; one log line tells how many
-pieces still replay. `metadata.speedrun.game` names the collection, the game's
+pieces still replay. A record of another version stays the record only if it
+replays from power-on to the win; otherwise it is kept as
+`cache/tas/record-<version>.msgpack` and the search starts without one. `metadata.speedrun.game` names the collection, the game's
 number, slug, title and version.
 
 ## PPO policy

@@ -10,6 +10,7 @@ from datenwissenschaften.settings import load_config
 from datenwissenschaften.speedrun.polish import Polisher
 from datenwissenschaften.speedrun.practice import practised, write_practice_route
 from datenwissenschaften.speedrun.prior import PRIOR_FILE, write_prior
+from datenwissenschaften.speedrun.rebase import join
 from datenwissenschaften.speedrun.reel import Reel
 from datenwissenschaften.speedrun.routes import FULL_RUN, Leg, Part, Routes, finished, load_progress, save_progress
 from datenwissenschaften.speedrun.run import Tas, frontier_workers, never_rest, tas_run, worker_pool
@@ -23,7 +24,7 @@ class LevelTrainer:
         self.routes = routes
         self.power_on = power_on
         if not routes.path.is_file():
-            routes.split(load_progress(routes.progress), power_on)
+            routes.split(load_progress(routes.progress) or tas.record.segments, power_on)
             save_progress(routes.progress, [], routes.version)
 
     def leg(self, part: Part) -> Leg:
@@ -33,6 +34,7 @@ class LevelTrainer:
         return Leg(part.name, entry, part.exit)
 
     def unbeaten(self) -> list[Part]:
+        join(self.tas.runner, self.routes)
         return [part for part in self.routes.parts if not finished(self.routes.segments(part.name), part.exit)]
 
     def share_practice(self) -> None:
@@ -62,7 +64,7 @@ class LevelTrainer:
 
     def full_run(self) -> None:
         leg = Leg(FULL_RUN, self.power_on, None)
-        segments = load_progress(self.routes.progress) or self.routes.stitched()
+        segments = load_progress(self.routes.progress) or self.tas.record.segments or self.routes.stitched()
         self.tas.improve(leg, self.tas.extend(leg, segments, None, never_rest))
 
     def forever(self) -> None:

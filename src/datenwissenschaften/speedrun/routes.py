@@ -115,8 +115,7 @@ class Routes:
         }
         changed = [name for name, route in replayed.items() if route != self.routes[name]]
         if changed:
-            self.routes = {**self.routes, **replayed}
-            atomic_write(self.path, msgspec.msgpack.encode(self.routes))
+            self.move(replayed)
         progress = load_progress(self.progress)
         if (progress_replayed := relabelled(runner, runner.power_on(), progress)) != progress:
             save_progress(self.progress, progress_replayed, self.version)
@@ -153,7 +152,10 @@ class Routes:
         if leg.name == FULL_RUN:
             save_progress(self.progress, segments, self.version)
             return
-        self.routes = {**self.routes, leg.name: Route(leg.entry.emulator_state, segments, self.version)}
+        self.move({leg.name: Route(leg.entry.emulator_state, segments, self.version)})
+
+    def move(self, moved: dict[str, Route]) -> None:
+        self.routes = {**self.routes, **moved}
         atomic_write(self.path, msgspec.msgpack.encode(self.routes))
 
     def view(self, name: str, segments: list[Segment]) -> list[Segment]:

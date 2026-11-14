@@ -100,7 +100,14 @@ def trainer_tas(tmp_path: Path, calls: list, extend, improve) -> SimpleNamespace
     feed = SimpleNamespace(practised=lambda frames: calls.append(("practised", frames)))
     turn_file = tmp_path / "turn.json"
     return SimpleNamespace(
-        extend=extend, improve=improve, feed=feed, runner=None, settings=None, turn_file=turn_file, output=tmp_path
+        extend=extend,
+        improve=improve,
+        feed=feed,
+        runner=None,
+        settings=None,
+        turn_file=turn_file,
+        output=tmp_path,
+        record=SimpleNamespace(segments=[]),
     )
 
 
@@ -220,3 +227,25 @@ def test_a_level_shows_its_new_pieces_while_it_is_still_searched(tmp_path: Path,
         trainer.beat_levels()
 
     assert calls == [("practised", {"Menu": 1}), ("practised", {"Menu": 1, "Level 1": 1})]
+
+
+def test_without_levels_or_progress_the_record_splits_into_the_levels_and_starts_the_full_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(levels, "practised", pieces)
+    kept = routes(tmp_path)
+    won = [*RUN[:3], Segment("Boss2", [[1]], b"won", True)]
+    started: list[list[Segment]] = []
+
+    def extend(leg: Leg, segments: list[Segment], patience: int | None, rest: Callable[[], bool]) -> list[Segment]:
+        started.append(segments)
+        raise OneRound
+
+    tas = trainer_tas(tmp_path, [], extend, None)
+    tas.record = SimpleNamespace(segments=won)
+    trainer = LevelTrainer(tas, kept, POWER_ON, NO_REEL)
+    with pytest.raises(OneRound):
+        trainer.full_run()
+
+    assert [kept.segments(part.name) for part in kept.parts] == [won[:1], won[1:3], won[3:]]
+    assert started == [won]

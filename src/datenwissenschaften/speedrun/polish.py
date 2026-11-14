@@ -1,11 +1,12 @@
 import random
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 import numpy as np
 from loguru import logger
 
-from datenwissenschaften.speedrun.movie import Segment, frames, verified_segments
-from datenwissenschaften.speedrun.routes import Leg, Part, Route, Routes, finished
+from datenwissenschaften.speedrun.movie import Segment, frames
+from datenwissenschaften.speedrun.rebase import rebased
+from datenwissenschaften.speedrun.routes import Leg, Part, finished, still_replaying
 from datenwissenschaften.speedrun.run import Tas, segment_of
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.speedrun.search import Crossing
@@ -37,28 +38,6 @@ def played_until(runner: SegmentRunner, entry: Start, segments: list[Segment], c
     return head, Start(runner.wrapper.state_machine.state_name, runner.snapshot())
 
 
-def replayed(runner: SegmentRunner, entry: Start, segments: list[Segment]) -> list[Segment]:
-    replay = verified_segments(runner, entry, segments)
-    return [
-        replace(segment, emulator_state=end)
-        for segment, end in zip(segments[: replay.verified], replay.ends, strict=True)
-    ]
-
-
-def rebased(
-    runner: SegmentRunner, routes: Routes, later: list[Part], current: Part, end: bytes
-) -> dict[str, Route] | None:
-    moved: dict[str, Route] = {}
-    for part in later:
-        segments = routes.segments(part.name)
-        replay = replayed(runner, Start(part.entry_state, end), segments)
-        if part != current and len(replay) < len(segments):
-            return None
-        moved[part.name] = Route(end, replay, routes.version)
-        end = replay[-1].emulator_state if replay else end
-    return moved
-
-
 @dataclass(slots=True)
 class Polisher:
     tas: Tas
@@ -88,19 +67,16 @@ class Polisher:
 
     def commit(self, part: Part, current: Part, leg: Leg, segments: list[Segment], faster: list[Segment]) -> bool:
         routes, runner = self.tas.routes, self.tas.runner
-        replay = replayed(runner, leg.entry, faster)
+        replay = still_replaying(runner, leg.entry, faster)
         if len(replay) < len(faster):
             return False
         saved = frames(segments) - frames(replay)
-        later = [each for each in routes.parts[routes.parts.index(part) + 1 :] if each.name in routes.routes]
-        moved = rebased(runner, routes, later, current, replay[-1].emulator_state)
+        moved = rebased(runner, routes, part.name, current.name, replay[-1].emulator_state)
         if moved is None:
             logger.info(f"{part.name} is {saved} frames faster but a beaten level after it no longer replays; it stays")
             return False
         routes.save(leg, replay)
-        for each in later:
-            route = moved[each.name]
-            routes.save(Leg(each.name, Start(each.entry_state, route.entry), each.exit), list(route.segments))
+        routes.move(moved)
         kept = len(moved[current.name].segments) if current.name in moved else 0
         logger.info(f"{part.name} is {saved} frames faster; {current.name} keeps {kept} pieces from its new start")
         self.tas.feed.event("improved", replay[-1].state, frames(replay))
