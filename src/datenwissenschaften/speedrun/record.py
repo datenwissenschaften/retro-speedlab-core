@@ -10,6 +10,7 @@ from datenwissenschaften.speedrun.runner import SegmentRunner
 from datenwissenschaften.speedrun.search_events import SearchEvents
 
 RECORD_FILE = "record.msgpack"
+UNVERIFIED = "unverified"
 
 
 class StoredRecord(msgspec.Struct, frozen=True):
@@ -68,6 +69,7 @@ class Record:
         replay = self.replayed(segments)
         if replay is None:
             logger.warning(f"A won run in {frames(segments)} frames does not replay from power-on; the record stays")
+            self.events.step(UNVERIFIED, None, frames(segments), None)
             return
         was = f" (was {frames(self.segments)})" if self.segments else ""
         self.events.record(replay, self.segments)

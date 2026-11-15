@@ -263,7 +263,7 @@ published. The key is the game's slug; every payload carries `game` and `at`:
 | Topic | Published | Payload |
 |-------|-----------|---------|
 | `runs.attempts` | every finished search job of a round | `state`, `seed`, `role`, `seconds`, `outcome` (`crossing`, `checkpoint`, `nothing`), `crossings`, `frames`, `reached` |
-| `runs.steps` | every step of the search | `kind` (`found`, `checkpoint`, `stuck`, `improved`, `lab`), `state`, `frames`, `saved` (frames an improvement saved) |
+| `runs.steps` | every step of the search | `kind` (`found`, `checkpoint`, `stuck`, `improved`, `lab`, and `unverified` for a won run that does not replay from power-on), `state`, `frames`, `saved` (frames an improvement saved) |
 | `runs.records` | a new record from power-on that replays | `version`, `frames`, `seconds`, `pieces`, `previous_frames` |
 | `policy.rounds` | every PPO round | `run` (the W&B run path), `round`, `steps`, `reward`, `exits`, `episodes`, `exit_rate`, `entropy`, `explained_variance`, `loss` |
 

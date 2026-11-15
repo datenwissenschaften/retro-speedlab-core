@@ -2,7 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import msgspec
-from fakes import FAKE_VERSION, NO_EVENTS, FakeWrapper, SavingEmulator, fake_routes
+from fakes import FAKE_VERSION, FRAME_RATE, NO_EVENTS, FakeWrapper, RecordedEvents, SavingEmulator, fake_routes
 
 from datenwissenschaften.speedrun.movie import Segment, frames
 from datenwissenschaften.speedrun.record import RECORD_FILE, Record, StoredRecord, retired_path, stored_record
@@ -10,6 +10,7 @@ from datenwissenschaften.speedrun.routes import FULL_RUN, Leg, Part, Routes
 from datenwissenschaften.speedrun.run import Tas
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.speedrun.screen import Cut
+from datenwissenschaften.speedrun.search_events import SearchEvents
 
 OLD_VERSION = "0.9.0"
 WINNING_SCRIPT = [(3, 0), (3, 1), (3, 5), (3, 6), (3, 7), (3, 7), (3, 7), (3, 7)]
@@ -54,6 +55,27 @@ def test_only_a_faster_won_run_that_replays_from_power_on_replaces_the_record(tm
     best.offer(FAST)
 
     assert frames(best.segments) == frames(record(tmp_path).segments) == frames(FAST)
+
+
+def test_a_new_record_and_a_won_run_that_does_not_replay_are_published(tmp_path: Path):
+    events = RecordedEvents()
+    best = Record(
+        tmp_path / RECORD_FILE,
+        winning_runner(tmp_path),
+        FAKE_VERSION,
+        SearchEvents(events, "walk", "1.0.0", FRAME_RATE),
+    )
+
+    best.offer(BROKEN)
+    best.offer(SLOW)
+    best.offer(FAST)
+
+    published = [(topic, payload.get("kind"), payload.get("previous_frames")) for topic, _, payload in events.published]
+    assert published == [
+        ("runs.steps", "unverified", None),
+        ("runs.records", None, None),
+        ("runs.records", None, frames(SLOW)),
+    ]
 
 
 def test_the_record_is_shown_until_a_faster_run_is_verified(tmp_path: Path):
