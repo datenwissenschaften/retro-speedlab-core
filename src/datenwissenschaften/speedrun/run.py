@@ -14,9 +14,19 @@ from loguru import logger
 from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.experiments import start_experiment
 from datenwissenschaften.logger import setup_logging
-from datenwissenschaften.settings import RetroSpeedlabConfig, RetroSpeedlabPaths, load_config
+from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
 from datenwissenschaften.speedrun.feed import SpeedrunFeed, publish_every
-from datenwissenschaften.speedrun.footage import compare_cut, movie_cut, render_compare, render_movie
+from datenwissenschaften.speedrun.footage import (
+    COMPARE,
+    MOVIE,
+    RUN,
+    compare_cut,
+    movie_cut,
+    render_compare,
+    render_movie,
+    render_run,
+    run_cut,
+)
 from datenwissenschaften.speedrun.hints import Hint, hinted, hints_path, load_hints, pressed
 from datenwissenschaften.speedrun.improver import Improver, Repair
 from datenwissenschaften.speedrun.journal import JOURNAL_FILE, JournalStore
@@ -44,7 +54,7 @@ from datenwissenschaften.speedrun.routes import (
     parts_of,
 )
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
-from datenwissenschaften.speedrun.screen import Screen
+from datenwissenschaften.speedrun.screen import Render, Screen
 from datenwissenschaften.speedrun.search import HOLD_FRAMES, ROUTE_CHECKPOINT, Checkpoint, Crossing
 from datenwissenschaften.speedrun.searcher import Lead, Searcher
 from datenwissenschaften.speedrun.shown import SHOWN_FILE, worth_showing
@@ -64,7 +74,7 @@ from datenwissenschaften.speedrun.stuck import (
 )
 from datenwissenschaften.speedrun.turns import TURN_FILE, Turn, save_turn, turn_of
 from datenwissenschaften.speedrun.versions import upgrade
-from datenwissenschaften.ui.relay import relay_key
+from datenwissenschaften.ui.relay import game_path, relay_key
 from datenwissenschaften.ui.video_upload import VideoUpload
 from datenwissenschaften.workflow.wrapper import wrapper_class
 
@@ -76,8 +86,6 @@ IMPROVE_ROUNDS = 1
 
 SEARCH_JOB = "search"
 MATH_THREADS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")
-
-Footage = Callable[[RetroSpeedlabPaths, Path, tuple[bytes, ...]], Path]
 
 app = typer.Typer()
 
@@ -119,6 +127,7 @@ class Tas:
     feed: SpeedrunFeed
     movie: Screen
     compare: Screen
+    run: Screen
     improver: Improver
     record: Record
     hints: list[Hint]
@@ -189,6 +198,8 @@ class Tas:
 
     def show(self, leg: Leg, segments: list[Segment], searching: str) -> None:
         self.feed.show(self.record.shown(self.routes.view(leg.name, segments)), searching)
+        if self.record.segments:
+            self.run.queue(run_cut(self.feed.course, self.record.segments))
 
     def keep(self, leg: Leg, segments: list[Segment], searching: str) -> list[Segment]:
         self.routes.save(leg, segments)
@@ -401,20 +412,30 @@ class Tas:
 def publish(tas: Tas, segments: list[Segment]) -> None:
     tas.movie.settle()
     tas.compare.settle()
+    tas.run.settle()
     logger.info(f"Verified movie reaches {segments[-1].state} in {frames(segments)} frames")
 
 
 def video_upload(settings: RetroSpeedlabConfig, name: str) -> VideoUpload | None:
-    if not settings.ui.enabled or not settings.ui.live:
+    if not settings.ui.enabled:
         return None
-    return VideoUpload(settings.upload.url, relay_key(settings.upload), name)
+    url = f"{settings.upload.url}{game_path(settings.speedrun.game.id)}"
+    return VideoUpload(url, relay_key(settings.upload), name)
 
 
-def screen(settings: RetroSpeedlabConfig, feed: SpeedrunFeed, name: str, render: Footage) -> Screen:
-    rendered = partial(render, settings.paths, tas_dir(settings))
-    shown = Screen(name, rendered, video_upload(settings, f"{name}.mp4"), partial(feed.shown, name))
+def screen(settings: RetroSpeedlabConfig, feed: SpeedrunFeed, name: str, render: Render) -> Screen:
+    shown = Screen(name, render, video_upload(settings, f"{name}.mp4"), partial(feed.shown, name))
     shown.start()
     return shown
+
+
+def screens(settings: RetroSpeedlabConfig, feed: SpeedrunFeed, wrapper: str, config: Path) -> dict[str, Screen]:
+    output = tas_dir(settings)
+    return {
+        MOVIE: screen(settings, feed, MOVIE, partial(render_movie, settings.paths, output)),
+        COMPARE: screen(settings, feed, COMPARE, partial(render_compare, settings.paths, output)),
+        RUN: screen(settings, feed, RUN, partial(render_run, wrapper, config, output)),
+    }
 
 
 def frontier_workers(settings: RetroSpeedlabConfig) -> int:
@@ -453,7 +474,7 @@ def tas_run(wrapper: str, config: Path, pool: Executor, polishing: Executor) -> 
     publishing = threading.Thread(target=publish_every, args=(feed, stopped, lab_running), name="speedrun-feed")
     publishing.daemon = True
     publishing.start()
-    movie, compare = screen(settings, feed, "movie", render_movie), screen(settings, feed, "compare", render_compare)
+    shown = screens(settings, feed, wrapper, config)
     searcher = Searcher(wrapper, config, settings, pool, feed)
     routes = Routes(output / ROUTES_FILE, output / PROGRESS_FILE, parts_of(course), game.version)
     upgrade(routes, runner)
@@ -466,7 +487,20 @@ def tas_run(wrapper: str, config: Path, pool: Executor, polishing: Executor) -> 
     )
     record = Record(output / RECORD_FILE, runner, game.version)
     hints = load_hints(hints_path(config))
-    return Tas(settings, runner, searcher, routes, feed, movie, compare, improver, record, hints, set())
+    return Tas(
+        settings,
+        runner,
+        searcher,
+        routes,
+        feed,
+        shown[MOVIE],
+        shown[COMPARE],
+        shown[RUN],
+        improver,
+        record,
+        hints,
+        set(),
+    )
 
 
 @app.command()

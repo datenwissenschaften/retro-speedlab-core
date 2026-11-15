@@ -1,0 +1,97 @@
+import subprocess
+from collections.abc import Iterator
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+import cv2
+import msgspec
+import numpy as np
+import typer
+from numpy.typing import NDArray
+from speedlab_engine.movie import Movie
+from speedlab_engine.soundtrack import mix
+from speedlab_engine.video import AUDIO_ENCODING, ENCODING, cues_of
+
+from datenwissenschaften.environment.factory import make_environment
+from datenwissenschaften.settings import load_config
+from datenwissenschaften.speedrun.journal import Split
+from datenwissenschaften.speedrun.learned import rendered_sprites
+from datenwissenschaften.speedrun.movie import Segment, memory_sample, pieces_pressed, recorded
+from datenwissenschaften.speedrun.report import Course, course_of, splits
+from datenwissenschaften.speedrun.run_panel import HEIGHT, WIDTH, Moment, annotated, sprite_colors
+from datenwissenschaften.speedrun.runner import SegmentRunner
+from datenwissenschaften.speedrun.sprite_matches import Match, sprite_matches, templates_of
+from datenwissenschaften.workflow.wrapper import wrapper_class
+
+MATCH_EVERY = 3
+
+app = typer.Typer()
+
+
+def playing(found: list[Split], first: str) -> str:
+    return found[-1].level if found else first
+
+
+def moments(
+    runner: SegmentRunner, course: Course, segments: list[Segment]
+) -> Iterator[tuple[NDArray[np.uint8], Moment]]:
+    found = splits(course, segments)
+    runner.restore(runner.power_on())
+    for frame, buttons in enumerate(np.asarray(pieces_pressed(segments), dtype=np.int8)):
+        runner.emulator.step(buttons)
+        seconds = (frame + 1) / course.frame_rate
+        cleared = [split for split in found if split.seconds <= seconds]
+        level = found[len(cleared)].level if len(cleared) < len(found) else playing(found, course.first)
+        memory = memory_sample(runner.wrapper.read_ram())
+        yield (
+            np.asarray(runner.emulator.em.get_screen(), dtype=np.uint8),
+            Moment(frame, seconds, level, cleared, memory),
+        )
+
+
+def encoder_command(video: Path, frame_rate: float, soundtrack: Path | None) -> list[str]:
+    command = ["ffmpeg", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24"]
+    command += ["-s", f"{WIDTH}x{HEIGHT}", "-framerate", f"{frame_rate:.6f}", "-i", "pipe:"]
+    if soundtrack is not None:
+        command += ["-i", str(soundtrack), *AUDIO_ENCODING]
+    return [*command, *ENCODING, str(video)]
+
+
+def soundtrack(runner: SegmentRunner, segments: list[Segment], collection: Path, folder: Path) -> Path | None:
+    movie = msgspec.msgpack.decode(recorded(runner, runner.power_on(), pieces_pressed(segments)), type=Movie)
+    cues = cues_of(movie, collection)
+    return None if cues is None else mix(cues, len(movie.frames), folder)
+
+
+def render_run_view(wrapper: str, config: Path, pieces: Path, video: Path) -> Path:
+    cv2.setNumThreads(1)
+    settings = load_config(config)
+    runner = SegmentRunner(make_environment(wrapper_class(wrapper), settings))
+    course = course_of(runner, settings.speedrun.game)
+    segments = msgspec.msgpack.decode(pieces.read_bytes(), type=list[Segment])
+    sprites = templates_of(rendered_sprites(settings))
+    colors = sprite_colors(sorted(sprites))
+    matches: list[Match] = []
+    with TemporaryDirectory() as folder:
+        sound = soundtrack(runner, segments, settings.paths.collection, Path(folder))
+        with subprocess.Popen(encoder_command(video, course.frame_rate, sound), stdin=subprocess.PIPE) as encoder:
+            if encoder.stdin is None:
+                raise RuntimeError("ffmpeg opened no input pipe")
+            for screen, moment in moments(runner, course, segments):
+                if moment.frame % MATCH_EVERY == 0:
+                    matches = sprite_matches(screen, sprites)
+                frame = annotated(screen, matches, colors, settings.speedrun.game.title, moment)
+                encoder.stdin.write(frame.tobytes())
+            encoder.stdin.close()
+            if encoder.wait() != 0:
+                raise RuntimeError(f"ffmpeg failed to encode {video.name}")
+    return video
+
+
+@app.command()
+def view(wrapper: str, config: Path, pieces: Path, video: Path) -> None:
+    render_run_view(wrapper, config, pieces, video)
+
+
+if __name__ == "__main__":
+    app()

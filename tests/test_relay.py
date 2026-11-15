@@ -19,10 +19,6 @@ BACKGROUND = UISettings(True, False, "2026.10.08-1", True)
 headers: list[httpx.Headers] = []
 
 
-def backend(requests: list[tuple[str, str, bytes]]) -> httpx.Client:
-    return api(requests, "https://api.test/live")
-
-
 def api(requests: list[tuple[str, str, bytes]], base_url: str) -> httpx.Client:
     def answer(request: httpx.Request) -> httpx.Response:
         requests.append((request.method, request.url.path, request.content))
@@ -37,15 +33,16 @@ def test_the_movie_goes_up_in_parts_below_the_waf_body_limit(monkeypatch, tmp_pa
     movie = tmp_path / "screen.mp4"
     movie.write_bytes(b"0123456789")
     monkeypatch.setattr(video_upload, "PART_BYTES", 4)
-    monkeypatch.setattr(video_upload, "backend_client", lambda url, api_key: backend(requests))
+    monkeypatch.setattr(video_upload, "relay_client", lambda url, api_key: api(requests, url))
 
-    VideoUpload("https://api.test", "key", "movie.mp4").put(movie, "abc", {"movie-ram.json": {"every": 6}})
+    game = f"https://api.test{relay.game_path('comet_courier')}"
+    VideoUpload(game, "key", "movie.mp4").put(movie, "abc", {"movie-ram.json": {"every": 6}})
 
     assert [(path, body) for _, path, body in requests] == [
-        ("/live/movie.mp4/parts/0", b"0123"),
-        ("/live/movie.mp4/parts/1", b"4567"),
-        ("/live/movie.mp4/parts/2", b"89"),
-        ("/live/movie-ram.json", b'{"version":"abc","every":6}'),
+        ("/games/comet_courier/movie.mp4/parts/0", b"0123"),
+        ("/games/comet_courier/movie.mp4/parts/1", b"4567"),
+        ("/games/comet_courier/movie.mp4/parts/2", b"89"),
+        ("/games/comet_courier/movie-ram.json", b'{"version":"abc","every":6}'),
     ]
 
 
@@ -157,4 +154,4 @@ def test_an_oversized_attempts_mosaic_fails_fast(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(relay, "ATTEMPTS_BYTES", 3)
 
     with pytest.raises(ValueError, match="more than 3"):
-        relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path, "walk")._push_attempts(backend([]))
+        relay.LiveRelay("https://api.test", "key", SETTINGS, tmp_path, "walk")._push_attempts(api([], RELAY_URL))

@@ -9,6 +9,7 @@ from datenwissenschaften.speedrun.record import RECORD_FILE, Record, StoredRecor
 from datenwissenschaften.speedrun.routes import FULL_RUN, Leg, Part, Routes
 from datenwissenschaften.speedrun.run import Tas
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
+from datenwissenschaften.speedrun.screen import Cut
 
 OLD_VERSION = "0.9.0"
 WINNING_SCRIPT = [(3, 0), (3, 1), (3, 5), (3, 6), (3, 7), (3, 7), (3, 7), (3, 7)]
@@ -89,10 +90,16 @@ def test_the_feed_reports_the_record_while_the_search_works_on_a_level(tmp_path:
     part = Part("Survive", "Survive", None)
     routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", [part], FAKE_VERSION)
     shown: list[tuple[int, str]] = []
-    feed = SimpleNamespace(show=lambda segments, searching: shown.append((frames(segments), searching)))
-    tas = SimpleNamespace(feed=feed, record=best, routes=routes)
+    queued: list[Cut] = []
+    course = SimpleNamespace(first="Survive", frame_rate=60.0)
+    feed = SimpleNamespace(show=lambda segments, searching: shown.append((frames(segments), searching)), course=course)
+    tas = SimpleNamespace(feed=feed, record=best, routes=routes, run=SimpleNamespace(queue=queued.append))
 
     Tas.show(tas, Leg("Survive", Start("Survive", bytes([0])), None), [INTO_BOSS], "Boss")
     Tas.show(tas, Leg(FULL_RUN, Start("Survive", bytes([0])), None), FAST, "Boss")
 
     assert shown == [(frames(SLOW), "Boss"), (frames(FAST), "Boss")]
+    assert [(cut.field["part"], cut.field["frames"]) for cut in queued] == [
+        (FULL_RUN, frames(SLOW)),
+        (FULL_RUN, frames(FAST)),
+    ]

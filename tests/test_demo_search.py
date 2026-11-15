@@ -75,7 +75,8 @@ class IdlePool:
         return Future()
 
 
-def test_the_tas_search_beats_the_demo_cartridge_and_its_movie_renders(tmp_path: Path):
+def test_the_tas_search_beats_the_demo_cartridge_and_its_movies_render(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parent))
     tas = run.tas_run(WRAPPER, write_config(tmp_path), SyncPool(), IdlePool())
     power_on = tas.runner.power_on()
 
@@ -88,6 +89,8 @@ def test_the_tas_search_beats_the_demo_cartridge_and_its_movie_renders(tmp_path:
     assert (shown.cartridge, shown.version) == ("games.walk.cartridge", "1.0.0")
     assert len(decode(shown.frames)) == run.frames(segments)
     assert (tas.output / "screen.mp4").stat().st_size > 0
+    assert (tas.output / "run.mp4").stat().st_size > 0
+    assert tas.feed.screened["run"]["part"] == FULL_RUN
     assert tas.feed.learned.sprites[0]["name"] == "dot"
 
 

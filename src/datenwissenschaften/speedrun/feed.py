@@ -43,7 +43,7 @@ class SpeedrunFeed:
         self.summary: dict[str, Any] = {}
         self.searching: str | None = None
         self.search: SearchRound | None = None
-        self.screened: dict[str, dict[str, Any] | None] = {"movie": None, "compare": None}
+        self.screened: dict[str, dict[str, Any] | None] = {"movie": None, "compare": None, "run": None}
         self.practice: dict[str, dict[str, Any]] = {}
         self.reel: dict[str, dict[str, Any]] = {}
         live.mkdir(parents=True, exist_ok=True)

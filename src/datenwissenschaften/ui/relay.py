@@ -41,8 +41,8 @@ def relay_client(url: str, api_key: str) -> httpx.Client:
     return httpx.Client(base_url=url, headers={"X-API-Key": api_key}, timeout=TIMEOUT_SECONDS)
 
 
-def backend_client(url: str, api_key: str) -> httpx.Client:
-    return relay_client(f"{url}/live", api_key)
+def game_path(game: str) -> str:
+    return f"/games/{game}"
 
 
 class LiveRelay:
@@ -51,7 +51,7 @@ class LiveRelay:
         self.api_key = api_key
         self.ui = ui
         self.live = live
-        self.snapshot_path = LIVE_SNAPSHOT if ui.live else f"/games/{game}/snapshot"
+        self.snapshot_path = LIVE_SNAPSHOT if ui.live else f"{game_path(game)}/snapshot"
         self.attempts_shown: bytes | None = None
         self.stopped = threading.Event()
 

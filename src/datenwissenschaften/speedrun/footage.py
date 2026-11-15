@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -8,16 +10,23 @@ from datenwissenschaften.speedrun.journal import now
 from datenwissenschaften.speedrun.movie import Segment, recorded
 from datenwissenschaften.speedrun.paths import atomic_write
 from datenwissenschaften.speedrun.report import Course
-from datenwissenschaften.speedrun.routes import Leg
+from datenwissenschaften.speedrun.routes import FULL_RUN, Leg
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.speedrun.screen import Cut
 from datenwissenschaften.speedrun.search import Crossing
 from datenwissenschaften.speedrun.video import render_video, stack_videos
 
+MOVIE = "movie"
+COMPARE = "compare"
+RUN = "run"
 SCREEN_MOVIE = "screen.movie"
 MOVIE_MEMORY = "movie-ram.json"
 COMPARE_PIECES = ("compare-before.movie", "compare-after.movie")
 COMPARE_VIDEO = "compare.mp4"
+RUN_PIECES = "run.msgpack"
+RUN_VIDEO = "run.mp4"
+RUN_VIEW = "datenwissenschaften.speedrun.run_view"
+LOW_PRIORITY = ("nice", "-n", "19")
 
 
 def movie_field(first: str, frame_rate: float, segments: list[Segment]) -> dict[str, Any]:
@@ -34,6 +43,12 @@ def movie_cut(course: Course, leg: Leg, segments: list[Segment], recording: byte
     key = msgspec.msgpack.encode([leg.name, *(segment.pressed for segment in segments)])
     field = {**movie_field(leg.entry.state, course.frame_rate, segments), "part": leg.name}
     return Cut(key, (recording,), field, {MOVIE_MEMORY: memory})
+
+
+def run_cut(course: Course, segments: list[Segment]) -> Cut:
+    key = msgspec.msgpack.encode([segment.pressed for segment in segments])
+    field = {**movie_field(course.first, course.frame_rate, segments), "part": FULL_RUN}
+    return Cut(key, (msgspec.msgpack.encode(segments),), field, {})
 
 
 def compare_cut(runner: SegmentRunner, start: Start, before: Segment, after: Crossing) -> Cut:
@@ -54,3 +69,11 @@ def render_compare(paths: RetroSpeedlabPaths, directory: Path, recordings: tuple
         atomic_write(piece, recording)
     before, after = render_video(paths, pieces)
     return stack_videos(before, after, directory / COMPARE_VIDEO)
+
+
+def render_run(wrapper: str, config: Path, directory: Path, recordings: tuple[bytes, ...]) -> Path:
+    pieces, video = directory / RUN_PIECES, directory / RUN_VIDEO
+    atomic_write(pieces, recordings[0])
+    command = [*LOW_PRIORITY, sys.executable, "-m", RUN_VIEW, wrapper, str(config), str(pieces), str(video)]
+    subprocess.run(command, check=True, capture_output=True, text=True)
+    return video
