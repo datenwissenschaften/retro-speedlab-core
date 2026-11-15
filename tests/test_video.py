@@ -15,7 +15,7 @@ RIGHT = np.array([name == "RIGHT" for name in BUTTONS], dtype=np.int8)
 
 def test_a_movie_is_rendered_by_the_engine_into_an_mp4_beside_it(tmp_path: Path):
     movie = tmp_path / "tas.movie"
-    save_movie(movie, record(Console(DEMO_COLLECTION, cartridge_name("walk")), np.array([RIGHT] * 30)))
+    save_movie(movie, record(Console(DEMO_COLLECTION, cartridge_name("walk"), False), np.array([RIGHT] * 30)))
 
     rendered = video.render_video(load_config(write_config(tmp_path)).paths, [movie])
 

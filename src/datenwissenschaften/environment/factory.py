@@ -10,7 +10,7 @@ from datenwissenschaften.settings import RetroSpeedlabConfig
 def make_environment(
     wrapper_cls: type[StateMachineGymWrapper[RamInfo]], config: RetroSpeedlabConfig
 ) -> StateMachineGymWrapper[RamInfo]:
-    console = Console(config.paths.collection, config.training.cartridge)
+    console = Console(config.paths.collection, config.training.cartridge, False)
     listed = config.speedrun.game.version
     if console.version != listed:
         raise RuntimeError(
