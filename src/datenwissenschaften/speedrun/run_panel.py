@@ -7,7 +7,6 @@ from speedlab_engine.cartridge import SCREEN_HEIGHT, SCREEN_WIDTH
 from speedlab_engine.video import PIXEL_SCALE
 
 from datenwissenschaften.speedrun.journal import Split, clock, spoken
-from datenwissenschaften.speedrun.sprite_matches import Match
 
 PANEL_WIDTH = 160
 WIDTH = (SCREEN_WIDTH + PANEL_WIDTH) * PIXEL_SCALE
@@ -15,7 +14,6 @@ HEIGHT = SCREEN_HEIGHT * PIXEL_SCALE
 GAME_WIDTH = SCREEN_WIDTH * PIXEL_SCALE
 FONT = cv2.FONT_HERSHEY_PLAIN
 TEXT_SCALE = 1.0
-LABEL_SCALE = 0.8
 CLOCK_SCALE = 2.4
 LINE = 18
 MARGIN = 14
@@ -25,9 +23,6 @@ BACKGROUND: Color = (16, 16, 28)
 TEXT: Color = (236, 236, 236)
 DIM: Color = (150, 150, 176)
 HEADING: Color = (255, 204, 0)
-HUES = 180
-SATURATED = 200
-BRIGHT = 255
 
 
 @dataclass(slots=True, frozen=True)
@@ -41,21 +36,6 @@ class Moment:
 
 def write(canvas: NDArray[np.uint8], text: str, at: tuple[int, int], color: Color, scale: float) -> None:
     cv2.putText(canvas, text, at, FONT, scale, color, 1, cv2.LINE_8)
-
-
-def sprite_colors(names: list[str]) -> dict[str, Color]:
-    hues = np.asarray([[[HUES * index // len(names), SATURATED, BRIGHT]] for index in range(len(names))], np.uint8)
-    rgb = np.asarray(cv2.cvtColor(hues, cv2.COLOR_HSV2RGB), dtype=np.uint8).reshape(-1, 3)
-    return {name: (int(red), int(green), int(blue)) for name, (red, green, blue) in zip(names, rgb, strict=True)}
-
-
-def draw_matches(canvas: NDArray[np.uint8], matches: list[Match], colors: dict[str, Color]) -> None:
-    for match in matches:
-        color = colors[match.name]
-        left, top = match.x * PIXEL_SCALE, match.y * PIXEL_SCALE
-        right, bottom = left + match.width * PIXEL_SCALE - 1, top + match.height * PIXEL_SCALE - 1
-        cv2.rectangle(canvas, (left, top), (right, bottom), color, 1, cv2.LINE_8)
-        write(canvas, match.name, (left, max(top - 3, LINE // 2)), color, LABEL_SCALE)
 
 
 def panel_lines(title: str, moment: Moment) -> list[tuple[str, str, Color]]:
@@ -82,12 +62,9 @@ def draw_panel(canvas: NDArray[np.uint8], title: str, moment: Moment) -> None:
         write(canvas, value, (left + COLUMN, y), color, TEXT_SCALE)
 
 
-def annotated(
-    screen: NDArray[np.uint8], matches: list[Match], colors: dict[str, Color], title: str, moment: Moment
-) -> NDArray[np.uint8]:
+def annotated(screen: NDArray[np.uint8], title: str, moment: Moment) -> NDArray[np.uint8]:
     canvas = np.empty((HEIGHT, WIDTH, 3), dtype=np.uint8)
     canvas[:] = BACKGROUND
     canvas[:, :GAME_WIDTH] = np.repeat(np.repeat(screen, PIXEL_SCALE, axis=0), PIXEL_SCALE, axis=1)
-    draw_matches(canvas, matches, colors)
     draw_panel(canvas, title, moment)
     return canvas
