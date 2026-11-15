@@ -11,6 +11,7 @@ from loguru import logger
 from numpy.typing import NDArray
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.logger import configure
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecEnv
 from torch import nn
@@ -74,7 +75,7 @@ def export_policy(policy: ActorCriticPolicy, path: Path) -> None:
 
 
 def policy_model(env: VecEnv, device: torch.device) -> PPO:
-    return PPO(
+    model = PPO(
         "MlpPolicy",
         env,
         n_steps=ROLLOUT_DECISIONS,
@@ -85,6 +86,8 @@ def policy_model(env: VecEnv, device: torch.device) -> PPO:
         policy_kwargs={"net_arch": {"pi": [HIDDEN, HIDDEN], "vf": [HIDDEN, HIDDEN]}, "activation_fn": nn.Tanh},
         device=device,
     )
+    model.set_logger(configure(None, []))
+    return model
 
 
 class RoundCallback(BaseCallback):

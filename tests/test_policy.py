@@ -99,10 +99,11 @@ def test_ppo_rounds_export_the_policy_and_keep_the_shortest_way_out(
     callback = RoundCallback(tmp_path, NO_EXPERIMENT, events, "walk")
 
     model.learn(128, callback=callback)
+    model.learn(64, callback=callback, reset_num_timesteps=False)
 
-    assert callback.rounds == 1
     published = [(topic, key, payload["round"]) for topic, key, payload in events.published]
-    assert published == [("policy.rounds", "walk", 1)]
+    assert published[0] == ("policy.rounds", "walk", 1)
+    assert "loss" in events.published[-1][2] and "entropy" in events.published[-1][2]
     assert PolicyPrior(tmp_path / POLICY_FILE).probabilities(np.zeros(1, dtype=np.uint8), 3) is not None
     assert [report.mode for report in read_reports(tmp_path / "live")] == ["policy"]
     exits = load_policy_exits(tmp_path / POLICY_EXITS_FILE)
