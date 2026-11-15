@@ -15,6 +15,7 @@ from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecEnv
 from torch import nn
 
+from datenwissenschaften.events import POLICY_ROUNDS, Events, load_events, now
 from datenwissenschaften.experiments import start_experiment
 from datenwissenschaften.gpu import gpu
 from datenwissenschaften.logger import setup_logging
@@ -33,10 +34,22 @@ LEARNING_RATE = 3e-4
 ENTROPY_WEIGHT = 0.01
 WAIT_SECONDS = 30.0
 POLICY_LOG = "policy.log"
-POLICY_JOB = "policy"
 SPAWN = "spawn"
 ENTROPY_LOSS = "train/entropy_loss"
 EXPLAINED_VARIANCE = "train/explained_variance"
+LOSS = "train/loss"
+CHECKPOINT_ROUNDS = 50
+CHECKPOINT_TYPE = "model"
+LATEST = "latest"
+HYPERPARAMETERS = {
+    "rollout_decisions": ROLLOUT_DECISIONS,
+    "hidden": HIDDEN,
+    "minibatch": MINIBATCH,
+    "epochs": EPOCHS,
+    "learning_rate": LEARNING_RATE,
+    "entropy_weight": ENTROPY_WEIGHT,
+    "checkpoint_rounds": CHECKPOINT_ROUNDS,
+}
 
 
 def linear(layer: nn.Module) -> nn.Linear:
@@ -75,10 +88,12 @@ def policy_model(env: VecEnv, device: torch.device) -> PPO:
 
 
 class RoundCallback(BaseCallback):
-    def __init__(self, output: Path, experiment: wandb.Run) -> None:
+    def __init__(self, output: Path, experiment: wandb.Run, events: Events, game: str) -> None:
         super().__init__()
         self.output = output
         self.experiment = experiment
+        self.events = events
+        self.game = game
         self.rounds = 0
         self.rewards = 0.0
         self.episodes = 0
@@ -108,15 +123,17 @@ class RoundCallback(BaseCallback):
         export_policy(policy, self.output / POLICY_FILE)
         self.rounds += 1
         reward = self.rewards / self.episodes
-        self.experiment.log(
-            {
-                "policy/reward": reward,
-                "policy/exits": self.exits,
-                "policy/episodes": self.episodes,
-                "policy/exit_rate": self.exits / self.episodes,
-                **self.learning(),
-            }
-        )
+        metrics = {
+            "policy/reward": reward,
+            "policy/exits": self.exits,
+            "policy/episodes": self.episodes,
+            "policy/exit_rate": self.exits / self.episodes,
+            **self.learning(),
+        }
+        self.experiment.log(metrics)
+        if self.rounds % CHECKPOINT_ROUNDS == 0:
+            self.checkpoint()
+        self.publish(metrics)
         logger.info(
             f"Policy round {self.rounds}: reward {reward:.2f} per episode, {self.exits} exits in "
             f"{self.episodes} episodes"
@@ -125,9 +142,29 @@ class RoundCallback(BaseCallback):
 
     def learning(self) -> dict[str, float]:
         learned = self.logger.name_to_value
-        if ENTROPY_LOSS not in learned or EXPLAINED_VARIANCE not in learned:
+        if ENTROPY_LOSS not in learned or EXPLAINED_VARIANCE not in learned or LOSS not in learned:
             return {}
-        return {"policy/entropy": -learned[ENTROPY_LOSS], "policy/explained_variance": learned[EXPLAINED_VARIANCE]}
+        return {
+            "policy/entropy": -learned[ENTROPY_LOSS],
+            "policy/explained_variance": learned[EXPLAINED_VARIANCE],
+            "policy/loss": learned[LOSS],
+        }
+
+    def checkpoint(self) -> None:
+        artifact = wandb.Artifact(f"policy-{self.game}", CHECKPOINT_TYPE, metadata={"round": self.rounds})
+        artifact.add_file(str(self.output / POLICY_FILE))
+        self.experiment.log_artifact(artifact, aliases=[LATEST, f"round-{self.rounds}"])
+
+    def publish(self, metrics: dict[str, float]) -> None:
+        payload = {
+            "game": self.game,
+            "run": self.experiment.path,
+            "round": self.rounds,
+            "steps": self.num_timesteps,
+            **{name.removeprefix("policy/"): value for name, value in metrics.items()},
+            "at": now(),
+        }
+        self.events.publish(POLICY_ROUNDS, self.game, payload)
 
 
 def speedrun_alive() -> bool:
@@ -155,7 +192,8 @@ def train_policy_forever(wrapper: str, config: Path) -> None:
     make = partial(PolicyEnv, wrapper, config, output, output / LIVE_DIR)
     env = SubprocVecEnv([make] * settings.speedrun.policy_emulators, start_method=SPAWN)
     model = policy_model(env, gpu())
-    callback = RoundCallback(output, start_experiment(settings, POLICY_JOB))
+    experiment = start_experiment(settings, HYPERPARAMETERS)
+    callback = RoundCallback(output, experiment, load_events(settings.events), settings.training.game)
     while speedrun_alive():
         model.learn(ROLLOUT_DECISIONS * env.num_envs, callback=callback, reset_num_timesteps=False)  # pyright: ignore[reportUnknownMemberType]
     env.close()

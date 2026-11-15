@@ -6,7 +6,7 @@ import msgspec
 import numpy as np
 import pytest
 import torch
-from fakes import NO_EXPERIMENT
+from fakes import NO_EXPERIMENT, RecordedEvents
 from stable_baselines3.common.vec_env import DummyVecEnv
 from test_tas import START, LineRunner
 
@@ -95,11 +95,14 @@ def test_ppo_rounds_export_the_policy_and_keep_the_shortest_way_out(
     monkeypatch.setattr(trainer_module, "ROLLOUT_DECISIONS", 64)
     monkeypatch.setattr(trainer_module, "MINIBATCH", 32)
     model = policy_model(DummyVecEnv([lambda: line_env]), CPU)
-    callback = RoundCallback(tmp_path, NO_EXPERIMENT)
+    events = RecordedEvents()
+    callback = RoundCallback(tmp_path, NO_EXPERIMENT, events, "walk")
 
     model.learn(128, callback=callback)
 
     assert callback.rounds == 1
+    published = [(topic, key, payload["round"]) for topic, key, payload in events.published]
+    assert published == [("policy.rounds", "walk", 1)]
     assert PolicyPrior(tmp_path / POLICY_FILE).probabilities(np.zeros(1, dtype=np.uint8), 3) is not None
     assert [report.mode for report in read_reports(tmp_path / "live")] == ["policy"]
     exits = load_policy_exits(tmp_path / POLICY_EXITS_FILE)

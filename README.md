@@ -224,7 +224,7 @@ after 128 decisions. `speedrun.policy_emulators` environments play in parallel i
 `SubprocVecEnv`. After every round of 1024 decisions per console the policy network (two tanh
 layers of 256) is exported to `cache/tas/policy.npz`, which the search workers read with numpy,
 the shortest episode that left the state is kept for the search to replay, and the round's
-reward, exits, entropy and value fit go to Weights & Biases.
+reward, exits, entropy, value fit and loss go to Weights & Biases and to the `policy.rounds` events.
 
 ## Workflows and the lab
 
@@ -247,18 +247,25 @@ up to 45 minutes on one game at 01:35, 07:35, 13:35 and 19:35 UTC and records th
 
 ### Experiments
 
-The search and the policy each log one [Weights & Biases](https://wandb.ai) run per release
-(project `retro-speedlab`, grouped by `ui.release`, jobs `search` and `policy`):
+The policy logs one [Weights & Biases](https://wandb.ai) run per process (project `retro-speedlab`, grouped by
+`ui.release`, job `policy`) with the game, the category and the PPO hyperparameters as its config: per PPO round
+`policy/reward`, `policy/exits`, `policy/episodes`, `policy/exit_rate`, `policy/entropy`,
+`policy/explained_variance` and `policy/loss`, and every 50 rounds the exported `policy.npz` as a new version of the
+`model` artifact `policy-<game>`, aliased `latest` and `round-<n>`. Without `WANDB_API_KEY` the run is disabled and
+logged as not tracked. The search logs nothing to W&B.
 
-- **search:** the run from power-on as `run/seconds`, `run/pieces`, `run/levels_beaten` and the state it
-  ends in, `run/reached`; every level's split as `levels/<level>`; running counts of `search/found`,
-  `search/improved`, `search/checkpoint`, `search/stuck` and `search/lab`; the frames the trimming saved,
-  `search/frames_saved`; and with every value `search/hours_since_progress`, the hours since a piece was
-  found or made faster;
-- **policy:** per PPO round `policy/reward`, `policy/exits`, `policy/episodes`, `policy/exit_rate`,
-  `policy/entropy` and `policy/explained_variance`.
+### Events
 
-Without `WANDB_API_KEY` the runs are disabled and logged as not tracked.
+The search and the policy publish their events through `events.sink`, a `module:attribute` the core imports and
+calls with `events.options`; it returns an object with `publish(topic, key, payload)`. With `sink: null` nothing is
+published. The key is the game's slug; every payload carries `game` and `at`:
+
+| Topic | Published | Payload |
+|-------|-----------|---------|
+| `runs.attempts` | every finished search job of a round | `state`, `seed`, `role`, `seconds`, `outcome` (`crossing`, `checkpoint`, `nothing`), `crossings`, `frames`, `reached` |
+| `runs.steps` | every step of the search | `kind` (`found`, `checkpoint`, `stuck`, `improved`, `lab`), `state`, `frames`, `saved` (frames an improvement saved) |
+| `runs.records` | a new record from power-on that replays | `version`, `frames`, `seconds`, `pieces`, `previous_frames` |
+| `policy.rounds` | every PPO round | `run` (the W&B run path), `round`, `steps`, `reward`, `exits`, `episodes`, `exit_rate`, `entropy`, `explained_variance`, `loss` |
 
 ### Lab runs
 
@@ -349,6 +356,7 @@ raise an error when the configuration is loaded.
 | `speedrun.segment_seconds` | Seconds per segment round |
 | `speedrun.policy`, `speedrun.policy_emulators` | PPO policy on or off and its parallel environments |
 | `speedrun.category` | The category run |
+| `events.sink`, `events.options` | The `module:attribute` that publishes the search's and the policy's events, called with `events.options`; `null` publishes none |
 | `log_level` | Loguru log level |
 
 ## Testing
