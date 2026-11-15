@@ -2,7 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import msgspec
-from fakes import FAKE_VERSION, FakeWrapper, SavingEmulator, fake_routes
+from fakes import FAKE_VERSION, NO_EVENTS, FakeWrapper, SavingEmulator, fake_routes
 
 from datenwissenschaften.speedrun.movie import Segment, frames
 from datenwissenschaften.speedrun.record import RECORD_FILE, Record, StoredRecord, retired_path, stored_record
@@ -25,7 +25,7 @@ def winning_runner(tmp_path: Path) -> SegmentRunner:
 
 
 def record(tmp_path: Path) -> Record:
-    return Record(tmp_path / RECORD_FILE, winning_runner(tmp_path), FAKE_VERSION)
+    return Record(tmp_path / RECORD_FILE, winning_runner(tmp_path), FAKE_VERSION, NO_EVENTS)
 
 
 def stored(tmp_path: Path, version: str, segments: list[Segment]) -> None:

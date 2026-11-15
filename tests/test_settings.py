@@ -22,6 +22,7 @@ def _document() -> dict[str, Any]:
         "ui": {"enable": True, "live": True, "release": "local"},
         "twitch": {"enabled": True},
         "agent": {"stall_minutes": 30},
+        "events": {"sink": None, "options": {}},
         "speedrun": {
             "scouts": 3,
             "backtrackers": 2,

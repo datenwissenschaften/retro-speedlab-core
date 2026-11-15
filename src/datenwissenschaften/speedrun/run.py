@@ -12,7 +12,7 @@ import typer
 from loguru import logger
 
 from datenwissenschaften.environment.factory import make_environment
-from datenwissenschaften.experiments import start_experiment
+from datenwissenschaften.events import load_events
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
 from datenwissenschaften.speedrun.feed import SpeedrunFeed, publish_every
@@ -56,6 +56,7 @@ from datenwissenschaften.speedrun.routes import (
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.speedrun.screen import Render, Screen
 from datenwissenschaften.speedrun.search import HOLD_FRAMES, ROUTE_CHECKPOINT, Checkpoint, Crossing
+from datenwissenschaften.speedrun.search_events import SearchEvents
 from datenwissenschaften.speedrun.searcher import Lead, Searcher
 from datenwissenschaften.speedrun.shown import SHOWN_FILE, worth_showing
 from datenwissenschaften.speedrun.stuck import (
@@ -84,7 +85,6 @@ BACKTRACK_SEARCHES = 3
 PRACTICE_BACKTRACK_TURNS = 3
 IMPROVE_ROUNDS = 1
 
-SEARCH_JOB = "search"
 MATH_THREADS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")
 
 app = typer.Typer()
@@ -260,7 +260,7 @@ class Tas:
             if patience is not None:
                 save_turn(self.turn_file, turn)
             self.leave(found.end.state)
-            self.feed.event("found", found.end.state, found.frames)
+            self.feed.event("found", found.end.state, found.frames, None)
             segments = self.keep(leg, [*segments, segment_of(found)], found.end.state)
             logger.info(
                 f"{start.state} -> {found.end.state} in {found.frames} frames; {leg.name} at {frames(segments)}"
@@ -302,7 +302,7 @@ class Tas:
         barred = start.state == self.barred.get(leg.name)
         if (barred or searches >= turn_searches(patience)) and not self.closer(start, found, barred):
             return self.wait_or_go_back(leg, segments, start, searches, patience)
-        self.feed.event("checkpoint", start.state, found.frames)
+        self.feed.event("checkpoint", start.state, found.frames, None)
         if found.remaining is not None:
             self.feed.journal.closer(start.state, found.remaining)
         on = f"{found.remaining} TAS frames before the exit" if found.guided else f"{found.gain:.1f} reward on"
@@ -315,7 +315,7 @@ class Tas:
     def wait_or_go_back(
         self, leg: Leg, segments: list[Segment], start: Start, searches: int, patience: int | None
     ) -> list[Segment]:
-        self.feed.event("stuck", start.state, None)
+        self.feed.event("stuck", start.state, None, None)
         chain = checkpoints_in_a_row(leg, segments)
         if chain and searches >= turn_searches(patience) and not self.advanced(leg, segments, chain):
             logger.warning(f"No way out of {start.state} after {searches} searches; its {chain} checkpoints go")
@@ -380,8 +380,7 @@ class Tas:
             return segments
         saved = frames(segments) - frames(replayed)
         logger.info(f"{leg.name} is {saved} frames faster from piece {len(head) - 1} into {head[-1].state}")
-        self.feed.event("improved", head[-1].state, frames(replayed))
-        self.feed.stats.trimmed(saved)
+        self.feed.event("improved", head[-1].state, frames(replayed), saved)
         return self.keep(leg, self.verified(leg, replayed), replayed[-1].state)
 
     def rebase(self, leg: Leg, end: bytes) -> bool:
@@ -459,14 +458,14 @@ def tas_run(wrapper: str, config: Path, pool: Executor, polishing: Executor) -> 
     game = settings.speedrun.game
     logger.info(f"Game package loaded: {game.id} {game.version} with {len(runner.classes)} states")
     journal = JournalStore(output / JOURNAL_FILE)
-    experiment = start_experiment(settings, SEARCH_JOB)
+    events = SearchEvents(load_events(settings.events), game.id, game.version, course.frame_rate)
     feed = SpeedrunFeed(
         course,
         journal,
         output / LIVE_DIR,
         output / STUCK_FILE,
         settings.paths.lab_run_marker,
-        experiment,
+        events,
         learned_of(settings),
     )
     lab_running = settings.paths.lab_run_marker.exists()
@@ -485,7 +484,7 @@ def tas_run(wrapper: str, config: Path, pool: Executor, polishing: Executor) -> 
     improver = Improver(
         wrapper, config, polishing, settings.speedrun.polishers, settings.speedrun.segment_seconds, feed.live
     )
-    record = Record(output / RECORD_FILE, runner, game.version)
+    record = Record(output / RECORD_FILE, runner, game.version, events)
     hints = load_hints(hints_path(config))
     return Tas(
         settings,

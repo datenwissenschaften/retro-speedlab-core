@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any
 
 import msgspec
-import wandb
 
 from datenwissenschaften.speedrun.journal import JournalStore
 from datenwissenschaften.speedrun.learned import Learned
@@ -13,7 +12,7 @@ from datenwissenschaften.speedrun.live_search import SearchRound, search_field
 from datenwissenschaften.speedrun.movie import Segment, frames
 from datenwissenschaften.speedrun.report import SECTION, Course, report, splits
 from datenwissenschaften.speedrun.routes import PartProgress
-from datenwissenschaften.speedrun.search_stats import SearchStats
+from datenwissenschaften.speedrun.search_events import SearchEvents
 from datenwissenschaften.speedrun.stuck import load_stuck
 from datenwissenschaften.ui.telemetry import publish_metadata
 
@@ -29,7 +28,7 @@ class SpeedrunFeed:
         live: Path,
         stuck: Path,
         lab_marker: Path,
-        experiment: wandb.Run,
+        events: SearchEvents,
         learned: Learned,
     ) -> None:
         self.course = course
@@ -38,7 +37,7 @@ class SpeedrunFeed:
         self.live = live
         self.stuck = stuck
         self.lab_marker = lab_marker
-        self.stats = SearchStats(experiment, journal, course.first)
+        self.events = events
         self.lock = threading.Lock()
         self.summary: dict[str, Any] = {}
         self.searching: str | None = None
@@ -52,7 +51,6 @@ class SpeedrunFeed:
         found = splits(self.course, segments)
         seconds = frames(segments) / self.course.frame_rate
         firsts = self.journal.track(found, seconds, self.course.levels)
-        self.stats.run(segments, found, seconds)
         summary = report(self.course, segments, found, firsts, searching, load_stuck(self.stuck))
         with self.lock:
             self.summary, self.searching = summary, searching
@@ -78,9 +76,9 @@ class SpeedrunFeed:
             self.practice = practice
         self.publish()
 
-    def event(self, kind: str, state: str | None, frames: int | None) -> None:
+    def event(self, kind: str, state: str | None, frames: int | None, saved: int | None) -> None:
         self.journal.event(kind, state, frames)
-        self.stats.event(kind)
+        self.events.step(kind, state, frames, saved)
 
     def begin(self, search: SearchRound) -> None:
         clear_reports(self.live)
@@ -116,7 +114,7 @@ class SpeedrunFeed:
         running = self.lab_marker.exists()
         if running and not was_running:
             stuck = load_stuck(self.stuck)
-            self.event("lab", self.searching if stuck is None else stuck.state, None)
+            self.event("lab", self.searching if stuck is None else stuck.state, None, None)
         return running
 
 

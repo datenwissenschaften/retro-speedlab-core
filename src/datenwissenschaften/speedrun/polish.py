@@ -79,6 +79,5 @@ class Polisher:
         routes.move(moved)
         kept = len(moved[current.name].segments) if current.name in moved else 0
         logger.info(f"{part.name} is {saved} frames faster; {current.name} keeps {kept} pieces from its new start")
-        self.tas.feed.event("improved", replay[-1].state, frames(replay))
-        self.tas.feed.stats.trimmed(saved)
+        self.tas.feed.event("improved", replay[-1].state, frames(replay), saved)
         return True

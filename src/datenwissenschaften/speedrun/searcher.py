@@ -1,17 +1,26 @@
 import random
 from concurrent.futures import Executor, Future
 from dataclasses import dataclass
+from itertools import islice
 from pathlib import Path
 
 from datenwissenschaften.settings import RetroSpeedlabConfig
 from datenwissenschaften.speedrun.feed import SpeedrunFeed
-from datenwissenschaften.speedrun.live import BACKTRACKER, SCOUT
+from datenwissenschaften.speedrun.live import BACKTRACKER, BEAM_SCOUT, SCOUT, VISION_SCOUT
 from datenwissenschaften.speedrun.live_search import search_round
 from datenwissenschaften.speedrun.runner import Start
 from datenwissenschaften.speedrun.search import UNBOUNDED, Checkpoint, Crossing, Searched, farthest, fastest_distinct
 from datenwissenschaften.speedrun.workers import beam, explore, polish, vision
 
 SEED_SPACE = 2**31
+
+
+@dataclass(slots=True, frozen=True)
+class Job:
+    index: int
+    seed: int
+    role: str
+    future: Future[Searched]
 
 
 @dataclass(slots=True, frozen=True)
@@ -39,7 +48,7 @@ class Searcher:
             beat = None if bound == UNBOUNDED else bound
             self.feed.begin(search_round(starts[-1].state, round_index, rounds, seconds, beat))
             jobs = self.jobs(starts, bound, seconds)
-            results = [(index, job.result()) for index, job in jobs]
+            results = [(job.index, self.finished(starts, job, seconds)) for job in jobs]
             self.feed.end()
             found = fastest_distinct([crossing for _, result in results for crossing in result.crossings])
             leads = [Lead(index, crossing) for index, result in results for crossing in result.crossings]
@@ -49,27 +58,31 @@ class Searcher:
                 return [lead for lead in leads if any(lead.crossing is fast for fast in found)], None
         return [], reached
 
-    def jobs(self, starts: list[Start], bound: int, seconds: float) -> list[tuple[int, Future[Searched]]]:
+    def finished(self, starts: list[Start], job: Job, seconds: float) -> Searched:
+        searched = job.future.result()
+        self.feed.events.attempt(starts[job.index].state, job.seed, job.role, seconds, searched)
+        return searched
+
+    def jobs(self, starts: list[Start], bound: int, seconds: float) -> list[Job]:
         speedrun, last = self.settings.speedrun, len(starts) - 1
         seeds = iter(range(random.randrange(SEED_SPACE), SEED_SPACE * 2))
-        jobs = [(last, self.scout(starts[last], bound, next(seeds), seconds, SCOUT)) for _ in range(speedrun.scouts)]
+        jobs = [self.scout(starts, last, bound, next(seeds), seconds, SCOUT) for _ in range(speedrun.scouts)]
         if bound != UNBOUNDED:
             return jobs
         origins = [random.randrange(last) if last else last for _ in range(speedrun.backtrackers)]
-        jobs += [(origin, self.scout(starts[origin], bound, next(seeds), seconds, BACKTRACKER)) for origin in origins]
+        jobs += [self.scout(starts, origin, bound, next(seeds), seconds, BACKTRACKER) for origin in origins]
         live = self.feed.live
-        jobs += [
-            (last, self.pool.submit(beam, self.wrapper, self.config, starts[last], next(seeds), seconds, live))
-            for _ in range(speedrun.beam_scouts)
-        ]
-        jobs += [
-            (last, self.pool.submit(vision, self.wrapper, self.config, starts[last], next(seeds), live))
-            for _ in range(speedrun.vision_scouts)
-        ]
+        for seed in islice(seeds, speedrun.beam_scouts):
+            searched = self.pool.submit(beam, self.wrapper, self.config, starts[last], seed, seconds, live)
+            jobs.append(Job(last, seed, BEAM_SCOUT, searched))
+        for seed in islice(seeds, speedrun.vision_scouts):
+            searched = self.pool.submit(vision, self.wrapper, self.config, starts[last], seed, live)
+            jobs.append(Job(last, seed, VISION_SCOUT, searched))
         return jobs
 
-    def scout(self, start: Start, bound: int, seed: int, seconds: float, role: str) -> Future[Searched]:
-        return self.pool.submit(explore, *self._job(start, bound, seed, seconds), self.feed.live, role)
+    def scout(self, starts: list[Start], index: int, bound: int, seed: int, seconds: float, role: str) -> Job:
+        searched = self.pool.submit(explore, *self._job(starts[index], bound, seed, seconds), self.feed.live, role)
+        return Job(index, seed, role, searched)
 
     def best(self, start: Start, bound: int, rounds: int) -> Crossing | Checkpoint | None:
         found, reached = self.candidates(start, bound, rounds)

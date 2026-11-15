@@ -7,6 +7,7 @@ from datenwissenschaften.speedrun.movie import Segment, frames
 from datenwissenschaften.speedrun.paths import atomic_write
 from datenwissenschaften.speedrun.routes import finished, still_replaying
 from datenwissenschaften.speedrun.runner import SegmentRunner
+from datenwissenschaften.speedrun.search_events import SearchEvents
 
 RECORD_FILE = "record.msgpack"
 
@@ -25,10 +26,11 @@ def stored_record(path: Path) -> StoredRecord | None:
 
 
 class Record:
-    def __init__(self, path: Path, runner: SegmentRunner, version: str) -> None:
+    def __init__(self, path: Path, runner: SegmentRunner, version: str, events: SearchEvents) -> None:
         self.path = path
         self.runner = runner
         self.version = version
+        self.events = events
         self.segments = self.restored()
 
     def replayed(self, segments: list[Segment]) -> list[Segment] | None:
@@ -68,6 +70,7 @@ class Record:
             logger.warning(f"A won run in {frames(segments)} frames does not replay from power-on; the record stays")
             return
         was = f" (was {frames(self.segments)})" if self.segments else ""
+        self.events.record(replay, self.segments)
         self.save(replay)
         logger.info(f"New record from power-on: {len(replay)} pieces in {frames(replay)} frames{was}")
 

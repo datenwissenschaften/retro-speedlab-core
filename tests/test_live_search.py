@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import cv2
 import numpy as np
 import pytest
-from fakes import NO_EXPERIMENT, fake_environment, write_config
+from fakes import NO_EVENTS, fake_environment, write_config
 
 from datenwissenschaften.knowledge import NO_KNOWLEDGE
 from datenwissenschaften.settings import load_config
@@ -231,7 +231,7 @@ def test_the_feed_publishes_the_movie_with_the_live_search_and_notices_a_lab_run
         tmp_path / "live",
         tmp_path / "stuck.json",
         marker,
-        NO_EXPERIMENT,
+        NO_EVENTS,
         Learned(NO_KNOWLEDGE, []),
     )
     segments = [Segment("Play", [[0, 1]] * 60, b"", False), Segment("Level2", [[0, 0]] * 60, b"", False)]
@@ -264,7 +264,7 @@ def test_the_feed_publishes_nothing_before_it_has_a_run_to_show(tmp_path: Path, 
         tmp_path / "live",
         tmp_path / "stuck.json",
         tmp_path / ".lab-run",
-        NO_EXPERIMENT,
+        NO_EVENTS,
         Learned(NO_KNOWLEDGE, []),
     )
 
@@ -325,7 +325,7 @@ def test_the_feed_publishes_how_far_every_level_got_in_seconds(tmp_path: Path, m
         tmp_path / "live",
         tmp_path / "stuck.json",
         tmp_path / ".lab-run",
-        NO_EXPERIMENT,
+        NO_EVENTS,
         Learned(NO_KNOWLEDGE, []),
     )
     feed.show([Segment("Play", [[0, 1]] * 60, b"", False)], "Play")

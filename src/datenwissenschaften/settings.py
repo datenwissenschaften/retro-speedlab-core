@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 from box import Box
@@ -65,6 +65,12 @@ class SpeedrunSettings:
 
 
 @dataclass(frozen=True)
+class EventSettings:
+    sink: str | None
+    options: dict[str, Any]
+
+
+@dataclass(frozen=True)
 class RetroSpeedlabConfig:
     paths: RetroSpeedlabPaths
     training: TrainingSettings
@@ -72,6 +78,7 @@ class RetroSpeedlabConfig:
     ui: UISettings
     lab: LabSettings
     speedrun: SpeedrunSettings
+    events: EventSettings
     log_level: str
 
 
@@ -115,6 +122,10 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             policy_emulators=_positive_int(document.speedrun.policy_emulators, "speedrun.policy_emulators"),
             game=_game(collection, slug, document.speedrun),
         ),
+        events=EventSettings(
+            sink=_optional_text(document.events.sink, "events.sink"),
+            options=_mapping(document.events.options, "events.options"),
+        ),
         log_level=_text(document.log_level, "log_level").upper(),
     )
 
@@ -134,6 +145,12 @@ def _text(value: Any, name: str) -> str:
 
 def _optional_text(value: Any, name: str) -> str | None:
     return None if value is None else _text(value, name)
+
+
+def _mapping(value: Any, name: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise RuntimeError(f"Configuration value '{name}' must be a mapping.")
+    return cast(dict[str, Any], value)
 
 
 def _boolean(value: Any, name: str) -> bool:

@@ -1,6 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import wandb
@@ -8,15 +9,26 @@ from speedlab_engine.cartridge import BUTTONS
 from speedlab_engine.collection import DEMO_COLLECTION
 
 from datenwissenschaften.environment.wrapper import StateMachineGymWrapper
+from datenwissenschaften.events import Unpublished
 from datenwissenschaften.ram import RamInfo, Shown, ram
 from datenwissenschaften.route.route_map import RouteMap
+from datenwissenschaften.speedrun.search_events import SearchEvents
 from datenwissenschaften.states.state import State
 
 FRAME_RATE = 60.0
 FAKE_VERSION = "1.0.0"
 NO_EXPERIMENT = wandb.init(project="tests", mode="disabled")
+NO_EVENTS = SearchEvents(Unpublished(), "walk", "1.0.0", 60.0)
 SAVING_SCRIPT = [(3, 0), (3, 1), (3, 2), (3, 5), (3, 6), (3, 6), (3, 6), (3, 6)]
 FAKE_BUTTONS = ["A", "START"]
+
+
+@dataclass
+class RecordedEvents:
+    published: list[tuple[str, str, dict[str, Any]]] = field(default_factory=list[tuple[str, str, dict[str, Any]]])
+
+    def publish(self, topic: str, key: str, payload: dict[str, Any]) -> None:
+        self.published.append((topic, key, payload))
 
 
 @dataclass
@@ -136,6 +148,7 @@ def write_config(tmp_path: Path) -> Path:
                 "ui: {enable: false, live: true, release: local}",
                 "twitch: {enabled: true}",
                 "agent: {stall_minutes: 30}",
+                "events: {sink: null, options: {}}",
                 "speedrun:",
                 "  scouts: 1",
                 "  backtrackers: 0",
