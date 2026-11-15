@@ -30,8 +30,8 @@ actions, and this repository turns them into a speedrun.
 - Movie (`.movie`) and MP4 video with sound of the verified run
 - **Live relay** of the newest verified segment, the run's time, level splits
   and the lab's status to the Retro Speedlab backend
-- **Lab task**: when the search stalls, Claude Code improves the game package on
-  its own branch; the LAB50 runner does not start it
+- **Lab**: when a search stalls, Claude Code improves the game's speedrun
+  package; a change ships only when its checks pass and the movie still replays
 
 ## Architecture
 
@@ -42,7 +42,7 @@ flowchart TD
     Search["Segment search<br/>one worker per process"]
     Movie["Verified movie<br/>progress.msgpack · screen.movie · screen.mp4"]
     Relay["Live relay<br/>snapshot · whole movie"]
-    Lab["Lab task, not started by the LAB50 runner<br/>agent/daily.sh"]
+    Lab["Lab<br/>Claude Code on the game package"]
 
     Game --> Env
     Env --> Search
@@ -212,7 +212,8 @@ number, slug, title and version.
 
 ## PPO policy
 
-The policy is off in `config.example.yaml` and in the LAB50 runner. With `speedrun.policy` and the
+The policy is off in `config.example.yaml`; the LAB50 runner turns it on next to the search on stream. With
+`speedrun.policy` and the
 optional `vision` dependencies (PyTorch and Stable-Baselines3), a separate process trains a policy with
 [Stable-Baselines3](https://stable-baselines3.readthedocs.io) PPO on the GPU, always from the start
 the search is working on (`cache/tas/policy_start.msgpack`). `policy.env.PolicyEnv` is a
@@ -236,13 +237,13 @@ stream shows its lessons as `metadata.critic`. Then it starts a lab run
 did not improve and no lab run ended for `agent.stall_minutes` minutes, as the
 journal records them; a checkpoint is no piece. Claude Code works on its own
 git worktree of the game package, and its branch ships only when its checks pass and the current movie still replays with
-it (`speedrun.run verify`). The lead session delegates to the subagents defined in the
-game package's `.claude/agents/`; the stream shows each member's role, state and
-latest step and every hand-off with its short task, the lead's latest actions
+it (`speedrun.run verify`). The stream shows Claude Code and every subagent it starts
+with its role, state and latest step and every hand-off with its short task, the lead's latest actions
 (only the kind of action and the source files it touches), its commit subjects
 with URLs and secret-like words hidden, and the lines it changed. Every task
-runs locally. The LAB50 runner starts only `speedrun`, and the games
-repository has no `agent/` scripts, so no lab runs happen today.
+runs locally. The LAB50 runner starts only `speedrun`; its own lab job gives Claude Code
+up to 45 minutes on one game at 01:35, 07:35, 13:35 and 19:35 UTC and records the run with
+`lab.record`.
 
 ### Experiments
 
@@ -375,8 +376,8 @@ uv run pyright
   their movies, videos and browser builds.
 - **retro-speedlab-games** (private): LAB50, the game collection an AI writes,
   with every cartridge and its RAM map, states, rewards and actions.
-- **retro-speedlab-runner** (private): runs the search for every LAB50 game in
-  turn on black-omen.
+- **retro-speedlab-runner** (private): runs three searches at once on black-omen,
+  rotating the LAB50 games every two hours, and the lab job.
 - **[retrospeedlab.com](https://www.retrospeedlab.com)**: the website with the
   live run; the stream view is at
   [stream.retrospeedlab.com](https://stream.retrospeedlab.com).
