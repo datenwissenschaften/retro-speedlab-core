@@ -79,12 +79,11 @@ class Screen:
             return
         field = {"version": version(video), **cut.field}
         logger.info(f"Rendered the {self.name} video {field['version']} in {time.monotonic() - began:.1f} s")
-        while self.pending is None:
-            if self._uploaded(video, field["version"], cut):
-                self.show(field)
-                return
+        while not self._uploaded(video, field["version"], cut):
             with self.changed:
-                self.changed.wait_for(lambda: self.pending is not None, RETRY_SECONDS)
+                if self.changed.wait_for(lambda: self.pending is not None, RETRY_SECONDS):
+                    return
+        self.show(field)
 
     def _uploaded(self, video: Path, shown: str, cut: Cut) -> bool:
         if self.upload is None:

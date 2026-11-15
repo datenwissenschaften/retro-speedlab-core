@@ -81,14 +81,28 @@ def test_an_upload_is_retried_until_the_backend_takes_it(tmp_path: Path, monkeyp
     assert len(uploads) == 1 and len(shown) == 1
 
 
-def test_a_render_overtaken_by_a_newer_one_is_not_uploaded(tmp_path: Path):
+def test_a_finished_render_is_uploaded_and_shown_even_when_a_newer_one_waits(tmp_path: Path):
     render.directory = tmp_path
-    shown: list[dict] = []
-    movies = Screen("movie", render, None, shown.append)
+    shown, uploads = [], []
+    movies = Screen("movie", render, flaky_upload([True], uploads), shown.append)
     movies.pending = cut(b"newer", {"frames": 2})
 
     movies._present(cut(b"older", {"frames": 1}))
 
+    version = hashlib.sha256(b"mp4:older").hexdigest()[:12]
+    assert [upload[:2] for upload in uploads] == [(b"mp4:older", version)]
+    assert shown == [{"version": version, "frames": 1}]
+
+
+def test_a_failed_upload_is_not_retried_once_a_newer_render_waits(tmp_path: Path):
+    render.directory = tmp_path
+    shown, uploads = [], []
+    movies = Screen("movie", render, flaky_upload([False], uploads), shown.append)
+    movies.pending = cut(b"newer", {"frames": 2})
+
+    movies._present(cut(b"older", {"frames": 1}))
+
+    assert uploads == []
     assert shown == []
 
 
