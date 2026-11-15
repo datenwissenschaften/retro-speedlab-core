@@ -1,3 +1,4 @@
+import math
 import re
 import threading
 from collections.abc import Collection
@@ -16,7 +17,9 @@ FOUND = "found"
 IMPROVED = "improved"
 SHOWN_HISTORY = 200
 SHOWN_MILESTONES = 50
-TENTHS_PER_MINUTE = 600
+HUNDREDTHS_PER_SECOND = 100
+HUNDREDTHS_PER_MINUTE = 6000
+FLOAT_TOLERANCE = 1e-6
 WORD_START = re.compile(r"(?<=[a-z])(?=[A-Z0-9])|(?<=[0-9])(?=[A-Z])")
 
 
@@ -56,9 +59,13 @@ class Split:
     level_seconds: float
 
 
+def hundredths(seconds: float) -> int:
+    return math.floor(seconds * HUNDREDTHS_PER_SECOND + FLOAT_TOLERANCE)
+
+
 def clock(seconds: float) -> str:
-    tenths = round(seconds * 10)
-    return f"{tenths // TENTHS_PER_MINUTE}:{tenths % TENTHS_PER_MINUTE / 10:04.1f}"
+    minutes, rest = divmod(hundredths(seconds), HUNDREDTHS_PER_MINUTE)
+    return f"{minutes}:{rest / HUNDREDTHS_PER_SECOND:05.2f}"
 
 
 def spoken(state: str) -> str:
@@ -144,10 +151,11 @@ class JournalStore:
             if level:
                 self._milestone("level", f"{split.level} beaten in {clock(split.level_seconds)}")
             return
-        if level and split.level_seconds < bests[split.level]:
-            saved = bests[split.level] - split.level_seconds
+        saved = hundredths(bests[split.level]) - hundredths(split.level_seconds)
+        if level and saved > 0:
             bests[split.level] = split.level_seconds
-            self._milestone("best", f"{split.level} in {clock(split.level_seconds)}, {saved:.1f} s faster")
+            faster = saved / HUNDREDTHS_PER_SECOND
+            self._milestone("best", f"{split.level} in {clock(split.level_seconds)}, {faster:.2f} s faster")
 
     def _milestone(self, kind: str, text: str) -> None:
         self.journal.milestones = [*self.journal.milestones, Milestone(now(), kind, text)][-SHOWN_MILESTONES:]

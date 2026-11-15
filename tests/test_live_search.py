@@ -147,12 +147,13 @@ def test_the_journal_keeps_the_first_time_of_each_part_and_tells_only_of_levels_
     again = JournalStore(path).fields()
     assert opened == {"Menu": 10.8} and first == faster == {"Menu": 10.8, "Level 1": 64.69}
     assert [milestone["text"] for milestone in again["milestones"]] == [
-        "Level 1 beaten in 1:04.7",
-        "Level 1 in 1:02.2, 2.5 s faster",
+        "Level 1 beaten in 1:04.69",
+        "Level 1 in 1:02.20, 2.49 s faster",
     ]
     assert [point["seconds"] for point in again["history"]] == [10.8, 64.69, 70.0]
     assert [event["frames"] for event in again["events"]] == list(range(5, 25))
-    assert clock(59.97) == "1:00.0"
+    assert clock(59.97) == "0:59.97"
+    assert clock(42.083333333333336) == "0:42.08"
 
 
 def test_the_journal_tells_when_a_state_gets_closer_to_its_door(tmp_path: Path):
