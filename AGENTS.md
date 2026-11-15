@@ -436,7 +436,7 @@ Before considering work complete, verify:
 
 # This Repository
 
-The TAS search, PPO policy, state machine and lab workflow that speedrun the LAB50 games. Generic for every game: nothing specific to one game.
+The TAS search, PPO policy, state machine and lab workflow that speedrun the LAB24 games. Generic for every game: nothing specific to one game.
 
 Checks, run in WSL:
 

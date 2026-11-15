@@ -6,7 +6,7 @@ Tool-assisted speedrun search for Retro Speedlab's own 8-bit games. The search
 finds the fastest movie of buttons to press on every frame from power-on,
 verifies that it replays, and streams the run to
 [Retro Speedlab](https://www.retrospeedlab.com). The games are Python
-cartridges of LAB50, a game collection an AI writes, that run on
+cartridges of LAB24, a game collection an AI writes, that run on
 retro-speedlab-engine, a deterministic 8-bit console; the collection's search package supplies the RAM map, states, rewards and
 actions, and this repository turns them into a speedrun.
 
@@ -212,7 +212,7 @@ number, slug, title and version.
 
 ## PPO policy
 
-The policy is off in `config.example.yaml`; the LAB50 runner turns it on next to the search on stream. With
+The policy is off in `config.example.yaml`; the LAB24 runner turns it on next to the search on stream. With
 `speedrun.policy` and the
 optional `vision` dependencies (PyTorch and Stable-Baselines3), a separate process trains a policy with
 [Stable-Baselines3](https://stable-baselines3.readthedocs.io) PPO on the GPU, always from the start
@@ -241,7 +241,7 @@ it (`speedrun.run verify`). The stream shows Claude Code and every subagent it s
 with its role, state and latest step and every hand-off with its short task, the lead's latest actions
 (only the kind of action and the source files it touches), its commit subjects
 with URLs and secret-like words hidden, and the lines it changed. Every task
-runs locally. The LAB50 runner starts only `speedrun`; its own lab job gives Claude Code
+runs locally. The LAB24 runner starts only `speedrun`; its own lab job gives Claude Code
 up to 45 minutes on one game at 01:35, 07:35, 13:35 and 19:35 UTC and records the run with
 `lab.record`.
 
@@ -374,10 +374,10 @@ uv run pyright
   the live relay and the lab workflow.
 - **retro-speedlab-engine** (private): the 8-bit console the games run on,
   their movies, videos and browser builds.
-- **retro-speedlab-games** (private): LAB50, the game collection an AI writes,
+- **retro-speedlab-games** (private): LAB24, the game collection an AI writes,
   with every cartridge and its RAM map, states, rewards and actions.
 - **retro-speedlab-runner** (private): runs three searches at once on black-omen,
-  rotating the LAB50 games every two hours, and the lab job.
+  rotating the LAB24 games every two hours, and the lab job.
 - **[retrospeedlab.com](https://www.retrospeedlab.com)**: the website with the
   live run; the stream view is at
   [stream.retrospeedlab.com](https://stream.retrospeedlab.com).
