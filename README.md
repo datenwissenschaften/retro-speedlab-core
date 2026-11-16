@@ -1,6 +1,6 @@
 # Retro Speedlab Core
 
-[![CI](https://github.com/RetroSpeedLab/retro-speedlab-core/actions/workflows/ci.yml/badge.svg)](https://github.com/RetroSpeedLab/retro-speedlab-core/actions/workflows/ci.yml) ![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg) [![Last commit](https://img.shields.io/github/last-commit/RetroSpeedLab/retro-speedlab-core)](https://github.com/RetroSpeedLab/retro-speedlab-core/commits/main) [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE) ![Ruff](https://img.shields.io/badge/lint-Ruff-D7FF64.svg) [![codecov](https://codecov.io/gh/datenwissenschaften/retro-speedlab-core/graph/badge.svg)](https://codecov.io/gh/datenwissenschaften/retro-speedlab-core)
+[![CI](https://github.com/RetroSpeedLab/retro-speedlab-core/actions/workflows/ci.yml/badge.svg)](https://github.com/RetroSpeedLab/retro-speedlab-core/actions/workflows/ci.yml) ![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg) [![Last commit](https://img.shields.io/github/last-commit/RetroSpeedLab/retro-speedlab-core)](https://github.com/RetroSpeedLab/retro-speedlab-core/commits/main) [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE) ![Ruff](https://img.shields.io/badge/lint-Ruff-D7FF64.svg) [![codecov](https://codecov.io/gh/RetroSpeedLab/retro-speedlab-core/graph/badge.svg)](https://codecov.io/gh/RetroSpeedLab/retro-speedlab-core)
 
 Tool-assisted speedrun (TAS) search for the games of
 [Retro Speedlab](https://www.retrospeedlab.com). The search finds the fastest

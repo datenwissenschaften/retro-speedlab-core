@@ -16,7 +16,7 @@ dependencies = [
     "numpy==2.5.1",
     "opencv-python==4.13.0.92",
     "pyyaml==6.0.3",
-    "retro-speedlab-engine @ git+https://github.com/datenwissenschaften/retro-speedlab-engine.git@main",
+    "retro-speedlab-engine @ git+https://github.com/RetroSpeedLab/retro-speedlab-engine.git@main",
     "loguru==0.7.3",
     "httpx==0.28.1",
     "python-box==7.4.1",
@@ -41,7 +41,7 @@ keywords = ["speedrun", "tool-assisted-speedrun", "retro-gaming", "pyxel"]
 
 [project.urls]
 Homepage = "https://www.retrospeedlab.com"
-Repository = "https://github.com/datenwissenschaften/retro-speedlab-core"
+Repository = "https://github.com/RetroSpeedLab/retro-speedlab-core"
 
 [project.optional-dependencies]
 vision = ["torch==2.9.1", "stable-baselines3==2.9.2"]
