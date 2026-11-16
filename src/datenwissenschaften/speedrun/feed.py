@@ -5,6 +5,7 @@ from typing import Any
 
 import msgspec
 
+from datenwissenschaften.speedrun.attempt import Origin
 from datenwissenschaften.speedrun.journal import JournalStore
 from datenwissenschaften.speedrun.learned import Learned
 from datenwissenschaften.speedrun.live import clear_reports, read_reports
@@ -76,9 +77,9 @@ class SpeedrunFeed:
             self.practice = practice
         self.publish()
 
-    def event(self, kind: str, state: str | None, frames: int | None, saved: int | None) -> None:
+    def event(self, kind: str, state: str | None, frames: int | None, saved: int | None, origin: Origin | None) -> None:
         self.journal.event(kind, state, frames)
-        self.events.step(kind, state, frames, saved)
+        self.events.step(kind, state, frames, saved, origin)
 
     def begin(self, search: SearchRound) -> None:
         clear_reports(self.live)
@@ -114,7 +115,7 @@ class SpeedrunFeed:
         running = self.lab_marker.exists()
         if running and not was_running:
             stuck = load_stuck(self.stuck)
-            self.event("lab", self.searching if stuck is None else stuck.state, None, None)
+            self.event("lab", self.searching if stuck is None else stuck.state, None, None, None)
         return running
 
 

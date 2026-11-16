@@ -153,8 +153,12 @@ the game's slug; every payload carries `game` and `at`.
 
 | Topic | Published | Payload |
 |-------|-----------|---------|
-| `runs.attempts` | every finished search job | `state`, `seed`, `role`, `seconds`, `outcome` (`crossing`, `checkpoint`, `nothing`), `crossings`, `frames`, `reached` |
-| `runs.steps` | every step of the search | `kind` (`found`, `checkpoint`, `stuck`, `improved`, `lab`, `unverified`), `state`, `frames`, `saved` |
+| `runs.attempts` | every finished search and polisher job | `state`, `seed`, `role`, `seconds`, `worker_seconds`, `outcome` (`crossing`, `checkpoint`, `nothing`), `crossings`, `frames`, `reached` |
+| `runs.steps` | every step of the search | `kind` (`found`, `checkpoint`, `stuck`, `improved`, `lab`, `unverified`), `state`, `frames`, `saved`, `role`, `worker_seconds` |
+
+`role` is the worker kind (`scout`, `backtracker`, `beam-scout`, `vision-scout`, `polisher`) and `worker_seconds` the
+wall time its worker spent on the job. A `found` or `improved` step names the job whose crossing it took; the other
+steps have no worker and carry `null`.
 | `runs.records` | a new record that replays from power-on | `version`, `frames`, `seconds`, `pieces`, `previous_frames` |
 | `policy.rounds` | every PPO round | `run`, `round`, `steps`, `reward`, `exits`, `episodes`, `exit_rate`, `entropy`, `explained_variance`, `loss` |
 

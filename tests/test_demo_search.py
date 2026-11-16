@@ -98,7 +98,7 @@ def test_the_beam_scout_walks_the_demo_dot_to_its_goal(tmp_path: Path):
     config = write_config(tmp_path)
     start = workers.worker_runner(WRAPPER, config).power_on()
 
-    searched = workers.beam(WRAPPER, config, start, 1, 30.0, tmp_path / "live")
+    searched = workers.beam(WRAPPER, config, start, 1, 30.0, tmp_path / "live").searched
 
     assert searched.crossings and searched.crossings[0].won
     assert (tmp_path / "live" / "1.jpg").is_file()

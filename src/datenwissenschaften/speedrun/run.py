@@ -15,6 +15,7 @@ from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.events import load_events
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
+from datenwissenschaften.speedrun.attempt import Lead, Origin
 from datenwissenschaften.speedrun.feed import SpeedrunFeed, publish_every
 from datenwissenschaften.speedrun.footage import (
     COMPARE,
@@ -57,7 +58,7 @@ from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.speedrun.screen import Render, Screen
 from datenwissenschaften.speedrun.search import HOLD_FRAMES, ROUTE_CHECKPOINT, Checkpoint, Crossing
 from datenwissenschaften.speedrun.search_events import SearchEvents
-from datenwissenschaften.speedrun.searcher import Lead, Searcher
+from datenwissenschaften.speedrun.searcher import Searcher
 from datenwissenschaften.speedrun.shown import SHOWN_FILE, worth_showing
 from datenwissenschaften.speedrun.stuck import (
     BARRED_FILE,
@@ -242,10 +243,7 @@ class Tas:
             save_policy_start(self.output / POLICY_START_FILE, start)
             self.show(leg, segments, start.state)
             hint = self.hint(leg, segments, start)
-            if hint is None:
-                segments, found = self.frontier(leg, segments)
-            else:
-                segments, found = hint
+            segments, found, origin = self.frontier(leg, segments) if hint is None else (*hint, None)
             if patience is not None:
                 save_turn(self.turn_file, turn)
             if isinstance(found, Checkpoint):
@@ -260,7 +258,7 @@ class Tas:
             if patience is not None:
                 save_turn(self.turn_file, turn)
             self.leave(found.end.state)
-            self.feed.event("found", found.end.state, found.frames, None)
+            self.feed.event("found", found.end.state, found.frames, None, origin)
             segments = self.keep(leg, [*segments, segment_of(found)], found.end.state)
             logger.info(
                 f"{start.state} -> {found.end.state} in {found.frames} frames; {leg.name} at {frames(segments)}"
@@ -302,7 +300,7 @@ class Tas:
         barred = start.state == self.barred.get(leg.name)
         if (barred or searches >= turn_searches(patience)) and not self.closer(start, found, barred):
             return self.wait_or_go_back(leg, segments, start, searches, patience)
-        self.feed.event("checkpoint", start.state, found.frames, None)
+        self.feed.event("checkpoint", start.state, found.frames, None, None)
         if found.remaining is not None:
             self.feed.journal.closer(start.state, found.remaining)
         on = f"{found.remaining} TAS frames before the exit" if found.guided else f"{found.gain:.1f} reward on"
@@ -315,7 +313,7 @@ class Tas:
     def wait_or_go_back(
         self, leg: Leg, segments: list[Segment], start: Start, searches: int, patience: int | None
     ) -> list[Segment]:
-        self.feed.event("stuck", start.state, None, None)
+        self.feed.event("stuck", start.state, None, None, None)
         chain = checkpoints_in_a_row(leg, segments)
         if chain and searches >= turn_searches(patience) and not self.advanced(leg, segments, chain):
             logger.warning(f"No way out of {start.state} after {searches} searches; its {chain} checkpoints go")
@@ -335,38 +333,41 @@ class Tas:
             segments = self.shorten(leg, segments, index)
         return segments
 
-    def frontier(self, leg: Leg, segments: list[Segment]) -> tuple[list[Segment], Crossing | Checkpoint | None]:
+    def frontier(
+        self, leg: Leg, segments: list[Segment]
+    ) -> tuple[list[Segment], Crossing | Checkpoint | None, Origin | None]:
         first = len(segments) - checkpoints_in_a_row(leg, segments)
         starts = [self.start(leg, segments, index) for index in range(first, len(segments) + 1)]
         found = self.searcher.lead(starts, SEARCH_ROUNDS)
         if not isinstance(found, Lead):
-            return segments, found
+            return segments, found, None
         if first + found.index < len(segments):
             logger.info(f"A backtracker leaves {starts[-1].state} from checkpoint {found.index} of the chain")
-        return segments[: first + found.index], found.crossing
+        return segments[: first + found.index], found.crossing, found.origin
 
     def improved(self, leg: Leg, segments: list[Segment]) -> list[Segment]:
-        for index, crossing in self.improver.found(leg, segments):
-            segments = self.swapped(leg, segments, index, crossing)
-        for repair, crossing in self.improver.repaired(leg, segments):
-            segments = self.rebuilt(leg, segments, [*repair.chain, segment_of(crossing)])
+        for lead in self.improver.found(leg, segments):
+            segments = self.swapped(leg, segments, lead)
+        for repair, lead in self.improver.repaired(leg, segments):
+            segments = self.rebuilt(leg, segments, [*repair.chain, segment_of(lead.crossing)], lead.origin)
         return segments
 
     def shorten(self, leg: Leg, segments: list[Segment], index: int) -> list[Segment]:
         start = self.start(leg, segments, index)
         self.show(leg, segments, start.state)
-        crossing = self.searcher.best(start, len(segments[index].pressed), IMPROVE_ROUNDS)
-        if not isinstance(crossing, Crossing) or crossing.frames >= len(segments[index].pressed):
+        found = self.searcher.best(start, len(segments[index].pressed), IMPROVE_ROUNDS)
+        if not isinstance(found, Lead) or found.crossing.frames >= len(segments[index].pressed):
             return segments
-        return self.swapped(leg, segments, index, crossing)
+        return self.swapped(leg, segments, replace(found, index=index))
 
-    def swapped(self, leg: Leg, segments: list[Segment], index: int, crossing: Crossing) -> list[Segment]:
-        faster = self.rebuilt(leg, segments, [*segments[:index], segment_of(crossing)])
+    def swapped(self, leg: Leg, segments: list[Segment], lead: Lead) -> list[Segment]:
+        start, crossing = self.start(leg, segments, lead.index), lead.crossing
+        faster = self.rebuilt(leg, segments, [*segments[: lead.index], segment_of(crossing)], lead.origin)
         if faster is not segments:
-            self.compare.queue(compare_cut(self.runner, self.start(leg, segments, index), segments[index], crossing))
+            self.compare.queue(compare_cut(self.runner, start, segments[lead.index], crossing))
         return faster
 
-    def rebuilt(self, leg: Leg, segments: list[Segment], head: list[Segment]) -> list[Segment]:
+    def rebuilt(self, leg: Leg, segments: list[Segment], head: list[Segment], origin: Origin) -> list[Segment]:
         candidate = [*head, *segments[len(head) :]]
         replay = verified_segments(self.runner, leg.entry, candidate)
         if replay.verified < len(head):
@@ -380,7 +381,7 @@ class Tas:
             return segments
         saved = frames(segments) - frames(replayed)
         logger.info(f"{leg.name} is {saved} frames faster from piece {len(head) - 1} into {head[-1].state}")
-        self.feed.event("improved", head[-1].state, frames(replayed), saved)
+        self.feed.event("improved", head[-1].state, frames(replayed), saved, origin)
         return self.keep(leg, self.verified(leg, replayed), replayed[-1].state)
 
     def rebase(self, leg: Leg, end: bytes) -> bool:
@@ -482,7 +483,7 @@ def tas_run(wrapper: str, config: Path, pool: Executor, polishing: Executor) -> 
             f"Pieces of {', '.join(relabelled)} reach other states with this game package; they keep their place"
         )
     improver = Improver(
-        wrapper, config, polishing, settings.speedrun.polishers, settings.speedrun.segment_seconds, feed.live
+        wrapper, config, polishing, settings.speedrun.polishers, settings.speedrun.segment_seconds, feed.live, events
     )
     record = Record(output / RECORD_FILE, runner, game.version, events)
     hints = load_hints(hints_path(config))

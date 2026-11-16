@@ -1,6 +1,7 @@
 from typing import Any
 
 from datenwissenschaften.events import ATTEMPTS, RECORDS, STEPS, Events, now
+from datenwissenschaften.speedrun.attempt import Attempt, Origin
 from datenwissenschaften.speedrun.movie import Segment, frames
 from datenwissenschaften.speedrun.search import Searched
 
@@ -22,14 +23,16 @@ class SearchEvents:
         self.version = version
         self.frame_rate = frame_rate
 
-    def attempt(self, state: str, seed: int, role: str, seconds: float, searched: Searched) -> None:
+    def attempt(self, attempt: Attempt, seconds: float) -> None:
+        searched = attempt.searched
         fastest = min(searched.crossings, key=lambda crossing: crossing.frames, default=None)
         ended = fastest if fastest is not None else searched.checkpoint
         payload = {
-            "state": state,
-            "seed": seed,
-            "role": role,
+            "state": attempt.state,
+            "seed": attempt.seed,
+            "role": attempt.origin.role,
             "seconds": seconds,
+            "worker_seconds": attempt.origin.worker_seconds,
             "outcome": outcome(searched),
             "crossings": len(searched.crossings),
             "frames": None if ended is None else ended.frames,
@@ -37,8 +40,16 @@ class SearchEvents:
         }
         self.publish(ATTEMPTS, payload)
 
-    def step(self, kind: str, state: str | None, frames: int | None, saved: int | None) -> None:
-        self.publish(STEPS, {"kind": kind, "state": state, "frames": frames, "saved": saved})
+    def step(self, kind: str, state: str | None, frames: int | None, saved: int | None, origin: Origin | None) -> None:
+        payload = {
+            "kind": kind,
+            "state": state,
+            "frames": frames,
+            "saved": saved,
+            "role": None if origin is None else origin.role,
+            "worker_seconds": None if origin is None else origin.worker_seconds,
+        }
+        self.publish(STEPS, payload)
 
     def record(self, segments: list[Segment], previous: list[Segment]) -> None:
         payload = {

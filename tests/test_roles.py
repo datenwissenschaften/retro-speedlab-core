@@ -4,19 +4,22 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from fakes import saving_environment
+from fakes import NO_EVENTS, RecordedEvents, saving_environment
 
 from datenwissenschaften.speedrun import vision, workers
+from datenwissenschaften.speedrun.attempt import Attempt, Origin
 from datenwissenschaften.speedrun.beam import beam_search
 from datenwissenschaften.speedrun.improver import CUT_FRAMES, SMALLEST_GAIN_FRAMES, Improver, Repair, cuts, shortenable
 from datenwissenschaften.speedrun.movie import Segment
 from datenwissenschaften.speedrun.routes import Leg
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.speedrun.search import Crossing, Searched
+from datenwissenschaften.speedrun.search_events import SearchEvents
 
 BOSS_FRAMES = 3
 SECONDS = 0.5
 LONG = SMALLEST_GAIN_FRAMES * 3
+POLISHED = Origin("polisher", 2.5)
 
 
 class RecordingPool:
@@ -42,6 +45,10 @@ def crossing(state: str, frames: int) -> Crossing:
     return Crossing(Start(state, bytes([9])), np.zeros((frames, 2), np.int8), False, ("cell",))
 
 
+def polished(*crossings: Crossing) -> Attempt:
+    return Attempt("Survive", 7, POLISHED, Searched(list(crossings), None))
+
+
 def test_only_pieces_that_leave_a_state_and_are_long_enough_are_shortened():
     segments = [piece("Survive", LONG, 1), piece("Boss", LONG, 2), piece("Exit", SMALLEST_GAIN_FRAMES, 3)]
 
@@ -50,7 +57,7 @@ def test_only_pieces_that_leave_a_state_and_are_long_enough_are_shortened():
 
 def test_polishers_keep_their_slots_busy_and_never_take_more():
     pool = RecordingPool()
-    improver = Improver("fakes:FakeWrapper", Path("config.yaml"), pool, 2, SECONDS, None)
+    improver = Improver("fakes:FakeWrapper", Path("config.yaml"), pool, 2, SECONDS, None, NO_EVENTS)
     segments = [piece("Boss", LONG, 1), piece("Exit", LONG, 2)]
 
     improver.keep_busy(leg(), segments)
@@ -62,18 +69,33 @@ def test_polishers_keep_their_slots_busy_and_never_take_more():
 
 def test_a_faster_piece_is_handed_over_only_while_the_route_still_holds_it():
     pool = RecordingPool()
-    improver = Improver("fakes:FakeWrapper", Path("config.yaml"), pool, 1, SECONDS, None)
+    improver = Improver("fakes:FakeWrapper", Path("config.yaml"), pool, 1, SECONDS, None, NO_EVENTS)
     segments = [piece("Boss", LONG, 1)]
     improver.keep_busy(leg(), segments)
-    pool.futures[0].set_result(Searched([crossing("Boss", LONG - SMALLEST_GAIN_FRAMES)], None))
+    pool.futures[0].set_result(polished(crossing("Boss", LONG - SMALLEST_GAIN_FRAMES)))
 
     assert improver.found(leg(), [piece("Boss", LONG - 1, 1)]) == []
     improver.keep_busy(leg(), segments)
-    pool.futures[1].set_result(Searched([crossing("Boss", LONG - SMALLEST_GAIN_FRAMES)], None))
+    pool.futures[1].set_result(polished(crossing("Boss", LONG - SMALLEST_GAIN_FRAMES)))
 
-    assert [(index, found.frames) for index, found in improver.found(leg(), segments)] == [
-        (0, LONG - SMALLEST_GAIN_FRAMES)
+    assert [(lead.index, lead.crossing.frames, lead.origin) for lead in improver.found(leg(), segments)] == [
+        (0, LONG - SMALLEST_GAIN_FRAMES, POLISHED)
     ]
+
+
+def test_every_finished_polisher_job_is_published_as_an_attempt_with_its_worker_time():
+    pool, events = RecordingPool(), RecordedEvents()
+    improver = Improver(
+        "fakes:FakeWrapper", Path("config.yaml"), pool, 1, SECONDS, None, SearchEvents(events, "walk", "1.0.0", 60.0)
+    )
+    improver.keep_busy(leg(), [piece("Boss", LONG, 1)])
+    pool.futures[0].set_result(polished(crossing("Boss", LONG - SMALLEST_GAIN_FRAMES)))
+
+    improver.found(leg(), [piece("Boss", LONG - 1, 1)])
+
+    [(topic, key, payload)] = events.published
+    assert (topic, key) == ("runs.attempts", "walk")
+    assert (payload["role"], payload["worker_seconds"], payload["seconds"]) == ("polisher", 2.5, SECONDS)
 
 
 def test_the_beam_scout_finds_the_way_out_with_button_patterns(tmp_path: Path):
@@ -129,16 +151,17 @@ def test_a_vision_plan_without_frames_leaves_the_search_running(
 
 def test_a_repair_is_handed_over_only_while_the_route_still_starts_with_its_original_pieces():
     pool = RecordingPool()
-    improver = Improver("fakes:FakeWrapper", Path("config.yaml"), pool, 1, SECONDS, None)
+    improver = Improver("fakes:FakeWrapper", Path("config.yaml"), pool, 1, SECONDS, None, NO_EVENTS)
     original = [piece("Boss", LONG, 1), piece("Exit", LONG, 2)]
     improver.repair(Repair("Level 1", original, [piece("Boss", LONG - SMALLEST_GAIN_FRAMES, 5)]), LONG)
-    pool.futures[0].set_result(Searched([crossing("Exit", LONG + 1), crossing("Exit", LONG - 1)], None))
+    pool.futures[0].set_result(polished(crossing("Exit", LONG + 1), crossing("Exit", LONG - 1)))
 
     assert improver.repaired(leg(), [piece("Boss", LONG - 1, 1), *original[1:]]) == []
     improver.repair(Repair("Level 1", original, [piece("Boss", LONG - SMALLEST_GAIN_FRAMES, 5)]), LONG)
-    pool.futures[1].set_result(Searched([crossing("Exit", LONG + 1), crossing("Exit", LONG - 1)], None))
+    pool.futures[1].set_result(polished(crossing("Exit", LONG + 1), crossing("Exit", LONG - 1)))
 
-    assert [found.frames for _, found in improver.repaired(leg(), [*original, piece("Stage", LONG, 3)])] == [LONG - 1]
+    repaired = improver.repaired(leg(), [*original, piece("Stage", LONG, 3)])
+    assert [(lead.index, lead.crossing.frames, lead.origin) for _, lead in repaired] == [(1, LONG - 1, POLISHED)]
 
 
 def test_a_long_piece_is_cut_every_ten_seconds_and_short_ones_only_at_their_start():
@@ -148,7 +171,7 @@ def test_a_long_piece_is_cut_every_ten_seconds_and_short_ones_only_at_their_star
 
 def test_polishers_pick_long_pieces_more_often(monkeypatch: pytest.MonkeyPatch):
     pool = RecordingPool()
-    improver = Improver("fakes:FakeWrapper", Path("config.yaml"), pool, 1, SECONDS, None)
+    improver = Improver("fakes:FakeWrapper", Path("config.yaml"), pool, 1, SECONDS, None, NO_EVENTS)
     segments = [piece("Boss", LONG, 1), piece("Exit", 10 * LONG, 2)]
     picked: list[list[int]] = []
     monkeypatch.setattr("random.choices", lambda candidates, weights: picked.append(weights) or [candidates[1]])
@@ -165,11 +188,13 @@ def test_a_tail_search_plays_the_head_first_and_hands_back_whole_pieces(
     starts: list[Start] = []
     found = crossing("Boss", 2)
     monkeypatch.setattr(workers, "worker_runner", lambda wrapper, config: runner)
-    monkeypatch.setattr(workers, "explore", lambda *job: starts.append(job[2]) or Searched([found], None))
+    monkeypatch.setattr(workers, "segment_search", lambda *job: starts.append(job[2]) or Searched([found], None))
 
-    searched = workers.explore_tail(
+    attempt = workers.explore_tail(
         "fakes:FakeWrapper", tmp_path, runner.power_on(), [[0, 0]], 5, 1, SECONDS, None, "polisher"
     )
 
-    assert searched.crossings[0].frames == 3
+    assert attempt.searched.crossings[0].frames == 3
+    assert (attempt.state, attempt.seed, attempt.origin.role) == ("Survive", 1, "polisher")
+    assert attempt.origin.worker_seconds >= 0
     assert starts[0].state == "Survive"

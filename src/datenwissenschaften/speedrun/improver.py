@@ -3,11 +3,13 @@ from concurrent.futures import Executor, Future
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from datenwissenschaften.speedrun.attempt import Attempt, Lead
 from datenwissenschaften.speedrun.live import POLISHER
 from datenwissenschaften.speedrun.movie import Segment
 from datenwissenschaften.speedrun.routes import Leg
 from datenwissenschaften.speedrun.runner import Start
 from datenwissenschaften.speedrun.search import Crossing, Searched
+from datenwissenschaften.speedrun.search_events import SearchEvents
 from datenwissenschaften.speedrun.workers import explore, explore_tail
 
 SEED_SPACE = 2**31
@@ -79,9 +81,10 @@ class Improver:
     polishers: int
     seconds: float
     live: Path | None
-    running: dict[Future[Searched], Target] = field(default_factory=dict[Future[Searched], Target])
-    repairs: dict[Future[Searched], tuple[Repair, int]] = field(
-        default_factory=dict[Future[Searched], tuple[Repair, int]]
+    events: SearchEvents
+    running: dict[Future[Attempt], Target] = field(default_factory=dict[Future[Attempt], Target])
+    repairs: dict[Future[Attempt], tuple[Repair, int]] = field(
+        default_factory=dict[Future[Attempt], tuple[Repair, int]]
     )
 
     def keep_busy(self, leg: Leg, segments: list[Segment]) -> None:
@@ -97,15 +100,20 @@ class Improver:
             job = (self.wrapper, self.config, target.start, head, bound, seed, self.seconds, self.live, POLISHER)
             self.running[self.pool.submit(explore_tail, *job)] = target
 
-    def found(self, leg: Leg, segments: list[Segment]) -> list[tuple[int, Crossing]]:
-        faster: list[tuple[int, Crossing]] = []
+    def finished(self, future: Future[Attempt]) -> Attempt:
+        attempt = future.result()
+        self.events.attempt(attempt, self.seconds)
+        return attempt
+
+    def found(self, leg: Leg, segments: list[Segment]) -> list[Lead]:
+        faster: list[Lead] = []
         for future in [future for future in self.running if future.done()]:
-            target = self.running.pop(future)
+            target, attempt = self.running.pop(future), self.finished(future)
             if not still_there(target, leg, segments):
                 continue
-            crossing = faster_crossing(target, future.result())
+            crossing = faster_crossing(target, attempt.searched)
             if crossing is not None:
-                faster.append((target.index, crossing))
+                faster.append(Lead(target.index, crossing, attempt.origin))
         return faster
 
     def repair(self, repair: Repair, bound: int) -> None:
@@ -113,14 +121,18 @@ class Improver:
         job = (self.wrapper, self.config, start, bound, random.randrange(SEED_SPACE), self.seconds, self.live, POLISHER)
         self.repairs[self.pool.submit(explore, *job)] = (repair, bound)
 
-    def repaired(self, leg: Leg, segments: list[Segment]) -> list[tuple[Repair, Crossing]]:
-        rebuilt: list[tuple[Repair, Crossing]] = []
+    def repaired(self, leg: Leg, segments: list[Segment]) -> list[tuple[Repair, Lead]]:
+        rebuilt: list[tuple[Repair, Lead]] = []
         for future in [future for future in self.repairs if future.done()]:
-            repair, bound = self.repairs.pop(future)
+            (repair, bound), attempt = self.repairs.pop(future), self.finished(future)
             if repair.leg != leg.name or not same_pieces(repair.original, segments):
                 continue
-            target = segments[len(repair.chain)].state
-            fitting = [c for c in future.result().crossings if c.end.state == target and c.frames <= bound]
+            index = len(repair.chain)
+            fitting = [
+                c for c in attempt.searched.crossings if c.end.state == segments[index].state and c.frames <= bound
+            ]
             if fitting:
-                rebuilt.append((repair, min(fitting, key=lambda crossing: crossing.frames)))
+                rebuilt.append(
+                    (repair, Lead(index, min(fitting, key=lambda crossing: crossing.frames), attempt.origin))
+                )
         return rebuilt

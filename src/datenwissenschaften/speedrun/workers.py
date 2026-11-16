@@ -10,6 +10,7 @@ from datenwissenschaften.knowledge import knowledge_path, load_knowledge
 from datenwissenschaften.policy.prior import POLICY_FILE, PolicyPrior
 from datenwissenschaften.settings import load_config
 from datenwissenschaften.speedrun.archives import Archives
+from datenwissenschaften.speedrun.attempt import Attempt, attempted
 from datenwissenschaften.speedrun.beam import BEAM_MODE, beam_search
 from datenwissenschaften.speedrun.explore import search_segment
 from datenwissenschaften.speedrun.live import BEAM_SCOUT, VISION_SCOUT, WorkerLive
@@ -40,7 +41,7 @@ def worker_archives(config: Path) -> Archives:
     return Archives(archives_dir(settings), settings.speedrun.scouts + settings.speedrun.polishers)
 
 
-def explore(
+def segment_search(
     wrapper: str, config: Path, start: Start, bound: int, seed: int, seconds: float, live: Path | None, role: str
 ) -> Searched:
     watched = None if live is None else WorkerLive(live, seed, role, WALK)
@@ -48,20 +49,32 @@ def explore(
     return search_segment(runner, start, bound, seed, seconds, watched, preferences, worker_archives(config))
 
 
+def explore(
+    wrapper: str, config: Path, start: Start, bound: int, seed: int, seconds: float, live: Path | None, role: str
+) -> Attempt:
+    return attempted(
+        start, seed, role, lambda: segment_search(wrapper, config, start, bound, seed, seconds, live, role)
+    )
+
+
 def polish(wrapper: str, config: Path, start: Start, crossing: Crossing, seconds: float) -> Crossing:
     return shave(worker_runner(wrapper, config), start, crossing, seconds)
 
 
-def beam(wrapper: str, config: Path, start: Start, seed: int, seconds: float, live: Path | None) -> Searched:
+def beam(wrapper: str, config: Path, start: Start, seed: int, seconds: float, live: Path | None) -> Attempt:
     watched = None if live is None else WorkerLive(live, seed, BEAM_SCOUT, BEAM_MODE)
-    return beam_search(worker_runner(wrapper, config), start, seconds, watched)
+    return attempted(
+        start, seed, BEAM_SCOUT, lambda: beam_search(worker_runner(wrapper, config), start, seconds, watched)
+    )
 
 
-def vision(wrapper: str, config: Path, start: Start, seed: int, live: Path | None) -> Searched:
+def vision(wrapper: str, config: Path, start: Start, seed: int, live: Path | None) -> Attempt:
     runner = worker_runner(wrapper, config)
     watched = None if live is None else WorkerLive(live, seed, VISION_SCOUT, VISION_MODE)
     goal = state_class(runner.wrapper.state_classes, start.state).goal
-    return vision_search(runner, start, goal, worker_notes(config), watched)
+    return attempted(
+        start, seed, VISION_SCOUT, lambda: vision_search(runner, start, goal, worker_notes(config), watched)
+    )
 
 
 @cache
@@ -80,13 +93,29 @@ def explore_tail(
     seconds: float,
     live: Path | None,
     role: str,
+) -> Attempt:
+    return attempted(
+        start, seed, role, lambda: tail_search(wrapper, config, start, head, bound, seed, seconds, live, role)
+    )
+
+
+def tail_search(
+    wrapper: str,
+    config: Path,
+    start: Start,
+    head: list[list[int]],
+    bound: int,
+    seed: int,
+    seconds: float,
+    live: Path | None,
+    role: str,
 ) -> Searched:
     runner = worker_runner(wrapper, config)
     runner.restore(start)
     for buttons in head:
         runner.press(np.asarray(buttons, dtype=np.int8))
     cut = runner.here(start.state)
-    searched = explore(wrapper, config, cut, bound, seed, seconds, live, role)
+    searched = segment_search(wrapper, config, cut, bound, seed, seconds, live, role)
     if not head:
         return searched
     played = np.asarray(head, dtype=np.int8)

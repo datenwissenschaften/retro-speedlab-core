@@ -69,7 +69,7 @@ class Record:
         replay = self.replayed(segments)
         if replay is None:
             logger.warning(f"A won run in {frames(segments)} frames does not replay from power-on; the record stays")
-            self.events.step(UNVERIFIED, None, frames(segments), None)
+            self.events.step(UNVERIFIED, None, frames(segments), None, None)
             return
         was = f" (was {frames(self.segments)})" if self.segments else ""
         self.events.record(replay, self.segments)

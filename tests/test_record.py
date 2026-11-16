@@ -71,6 +71,7 @@ def test_a_new_record_and_a_won_run_that_does_not_replay_are_published(tmp_path:
     best.offer(FAST)
 
     published = [(topic, payload.get("kind"), payload.get("previous_frames")) for topic, _, payload in events.published]
+    assert events.published[0][2]["role"] is None and events.published[0][2]["worker_seconds"] is None
     assert published == [
         ("runs.steps", "unverified", None),
         ("runs.records", None, None),

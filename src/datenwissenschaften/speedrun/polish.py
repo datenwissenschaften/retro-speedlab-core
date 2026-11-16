@@ -4,12 +4,12 @@ from dataclasses import dataclass
 import numpy as np
 from loguru import logger
 
+from datenwissenschaften.speedrun.attempt import Lead, Origin
 from datenwissenschaften.speedrun.movie import Segment, frames
 from datenwissenschaften.speedrun.rebase import rebased
 from datenwissenschaften.speedrun.routes import Leg, Part, finished, still_replaying
 from datenwissenschaften.speedrun.run import Tas, segment_of
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
-from datenwissenschaften.speedrun.search import Crossing
 
 POLISH_EVERY = 3
 TAIL_ROUNDS = 1
@@ -54,18 +54,20 @@ class Polisher:
         cut = random.choice(cut_points(frames(segments)))
         leg = Leg(part.name, Start(part.entry_state, routes.routes[part.name].entry), part.exit)
         faster = self.tail(leg, segments, cut)
-        return faster is not None and self.commit(part, current, leg, segments, faster)
+        return faster is not None and self.commit(part, current, leg, segments, *faster)
 
-    def tail(self, leg: Leg, segments: list[Segment], cut: int) -> list[Segment] | None:
+    def tail(self, leg: Leg, segments: list[Segment], cut: int) -> tuple[list[Segment], Origin] | None:
         head, start = played_until(self.tas.runner, leg.entry, segments, cut)
         bound = frames(segments) - cut - SMALLEST_GAIN_FRAMES
-        crossing = self.tas.searcher.best(start, bound, TAIL_ROUNDS)
-        if not isinstance(crossing, Crossing) or crossing.frames > bound or crossing.end.state != leg.exit:
+        found = self.tas.searcher.best(start, bound, TAIL_ROUNDS)
+        if not isinstance(found, Lead) or found.crossing.frames > bound or found.crossing.end.state != leg.exit:
             logger.info(f"{leg.name} from frame {cut}: no way to its exit in {bound} frames or fewer")
             return None
-        return [*head, segment_of(crossing)]
+        return [*head, segment_of(found.crossing)], found.origin
 
-    def commit(self, part: Part, current: Part, leg: Leg, segments: list[Segment], faster: list[Segment]) -> bool:
+    def commit(
+        self, part: Part, current: Part, leg: Leg, segments: list[Segment], faster: list[Segment], origin: Origin
+    ) -> bool:
         routes, runner = self.tas.routes, self.tas.runner
         replay = still_replaying(runner, leg.entry, faster)
         if len(replay) < len(faster):
@@ -79,5 +81,5 @@ class Polisher:
         routes.move(moved)
         kept = len(moved[current.name].segments) if current.name in moved else 0
         logger.info(f"{part.name} is {saved} frames faster; {current.name} keeps {kept} pieces from its new start")
-        self.tas.feed.event("improved", replay[-1].state, frames(replay), saved)
+        self.tas.feed.event("improved", replay[-1].state, frames(replay), saved, origin)
         return True

@@ -7,7 +7,17 @@ from types import SimpleNamespace
 import msgspec
 import numpy as np
 import pytest
-from fakes import FAKE_VERSION, FakeWrapper, SavingEmulator, fake_routes, saved_state, saving_environment, write_config
+from fakes import (
+    FAKE_VERSION,
+    NO_EVENTS,
+    FakeWrapper,
+    RecordedEvents,
+    SavingEmulator,
+    fake_routes,
+    saved_state,
+    saving_environment,
+    write_config,
+)
 from speedlab_engine.cartridge import BUTTONS
 from speedlab_engine.movie import Movie, decode
 
@@ -15,6 +25,7 @@ from datenwissenschaften.policy.prior import PolicyPrior
 from datenwissenschaften.speedrun import feed as feed_module
 from datenwissenschaften.speedrun import footage, movie, run, search, searcher, workers
 from datenwissenschaften.speedrun.archives import Archives
+from datenwissenschaften.speedrun.attempt import Attempt, Lead, Origin
 from datenwissenschaften.speedrun.explore import search_segment
 from datenwissenschaften.speedrun.hints import Hint, Press, hints_path, load_hints, pressed
 from datenwissenschaften.speedrun.improver import Improver
@@ -44,6 +55,7 @@ from datenwissenschaften.speedrun.routes import (
 from datenwissenschaften.speedrun.run import BACKTRACK_SEARCHES, never_rest
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
 from datenwissenschaften.speedrun.search import HOLD_FRAMES, UNBOUNDED, Checkpoint, Crossing, Searched, shave
+from datenwissenschaften.speedrun.search_events import SearchEvents
 from datenwissenschaften.speedrun.stuck import (
     FAILURES_FILE,
     STUCK_FILE,
@@ -60,6 +72,8 @@ from datenwissenschaften.speedrun.turns import Turn, load_turn, save_turn
 
 BOSS_FRAMES = 3
 SECONDS = 0.05
+SCOUTED = Origin("scout", 1.5)
+POLISHED = Origin("polisher", 4.0)
 
 
 class IdlePool:
@@ -280,7 +294,9 @@ def test_workers_search_and_shave_from_a_savestate(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(workers, "worker_archives", lambda config: archives)
 
     assert (
-        workers.explore("fakes:FakeWrapper", tmp_path, start, 100, 1, SECONDS, None, "scout").crossings[0].frames
+        workers.explore("fakes:FakeWrapper", tmp_path, start, 100, 1, SECONDS, None, "scout")
+        .searched.crossings[0]
+        .frames
         == BOSS_FRAMES
     )
     assert workers.polish("fakes:FakeWrapper", tmp_path, start, crossing, SECONDS) == shave(runner, start, crossing, 0)
@@ -302,7 +318,7 @@ def test_a_faster_piece_that_breaks_the_rest_of_the_run_is_not_taken(tmp_path: P
     tas = local_tas(tmp_path, monkeypatch, runner)
     segments = [Segment("Survive", [[1, 0]] * 4, bytes([4]), False), Segment("Boss", [[1, 0]], bytes([5]), False)]
     faster = Crossing(Start("Survive", bytes([2])), np.zeros((2, 2), np.int8), False, ("Survive", 0))
-    monkeypatch.setattr(searcher.Searcher, "best", lambda self, start, bound, rounds: faster)
+    monkeypatch.setattr(searcher.Searcher, "best", lambda self, start, bound, rounds: Lead(0, faster, SCOUTED))
     replayed = lambda runner, start, shorter: movie.Replay(1, {}, [bytes([2])])  # noqa: E731
     monkeypatch.setattr(run, "verified_segments", replayed)
 
@@ -957,18 +973,18 @@ def test_a_faster_piece_whose_follower_breaks_has_the_follower_searched_again_an
     runner = SegmentRunner(saving_environment(tmp_path))
     tas = local_tas(tmp_path, monkeypatch, runner)
     pool = RecordingPool()
-    tas.improver = Improver("fakes:FakeWrapper", tmp_path, pool, 1, SECONDS, None)
+    tas.improver = Improver("fakes:FakeWrapper", tmp_path, pool, 1, SECONDS, None, NO_EVENTS)
     leg = Leg(FULL_RUN, runner.power_on(), "Exit")
     segments = [Segment("Boss", [[0, 0]] * 40, bytes([1]), False), Segment("Exit", [[0, 0]] * 50, bytes([2]), False)]
     faster = Crossing(Start("Boss", bytes([5])), np.zeros((30, 2), np.int8), False, ("cell",))
     monkeypatch.setattr(run, "verified_segments", lambda *arguments: movie.Replay(1, {}, [bytes([7])]))
 
-    assert tas.swapped(leg, segments, 0, faster) is segments
+    assert tas.swapped(leg, segments, Lead(0, faster, SCOUTED)) is segments
     assert pool.jobs[0][2] == Start("Boss", bytes([7]))
     assert pool.jobs[0][3] == 90 - 30 - 1
 
     repaired = Crossing(Start("Exit", bytes([8])), np.zeros((45, 2), np.int8), False, ("cell",))
-    pool.futures[0].set_result(Searched([repaired], None))
+    pool.futures[0].set_result(Attempt("Exit", 1, POLISHED, Searched([repaired], None)))
     monkeypatch.setattr(
         run,
         "verified_segments",
@@ -976,8 +992,14 @@ def test_a_faster_piece_whose_follower_breaks_has_the_follower_searched_again_an
     )
 
     monkeypatch.setattr(run.Tas, "verified", lambda self, leg, kept: kept)
+    events = RecordedEvents()
+    tas.feed.events = SearchEvents(events, "walk", FAKE_VERSION, 60.0)
 
     assert [len(piece.pressed) for piece in tas.improved(leg, segments)] == [30, 45]
+    steps = [payload for topic, _, payload in events.published if topic == "runs.steps"]
+    assert [(step["kind"], step["saved"], step["role"], step["worker_seconds"]) for step in steps] == [
+        ("improved", 15, "polisher", 4.0)
+    ]
 
 
 def test_when_only_a_part_replays_the_movie_shows_that_part_without_the_broken_piece(tmp_path: Path, monkeypatch):
