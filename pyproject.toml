@@ -44,7 +44,7 @@ Homepage = "https://www.retrospeedlab.com"
 Repository = "https://github.com/RetroSpeedLab/retro-speedlab-core"
 
 [project.optional-dependencies]
-vision = ["torch==2.9.1", "stable-baselines3==2.9.2"]
+vision = ["torch==2.15.0", "stable-baselines3==2.9.2"]
 
 [dependency-groups]
 dev = [
