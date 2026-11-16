@@ -9,7 +9,7 @@ import typer
 from numpy.typing import NDArray
 from speedlab_engine.movie import Movie
 from speedlab_engine.soundtrack import mix
-from speedlab_engine.video import AUDIO_ENCODING, ENCODING, cues_of
+from speedlab_engine.video import AUDIO_ENCODING, ENCODINGS, Encoder, cues_of
 
 from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.settings import load_config
@@ -44,12 +44,12 @@ def moments(
         )
 
 
-def encoder_command(video: Path, frame_rate: float, soundtrack: Path | None) -> list[str]:
+def encoder_command(video: Path, frame_rate: float, soundtrack: Path | None, encoder: Encoder) -> list[str]:
     command = ["ffmpeg", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24"]
     command += ["-s", f"{WIDTH}x{HEIGHT}", "-framerate", f"{frame_rate:.6f}", "-i", "pipe:"]
     if soundtrack is not None:
         command += ["-i", str(soundtrack), *AUDIO_ENCODING]
-    return [*command, *ENCODING, str(video)]
+    return [*command, *ENCODINGS[encoder], str(video)]
 
 
 def soundtrack(runner: SegmentRunner, segments: list[Segment], collection: Path, folder: Path) -> Path | None:
@@ -65,13 +65,14 @@ def render_run_view(wrapper: str, config: Path, pieces: Path, video: Path) -> Pa
     segments = msgspec.msgpack.decode(pieces.read_bytes(), type=list[Segment])
     with TemporaryDirectory() as folder:
         sound = soundtrack(runner, segments, settings.paths.collection, Path(folder))
-        with subprocess.Popen(encoder_command(video, course.frame_rate, sound), stdin=subprocess.PIPE) as encoder:
-            if encoder.stdin is None:
+        command = encoder_command(video, course.frame_rate, sound, settings.video.encoder)
+        with subprocess.Popen(command, stdin=subprocess.PIPE) as ffmpeg:
+            if ffmpeg.stdin is None:
                 raise RuntimeError("ffmpeg opened no input pipe")
             for screen, moment in moments(runner, course, segments):
-                encoder.stdin.write(annotated(screen, settings.speedrun.game.title, moment).tobytes())
-            encoder.stdin.close()
-            if encoder.wait() != 0:
+                ffmpeg.stdin.write(annotated(screen, settings.speedrun.game.title, moment).tobytes())
+            ffmpeg.stdin.close()
+            if ffmpeg.wait() != 0:
                 raise RuntimeError(f"ffmpeg failed to encode {video.name}")
     return video
 

@@ -5,6 +5,7 @@ import pytest
 import yaml
 from box.exceptions import BoxKeyError
 from speedlab_engine.collection import DEMO_COLLECTION
+from speedlab_engine.video import Encoder
 
 from datenwissenschaften.settings import GameSettings, SpeedrunSettings, load_config
 
@@ -23,6 +24,7 @@ def _document() -> dict[str, Any]:
         "twitch": {"enabled": True},
         "agent": {"stall_minutes": 30},
         "events": {"sink": None, "options": {}},
+        "video": {"encoder": "h264_nvenc"},
         "speedrun": {
             "scouts": 3,
             "backtrackers": 2,
@@ -52,6 +54,7 @@ def test_complete_config_loads(tmp_path: Path):
     game = GameSettings("walk", 1, "Walk", "1.0.0", "DEMO", "Warpless")
     assert config.speedrun == SpeedrunSettings(3, 2, 2, 1, 2, 60.0, False, 3, game)
     assert config.upload.api_key is None
+    assert config.video.encoder is Encoder.NVENC
     assert config.log_level == "INFO"
 
 
@@ -108,6 +111,7 @@ def test_the_game_must_be_listed_in_the_collection(tmp_path: Path):
         ("speedrun", "backtrackers", -1, "speedrun.backtrackers"),
         ("speedrun", "segment_seconds", 0, "speedrun.segment_seconds"),
         ("upload", "api_key", " ", "upload.api_key"),
+        ("video", "encoder", "libx265", "video.encoder"),
     ],
 )
 def test_a_malformed_value_is_named_when_the_config_loads(tmp_path: Path, section: str, key: str, value, named: str):

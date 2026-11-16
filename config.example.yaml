@@ -28,6 +28,9 @@ ui:
 twitch:
   enabled: true
 
+video:
+  encoder: libx264
+
 speedrun:
   scouts: 3
   backtrackers: 2

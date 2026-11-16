@@ -20,6 +20,7 @@ from fakes import (
 )
 from speedlab_engine.cartridge import BUTTONS
 from speedlab_engine.movie import Movie, decode
+from speedlab_engine.video import Encoder
 
 from datenwissenschaften.policy.prior import PolicyPrior
 from datenwissenschaften.speedrun import feed as feed_module
@@ -94,13 +95,13 @@ class SyncPool:
         pass
 
 
-def fake_render(paths: object, recordings: list[Path]) -> list[Path]:
+def fake_render(paths: object, encoder: Encoder, recordings: list[Path]) -> list[Path]:
     for recording in recordings:
         recording.with_suffix(".mp4").write_bytes(recording.read_bytes())
     return [recording.with_suffix(".mp4") for recording in recordings]
 
 
-def fake_stack(left: Path, right: Path, stacked: Path) -> Path:
+def fake_stack(left: Path, right: Path, stacked: Path, encoder: Encoder) -> Path:
     stacked.write_bytes(left.read_bytes() + right.read_bytes())
     return stacked
 
@@ -702,7 +703,9 @@ def test_every_level_with_pieces_gets_its_best_video_once_in_level_order(tmp_pat
     monkeypatch.setattr(feed_module, "publish_metadata", lambda section, values: published.append(values))
     rendered: list[Path] = []
     monkeypatch.setattr(
-        footage, "render_video", lambda paths, recordings: rendered.extend(recordings) or fake_render(paths, recordings)
+        footage,
+        "render_video",
+        lambda paths, encoder, recordings: rendered.extend(recordings) or fake_render(paths, encoder, recordings),
     )
     parts = [Part("Survive", "Survive", "Boss"), Part("Level 1", "Boss", None)]
     routes = Routes(tmp_path / "levels.msgpack", tmp_path / "progress.msgpack", parts, FAKE_VERSION)

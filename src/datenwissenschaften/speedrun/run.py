@@ -430,10 +430,10 @@ def screen(settings: RetroSpeedlabConfig, feed: SpeedrunFeed, name: str, render:
 
 
 def screens(settings: RetroSpeedlabConfig, feed: SpeedrunFeed, wrapper: str, config: Path) -> dict[str, Screen]:
-    output = tas_dir(settings)
+    output, encoder = tas_dir(settings), settings.video.encoder
     return {
-        MOVIE: screen(settings, feed, MOVIE, partial(render_movie, settings.paths, output)),
-        COMPARE: screen(settings, feed, COMPARE, partial(render_compare, settings.paths, output)),
+        MOVIE: screen(settings, feed, MOVIE, partial(render_movie, settings.paths, encoder, output)),
+        COMPARE: screen(settings, feed, COMPARE, partial(render_compare, settings.paths, encoder, output)),
         RUN: screen(settings, feed, RUN, partial(render_run, wrapper, config, output)),
     }
 

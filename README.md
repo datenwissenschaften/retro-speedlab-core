@@ -228,6 +228,7 @@ when the configuration is loaded.
 | `speedrun.segment_seconds` | Seconds per segment round, doubled with each retry |
 | `speedrun.policy`, `speedrun.policy_emulators` | PPO policy on or off and its parallel environments |
 | `speedrun.category` | The category run |
+| `video.encoder` | `libx264` encodes on the CPU, `h264_nvenc` on an NVIDIA GPU |
 | `events.sink`, `events.options` | Event sink and its options; `null` publishes nothing |
 | `log_level` | Loguru log level |
 

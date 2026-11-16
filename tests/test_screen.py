@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import httpx
 import numpy as np
 import pytest
+from speedlab_engine.video import Encoder
 
 from datenwissenschaften.ram import RamInfo, Shown, ram
 from datenwissenschaften.route.position import Position
@@ -129,15 +130,17 @@ def test_a_video_that_does_not_render_is_skipped():
 def test_the_movie_and_the_comparison_render_from_their_recordings(tmp_path: Path, monkeypatch):
     rendered: list[list[str]] = []
 
-    def render_video(paths: object, recordings: list[Path]) -> list[Path]:
+    def render_video(paths: object, encoder: Encoder, recordings: list[Path]) -> list[Path]:
         rendered.append([recording.read_bytes().decode() for recording in recordings])
         return [recording.with_suffix(".mp4") for recording in recordings]
 
     monkeypatch.setattr(footage, "render_video", render_video)
-    monkeypatch.setattr(footage, "stack_videos", lambda left, right, stacked: (left.name, right.name, stacked.name))
+    monkeypatch.setattr(
+        footage, "stack_videos", lambda left, right, stacked, encoder: (left.name, right.name, stacked.name)
+    )
 
-    movie = render_movie(SimpleNamespace(), tmp_path, (b"run",))
-    compare = render_compare(SimpleNamespace(), tmp_path, (b"old", b"new"))
+    movie = render_movie(SimpleNamespace(), Encoder.X264, tmp_path, (b"run",))
+    compare = render_compare(SimpleNamespace(), Encoder.X264, tmp_path, (b"old", b"new"))
 
     assert movie == tmp_path / "screen.mp4"
     assert compare == ("compare-before.mp4", "compare-after.mp4", "compare.mp4")

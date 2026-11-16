@@ -2,7 +2,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from speedlab_engine.video import ENCODING
+from speedlab_engine.video import ENCODINGS, Encoder
 
 from datenwissenschaften.settings import RetroSpeedlabPaths
 
@@ -10,7 +10,7 @@ RENDERER = "speedlab_engine.cli"
 MP4 = ".mp4"
 
 
-def render_video(paths: RetroSpeedlabPaths, movies: list[Path]) -> list[Path]:
+def render_video(paths: RetroSpeedlabPaths, encoder: Encoder, movies: list[Path]) -> list[Path]:
     for movie in movies:
         command = [
             sys.executable,
@@ -20,13 +20,14 @@ def render_video(paths: RetroSpeedlabPaths, movies: list[Path]) -> list[Path]:
             str(paths.collection),
             str(movie),
             str(movie.with_suffix(MP4)),
+            encoder,
         ]
         subprocess.run(command, check=True, capture_output=True, text=True)
     return [movie.with_suffix(MP4) for movie in movies]
 
 
-def stack_videos(left: Path, right: Path, stacked: Path) -> Path:
+def stack_videos(left: Path, right: Path, stacked: Path, encoder: Encoder) -> Path:
     command = ["ffmpeg", "-loglevel", "error", "-y", "-i", str(left), "-i", str(right)]
-    command += ["-filter_complex", "hstack=inputs=2", *ENCODING, str(stacked)]
+    command += ["-filter_complex", "hstack=inputs=2", *ENCODINGS[encoder], str(stacked)]
     subprocess.run(command, check=True, capture_output=True, text=True)
     return stacked

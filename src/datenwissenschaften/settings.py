@@ -5,6 +5,7 @@ from typing import Any, cast
 import yaml
 from box import Box
 from speedlab_engine.collection import cartridge_name, listed, load_collection
+from speedlab_engine.video import Encoder
 
 
 @dataclass(frozen=True)
@@ -65,6 +66,11 @@ class SpeedrunSettings:
 
 
 @dataclass(frozen=True)
+class VideoSettings:
+    encoder: Encoder
+
+
+@dataclass(frozen=True)
 class EventSettings:
     sink: str | None
     options: dict[str, Any]
@@ -79,6 +85,7 @@ class RetroSpeedlabConfig:
     lab: LabSettings
     speedrun: SpeedrunSettings
     events: EventSettings
+    video: VideoSettings
     log_level: str
 
 
@@ -126,6 +133,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             sink=_optional_text(document.events.sink, "events.sink"),
             options=_mapping(document.events.options, "events.options"),
         ),
+        video=VideoSettings(encoder=_encoder(document.video.encoder)),
         log_level=_text(document.log_level, "log_level").upper(),
     )
 
@@ -135,6 +143,12 @@ def _game(collection: Path, slug: str, speedrun: Any) -> GameSettings:
     game = listed(games, slug)
     category = _text(speedrun.category, "speedrun.category")
     return GameSettings(game.slug, game.number, game.title, game.version, games.title, category)
+
+
+def _encoder(value: Any) -> Encoder:
+    if value not in list(Encoder):
+        raise RuntimeError(f"Configuration value 'video.encoder' must be one of {', '.join(Encoder)}.")
+    return Encoder(value)
 
 
 def _text(value: Any, name: str) -> str:

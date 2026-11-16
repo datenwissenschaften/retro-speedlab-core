@@ -149,6 +149,7 @@ def write_config(tmp_path: Path) -> Path:
                 "twitch: {enabled: true}",
                 "agent: {stall_minutes: 30}",
                 "events: {sink: null, options: {}}",
+                "video: {encoder: libx264}",
                 "speedrun:",
                 "  scouts: 1",
                 "  backtrackers: 0",
