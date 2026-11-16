@@ -73,6 +73,7 @@ venv = ".venv"
 
 [tool.coverage.run]
 source = ["src/datenwissenschaften"]
+patch = ["subprocess"]
 
 [tool.coverage.report]
 fail_under = 95
