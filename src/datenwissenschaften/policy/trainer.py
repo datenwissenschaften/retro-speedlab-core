@@ -1,4 +1,5 @@
 import io
+import math
 import multiprocessing
 import time
 from functools import partial
@@ -164,7 +165,7 @@ class RoundCallback(BaseCallback):
             "run": self.experiment.path,
             "round": self.rounds,
             "steps": self.num_timesteps,
-            **{name.removeprefix("policy/"): value for name, value in metrics.items()},
+            **{name.removeprefix("policy/"): value for name, value in metrics.items() if math.isfinite(value)},
             "at": now(),
         }
         self.events.publish(POLICY_ROUNDS, self.game, payload)
