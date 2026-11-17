@@ -14,6 +14,7 @@ from datenwissenschaften.ui.video_upload import VideoUpload
 
 VERSION_LENGTH = 12
 RETRY_SECONDS = 30.0
+LONGEST_RETRY_SECONDS = 30 * 60.0
 
 Render = Callable[[tuple[bytes, ...]], Path]
 
@@ -24,6 +25,10 @@ class Cut:
     recordings: tuple[bytes, ...]
     field: dict[str, Any]
     attachments: dict[str, dict[str, Any]]
+
+
+def retry_seconds(failures: int) -> float:
+    return min(RETRY_SECONDS * 2**failures, LONGEST_RETRY_SECONDS)
 
 
 def version(video: Path) -> str:
@@ -79,20 +84,20 @@ class Screen:
             return
         field = {"version": version(video), **cut.field}
         logger.info(f"Rendered the {self.name} video {field['version']} in {time.monotonic() - began:.1f} s")
-        while not self._uploaded(video, field["version"], cut):
+        failures = 0
+        while not self._uploaded(video, field["version"], cut, retry_seconds(failures)):
             with self.changed:
-                if self.changed.wait_for(lambda: self.pending is not None, RETRY_SECONDS):
+                if self.changed.wait_for(lambda: self.pending is not None, retry_seconds(failures)):
                     return
+            failures += 1
         self.show(field)
 
-    def _uploaded(self, video: Path, shown: str, cut: Cut) -> bool:
+    def _uploaded(self, video: Path, shown: str, cut: Cut, retry: float) -> bool:
         if self.upload is None:
             return True
         try:
             self.upload.put(video, shown, cut.attachments)
         except httpx.HTTPError as error:
-            logger.warning(
-                f"The {self.name} video does not reach the backend, retrying in {RETRY_SECONDS:.0f} s: {error}"
-            )
+            logger.warning(f"The {self.name} video does not reach the backend, retrying in {retry:.0f} s: {error}")
             return False
         return True

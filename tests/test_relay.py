@@ -1,5 +1,6 @@
 import gzip
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import httpx
@@ -23,9 +24,13 @@ def api(requests: list[tuple[str, str, bytes]], base_url: str) -> httpx.Client:
     def answer(request: httpx.Request) -> httpx.Response:
         requests.append((request.method, request.url.path, request.content))
         headers.append(request.headers)
-        return httpx.Response(204)
+        return httpx.Response(404 if request.method == "HEAD" else 204)
 
     return httpx.Client(base_url=base_url, transport=httpx.MockTransport(answer))
+
+
+def mocked(answer: Callable[[httpx.Request], httpx.Response]) -> Callable[[str, str], httpx.Client]:
+    return lambda url, api_key: httpx.Client(base_url=url, transport=httpx.MockTransport(answer))
 
 
 def test_the_movie_goes_up_in_parts_below_the_waf_body_limit(monkeypatch, tmp_path: Path):
@@ -39,11 +44,51 @@ def test_the_movie_goes_up_in_parts_below_the_waf_body_limit(monkeypatch, tmp_pa
     VideoUpload(game, "key", "movie.mp4").put(movie, "abc", {"movie-ram.json": {"every": 6}})
 
     assert [(path, body) for _, path, body in requests] == [
+        ("/games/comet_courier/movie.mp4", b""),
         ("/games/comet_courier/movie.mp4/parts/0", b"0123"),
         ("/games/comet_courier/movie.mp4/parts/1", b"4567"),
         ("/games/comet_courier/movie.mp4/parts/2", b"89"),
         ("/games/comet_courier/movie-ram.json", b'{"version":"abc","every":6}'),
     ]
+
+
+def test_a_part_that_times_out_is_sent_again_alone(monkeypatch, tmp_path: Path):
+    sent: list[str] = []
+    timeouts = [httpx.WriteTimeout("slow uplink")]
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        if request.method == "HEAD":
+            return httpx.Response(404)
+        sent.append(request.url.path)
+        if request.url.path.endswith("/parts/1") and timeouts:
+            raise timeouts.pop()
+        return httpx.Response(204)
+
+    movie = tmp_path / "screen.mp4"
+    movie.write_bytes(b"0123456789")
+    monkeypatch.setattr(video_upload, "PART_BYTES", 4)
+    monkeypatch.setattr(video_upload, "FIRST_WAIT_SECONDS", 0.0)
+    monkeypatch.setattr(video_upload, "relay_client", mocked(answer))
+
+    VideoUpload(RELAY_URL, "key", "movie.mp4").put(movie, "abc", {})
+
+    assert sent == ["/movie.mp4/parts/0", "/movie.mp4/parts/1", "/movie.mp4/parts/1", "/movie.mp4/parts/2"]
+
+
+def test_a_video_the_backend_holds_is_not_sent_again(monkeypatch, tmp_path: Path):
+    sent: list[tuple[str, str]] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        sent.append((request.method, request.url.path))
+        return httpx.Response(200, headers={"ETag": '"abc"'}) if request.method == "HEAD" else httpx.Response(204)
+
+    movie = tmp_path / "screen.mp4"
+    movie.write_bytes(b"0123456789")
+    monkeypatch.setattr(video_upload, "relay_client", mocked(answer))
+
+    VideoUpload(RELAY_URL, "key", "movie.mp4").put(movie, "abc", {"movie-ram.json": {"every": 6}})
+
+    assert sent == [("HEAD", "/movie.mp4"), ("PUT", "/movie-ram.json")]
 
 
 def test_an_oversized_movie_fails_fast(monkeypatch, tmp_path: Path):
