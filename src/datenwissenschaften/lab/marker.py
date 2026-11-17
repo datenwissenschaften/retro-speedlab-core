@@ -29,6 +29,7 @@ class AgentBranch:
 @dataclass(slots=True, frozen=True)
 class LabMarker:
     until: float
+    work_until: float
     phase: str
     base: str
     agents: dict[str, AgentBranch]

@@ -141,7 +141,8 @@ def test_the_published_lab_status_names_the_team_and_the_critic(tmp_path: Path, 
     define_agent(tmp_path, "reader", "Reads one source file.")
     log = real_log(tmp_path, REAL_LOG)
     agents = {"claude": {"log": str(log), "worktree": str(tmp_path)}}
-    lab = {"until": time.time() + 600, "phase": "working", "base": "HEAD", "agents": agents, "duel": None}
+    deadlines = {"until": time.time() + 600, "work_until": time.time() + 300}
+    lab = {**deadlines, "phase": "working", "base": "HEAD", "agents": agents, "duel": None}
     marker = tmp_path / ".lab-run"
     marker.write_text(json.dumps(lab), encoding="utf-8")
     critic = {"at": "2026-10-29T15:30:00+00:00", "runs": 5, "lessons": ["Probe RAM first https://x.example/a"]}
@@ -154,4 +155,4 @@ def test_the_published_lab_status_names_the_team_and_the_critic(tmp_path: Path, 
     assert [member["name"] for member in published["lab_run"]["team"]] == ["lead", "reader"]
     assert published["lab_run"]["handoffs"][0]["to"] == "reader"
     assert published["critic"] == {**critic, "lessons": ["Probe RAM first [hidden]"]}
-    assert lab_status(LabMarker(time.time(), "working", "HEAD", {}, None)).team == []
+    assert lab_status(LabMarker(time.time(), time.time(), "working", "HEAD", {}, None)).team == []

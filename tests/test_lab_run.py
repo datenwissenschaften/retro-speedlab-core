@@ -9,7 +9,7 @@ from datenwissenschaften.lab.branch import CodeHunk, branch_changes, first_hunk,
 
 
 def write_marker(marker: Path, until: float, agents: dict[str, dict[str, str]], base: str, phase: str) -> None:
-    lab = {"until": until, "phase": phase, "base": base, "agents": agents, "duel": None}
+    lab = {"until": until, "work_until": until, "phase": phase, "base": base, "agents": agents, "duel": None}
     marker.write_text(json.dumps(lab), encoding="utf-8")
 
 
@@ -29,7 +29,7 @@ def test_without_a_lab_run_the_stream_is_told_none_runs(tmp_path: Path, monkeypa
 
     lab_run.publish_lab_run(tmp_path / ".lab-run")
 
-    assert published == [("lab_run", {"active": False, "until": None})]
+    assert published == [("lab_run", {"active": False, "until": None, "work_until": None})]
 
 
 def test_a_live_lab_run_is_published_with_its_phase_and_agents(tmp_path: Path, monkeypatch):
@@ -55,7 +55,7 @@ def test_an_expired_marker_counts_as_no_lab_run(tmp_path: Path, monkeypatch):
 
     lab_run.publish_lab_run(marker)
 
-    assert published == [{"active": False, "until": None}]
+    assert published == [{"active": False, "until": None, "work_until": None}]
 
 
 def test_only_source_files_inside_the_branch_are_named(tmp_path: Path):

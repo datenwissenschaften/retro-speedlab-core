@@ -7,7 +7,7 @@ from datenwissenschaften.lab.branch import BranchChanges, CodeHunk, branch_chang
 from datenwissenschaften.lab.marker import DuelResult, LabMarker
 from datenwissenschaften.lab.team import Member, team_status
 
-IDLE = {"active": False, "until": None}
+IDLE = {"active": False, "until": None, "work_until": None}
 TEAM_AGENT = "claude"
 
 
@@ -22,6 +22,7 @@ class AgentStatus:
 class LabStatus:
     active: bool
     until: str
+    work_until: str
     phase: str
     agents: dict[str, AgentStatus]
     duel: DuelResult | None
@@ -44,7 +45,7 @@ def lab_team(lab: LabMarker) -> tuple[list[Member], list[dict[str, str | None]]]
 
 
 def lab_status(lab: LabMarker) -> LabStatus:
-    until = datetime.fromtimestamp(lab.until, UTC).isoformat()
+    until, work_until = (datetime.fromtimestamp(moment, UTC).isoformat() for moment in (lab.until, lab.work_until))
     agents = {agent: agent_status(agent, lab) for agent in lab.agents}
     team, handoffs = lab_team(lab)
-    return LabStatus(True, until, lab.phase, agents, lab.duel, team, handoffs)
+    return LabStatus(True, until, work_until, lab.phase, agents, lab.duel, team, handoffs)
