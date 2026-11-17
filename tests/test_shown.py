@@ -32,6 +32,13 @@ def test_a_checkpoint_in_the_same_state_is_no_new_piece(tmp_path: Path):
     assert not worth_showing(shown, STATES, "Play", [piece("Fed", 100), piece("Fed", 20)])
 
 
+def test_a_win_in_the_same_state_is_a_new_piece(tmp_path: Path):
+    shown = tmp_path / SHOWN_FILE
+    worth_showing(shown, STATES, "Play", [piece("Fed", 100)])
+
+    assert worth_showing(shown, STATES, "Play", [piece("Fed", 100), Segment("Fed", [[0]] * 20, b"", True)])
+
+
 def test_a_game_package_with_other_states_shows_its_first_movie(tmp_path: Path):
     shown = tmp_path / SHOWN_FILE
     worth_showing(shown, STATES, "Play", [piece("Fed", 100), piece("Heavy", 200)])

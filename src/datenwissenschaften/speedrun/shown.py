@@ -16,7 +16,7 @@ class Shown(msgspec.Struct, frozen=True):
 
 def shown_of(states: tuple[str, ...], entry: str, segments: list[Segment]) -> Shown:
     route = [entry, *(segment.state for segment in segments)]
-    pieces = sum(before != after for before, after in zip(route, route[1:], strict=False))
+    pieces = sum(before != after for before, after in zip(route, route[1:], strict=False)) + segments[-1].won
     return Shown(list(states), pieces, frames(segments))
 
 
