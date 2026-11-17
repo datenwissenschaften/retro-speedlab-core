@@ -438,7 +438,7 @@ Before considering work complete, verify:
 
 The TAS search, PPO policy, state machine and lab workflow that speedrun the LAB24 games. Generic for every game: nothing specific to one game.
 
-Checks, run in WSL:
+Checks, run in WSL after `uv sync --frozen --all-extras`, since pyright and the policy tests need the `vision` and `cuda` extras:
 
 - `uv run ruff check .`
 - `uv run ruff format --check .`

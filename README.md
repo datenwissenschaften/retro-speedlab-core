@@ -272,7 +272,10 @@ when the configuration is loaded.
 
 ## Checks
 
+Pyright and the policy tests need the `vision` and `cuda` extras.
+
 ```bash
+uv sync --frozen --all-extras
 uv run ruff check .
 uv run ruff format --check .
 uv run pyright
