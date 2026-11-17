@@ -105,13 +105,38 @@ about the game. A missing file is empty knowledge; a malformed one stops the run
 Every key is required, and `sprite` names one of the cartridge's `SPRITES`:
 
 ```yaml
-mechanics: [{title: Thrust, text: Holding A burns fuel.}]
-player: {name: Courier, text: The comet courier., sprite: courier}
-enemies: [{name: Drone, text: Flies at the courier., sprite: drone, levels: [1, 2]}]
-powerups: [{name: Fuel, text: Fills the tank., sprite: null, effect: More fuel}]
-levels: [{name: Level 1, goal: Deliver the parcel, route: Over the ridge, hazards: [rocks]}]
-ram: [{address: 0x0010, name: fuel, meaning: Fuel left, verified: true}]
+mechanics:
+  - title: Thrust
+    text: "Holding A burns fuel, and an empty tank drops the courier."
+player:
+  name: Courier
+  text: The comet courier.
+  sprite: courier
+enemies:
+  - name: Drone
+    text: Flies at the courier.
+    sprite: drone
+    levels: [1, 2]
+powerups:
+  - name: Fuel
+    text: Fills the tank.
+    sprite: null
+    effect: More fuel
+levels:
+  - name: Level 1
+    goal: Deliver the parcel
+    route: Over the ridge
+    hazards: [rocks]
+ram:
+  - address: 0x0010
+    name: fuel
+    meaning: Fuel left
+    verified: true
 ```
+
+The lab never edits `hints.json` or `knowledge.yaml` in place. It writes a draft and saves it with
+`python -m datenwissenschaften.lab.save <draft> <game dir>/knowledge.yaml`, which loads the draft with
+the search's own schema and refuses it, leaving the saved file as it was, when the search could not load it.
 
 ## Game kernels
 
