@@ -7,7 +7,6 @@ from loguru import logger
 
 from datenwissenschaften.lab.critic import CRITIC_FILE, read_critic
 from datenwissenschaften.lab.reports import publish_reports
-from datenwissenschaften.lab.request import claim_viewer_request
 from datenwissenschaften.logger import setup_logging
 from datenwissenschaften.settings import RetroSpeedlabConfig, load_config
 from datenwissenschaften.speedrun.journal import JOURNAL_FILE, last_progress
@@ -48,12 +47,8 @@ def lab_run_due(config: str) -> bool:
     if stalled_minutes >= settings.lab.stall_minutes:
         logger.info(f"Lab run: no progress for {stalled_minutes:.0f} minutes")
         return True
-    viewer = claim_viewer_request(settings)
-    if viewer is None:
-        logger.info(f"No lab run: the last progress was {stalled_minutes:.0f} minutes ago")
-        return False
-    logger.info(f"Lab run: {viewer} asked for it on Twitch")
-    return True
+    logger.info(f"No lab run: the last progress was {stalled_minutes:.0f} minutes ago")
+    return False
 
 
 @speedlab.task
