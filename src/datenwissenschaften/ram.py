@@ -2,6 +2,9 @@ from dataclasses import dataclass, field, fields, is_dataclass
 from functools import cache
 from typing import Any, ClassVar, Self, final
 
+import numpy as np
+from numpy.typing import NDArray
+
 from datenwissenschaften.route.position import Position
 
 
@@ -66,14 +69,14 @@ class RamInfo:
 
     @classmethod
     @final
-    def from_ram(cls, raw_ram: Any) -> Self:
-        values = {}
-        for name, (address, length) in cls.ram_map().items():
-            if length == 1:
-                values[name] = int(raw_ram[address])
-            else:
-                values[name] = [int(raw_ram[address + offset]) for offset in range(length)]
-        return cls(**values)
+    def from_ram(cls, raw_ram: bytes | bytearray | NDArray[np.uint8]) -> Self:
+        memory = bytes(raw_ram)
+        return cls(
+            **{
+                name: memory[address] if length == 1 else list(memory[address : address + length])
+                for name, (address, length) in cls.ram_map().items()
+            }
+        )
 
     def describe(self) -> dict[str, int]:
         return {}

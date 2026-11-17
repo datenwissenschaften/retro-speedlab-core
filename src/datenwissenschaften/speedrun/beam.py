@@ -57,9 +57,8 @@ def expanded(runner: SegmentRunner, origin: Start, node: Node, macro: np.ndarray
     for frame, buttons in enumerate(macro, 1):
         alive, won, reward = runner.press(buttons)
         score += reward
-        pressed = np.concatenate([node.pressed, macro[:frame]])
         if leaves(runner, origin, machine.state_name, won):
-            return confirmed(runner, pressed, won)
+            return confirmed(runner, np.concatenate([node.pressed, macro[:frame]]), won)
         if not alive or machine.state_name != origin.state:
             return None
     return Node(runner.here(origin.state), np.concatenate([node.pressed, macro]), score)
