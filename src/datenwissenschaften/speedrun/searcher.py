@@ -4,6 +4,8 @@ from dataclasses import dataclass, replace
 from itertools import islice
 from pathlib import Path
 
+from loguru import logger
+
 from datenwissenschaften.settings import RetroSpeedlabConfig
 from datenwissenschaften.speedrun.attempt import Attempt, Lead
 from datenwissenschaften.speedrun.feed import SpeedrunFeed
@@ -36,7 +38,7 @@ class Searcher:
             seconds = self.settings.speedrun.segment_seconds * 2**round_index
             beat = None if bound == UNBOUNDED else bound
             self.feed.begin(search_round(starts[-1].state, round_index, rounds, seconds, beat))
-            attempts = [(job.index, self.finished(job, seconds)) for job in self.jobs(starts, bound, seconds)]
+            attempts = self.attempts(self.jobs(starts, bound, seconds), seconds)
             self.feed.end()
             leads = [
                 Lead(index, crossing, attempt.origin)
@@ -50,7 +52,16 @@ class Searcher:
                 return [lead for lead in leads if any(lead.crossing is fast for fast in found)], None
         return [], reached
 
-    def finished(self, job: Job, seconds: float) -> Attempt:
+    def attempts(self, jobs: list[Job], seconds: float) -> list[tuple[int, Attempt]]:
+        attempts = [(job.index, attempt) for job in jobs if (attempt := self.finished(job, seconds)) is not None]
+        if not attempts:
+            raise RuntimeError(f"All {len(jobs)} search jobs of the round raised in the game")
+        return attempts
+
+    def finished(self, job: Job, seconds: float) -> Attempt | None:
+        if (error := job.future.exception()) is not None:
+            logger.opt(exception=error).error(f"A search job raised in the game and the round goes on: {error!r}")
+            return None
         attempt = job.future.result()
         self.feed.events.attempt(attempt, seconds)
         return attempt
