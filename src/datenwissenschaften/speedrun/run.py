@@ -75,7 +75,7 @@ from datenwissenschaften.speedrun.stuck import (
     unbar,
 )
 from datenwissenschaften.speedrun.turns import TURN_FILE, Turn, save_turn, turn_of
-from datenwissenschaften.speedrun.versions import upgrade
+from datenwissenschaften.speedrun.versions import retire_other_major, upgrade
 from datenwissenschaften.ui.relay import game_path, relay_key
 from datenwissenschaften.ui.video_upload import VideoUpload
 from datenwissenschaften.workflow.wrapper import wrapper_class
@@ -506,6 +506,7 @@ def tas_run(wrapper: str, config: Path, pool: Executor, polishing: Executor) -> 
 @app.command()
 def search(wrapper: str, config: Path, until: str) -> None:
     settings = load_config(config)
+    retire_other_major(settings)
     with worker_pool(frontier_workers(settings)) as pool, worker_pool(settings.speedrun.polishers) as polishing:
         tas = tas_run(wrapper, config, pool, polishing)
         leg = Leg(FULL_RUN, tas.runner.power_on(), until)

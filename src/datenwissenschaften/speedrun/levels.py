@@ -15,6 +15,7 @@ from datenwissenschaften.speedrun.reel import Reel
 from datenwissenschaften.speedrun.routes import FULL_RUN, Leg, Part, Routes, finished, load_progress, save_progress
 from datenwissenschaften.speedrun.run import Tas, frontier_workers, never_rest, tas_run, worker_pool
 from datenwissenschaften.speedrun.runner import Start
+from datenwissenschaften.speedrun.versions import retire_other_major
 
 
 class LevelTrainer:
@@ -95,6 +96,7 @@ def search_forever(wrapper: str, config: Path) -> None:
 
 def speedrun_forever(wrapper: str, config: Path) -> None:
     settings = load_config(config)
+    retire_other_major(settings)
     if not settings.speedrun.policy:
         search_forever(wrapper, config)
         return

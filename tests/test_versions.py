@@ -1,9 +1,14 @@
 from pathlib import Path
 
-from fakes import FAKE_VERSION, saved_state, saving_environment
+import msgspec
+import pytest
+from fakes import FAKE_VERSION, saved_state, saving_environment, write_config
 from loguru import logger
 
+from datenwissenschaften.settings import load_config
 from datenwissenschaften.speedrun.movie import Segment
+from datenwissenschaften.speedrun.paths import tas_dir
+from datenwissenschaften.speedrun.record import RECORD_FILE, StoredRecord
 from datenwissenschaften.speedrun.routes import (
     FULL_RUN,
     Leg,
@@ -14,7 +19,7 @@ from datenwissenschaften.speedrun.routes import (
     stored_progress,
 )
 from datenwissenschaften.speedrun.runner import SegmentRunner, Start
-from datenwissenschaften.speedrun.versions import upgrade
+from datenwissenschaften.speedrun.versions import major, retire_other_major, upgrade
 
 OLD_VERSION = "0.9.0"
 PARTS = [Part("Survive", "Survive", "Boss")]
@@ -70,3 +75,44 @@ def test_routes_of_the_current_version_are_left_as_they_are(tmp_path: Path):
     kept, messages = upgraded(tmp_path, FAKE_VERSION, pieces)
 
     assert kept.segments("Survive") == pieces and messages == []
+
+
+def learned_game(tmp_path: Path, version: str) -> Path:
+    output = tas_dir(load_config(write_config(tmp_path)))
+    output.mkdir(parents=True)
+    (output / RECORD_FILE).write_bytes(msgspec.msgpack.encode(StoredRecord(version, [])))
+    save_progress(output / "progress.msgpack", [], version)
+    (tmp_path / "models").mkdir()
+    (tmp_path / "models" / "policy.zip").write_bytes(b"weights")
+    (tmp_path / "knowledge.yaml").write_text("{}")
+    return output
+
+
+def test_a_new_major_version_retires_every_learned_piece_of_the_game_and_the_search_starts_fresh(tmp_path: Path):
+    learned_game(tmp_path, OLD_VERSION)
+    messages = []
+    sink = logger.add(messages.append, format="{message}")
+
+    retire_other_major(load_config(tmp_path / "config.yaml"))
+
+    logger.remove(sink)
+    retired = tmp_path / "retired" / OLD_VERSION
+    assert sorted(path.name for path in retired.iterdir()) == ["cache", "hints.json", "knowledge.yaml", "models"]
+    assert (retired / "cache" / "tas" / RECORD_FILE).is_file()
+    assert not (tmp_path / "cache").exists() and not (tmp_path / "models").exists()
+    assert len(messages) == 1 and f"a new major after {OLD_VERSION}" in messages[0]
+
+
+def test_a_minor_or_patch_version_keeps_everything_the_game_learned(tmp_path: Path):
+    output = learned_game(tmp_path, "1.3.7")
+
+    retire_other_major(load_config(tmp_path / "config.yaml"))
+
+    assert (output / RECORD_FILE).is_file() and (tmp_path / "models" / "policy.zip").is_file()
+    assert not (tmp_path / "retired").exists()
+
+
+def test_a_version_that_is_not_semantic_stops_the_search():
+    assert major("2.0.0") == 2
+    with pytest.raises(ValueError, match="not MAJOR.MINOR.PATCH"):
+        major("2.0")

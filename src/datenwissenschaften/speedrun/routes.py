@@ -96,13 +96,17 @@ def save_progress(path: Path, segments: list[Segment], version: str) -> None:
     atomic_write(path, msgspec.msgpack.encode(Progress(version, segments)))
 
 
+def stored_routes(path: Path) -> dict[str, Route]:
+    return msgspec.msgpack.decode(path.read_bytes(), type=dict[str, Route]) if path.is_file() else {}
+
+
 class Routes:
     def __init__(self, path: Path, progress: Path, parts: list[Part], version: str) -> None:
         self.path = path
         self.progress = progress
         self.parts = parts
         self.version = version
-        self.routes = msgspec.msgpack.decode(path.read_bytes(), type=dict[str, Route]) if path.is_file() else {}
+        self.routes = stored_routes(path)
 
     def relabel(self, runner: SegmentRunner) -> list[str]:
         entries = {part.name: part.entry_state for part in self.parts}

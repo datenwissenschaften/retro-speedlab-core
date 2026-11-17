@@ -73,9 +73,12 @@ searched separately:
    with its current frames as the bound. A faster piece replaces the old one only
    if the movie still replays.
 
-When a game's cartridge `VERSION` changes, every stored piece is replayed on the
-new version; the route is cut at the first piece that breaks and the search
-continues from there.
+When a game's cartridge `VERSION` changes its minor or patch number, every
+stored piece is replayed on the new version; the route is cut at the first piece
+that breaks and the search continues from there. A new major version (`X.0.0`)
+is a new game: before the search starts, `paths.cache`, `paths.models`,
+`hints.json` and `knowledge.yaml` move to `retired/<old version>/` next to the
+configuration, and the record, routes, policy and caches start fresh.
 
 ### Outputs
 
