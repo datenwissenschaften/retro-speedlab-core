@@ -101,7 +101,7 @@ def test_every_finished_polisher_job_is_published_as_an_attempt_with_its_worker_
 def test_the_beam_scout_finds_the_way_out_with_button_patterns(tmp_path: Path):
     runner = SegmentRunner(saving_environment(tmp_path))
 
-    searched = beam_search(runner, runner.power_on(), SECONDS, None)
+    searched = beam_search(runner, runner.power_on(), SECONDS, None, None)
 
     assert searched.crossings[0].end.state == "Boss"
     assert searched.crossings[0].frames == BOSS_FRAMES

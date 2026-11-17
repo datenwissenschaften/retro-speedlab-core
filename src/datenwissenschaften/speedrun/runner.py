@@ -41,6 +41,14 @@ def route_needs(key: CellKey) -> Needs:
     return tuple(value for value in cast(tuple[object, ...], dynamics) if isinstance(value, int))
 
 
+def cell_key(state: str, ram: RamInfo, frames: int) -> CellKey:
+    position = ram.position()
+    if position is None:
+        return (state, *ram.dynamics()) if ram.dynamics() else (state, frames // TIME_BUCKET_FRAMES)
+    cell = (position.x // CELL_PIXELS, position.y // CELL_PIXELS, position.height // CELL_PIXELS)
+    return (state, position.area, *cell, position.airborne, ram.dynamics())
+
+
 @dataclass(slots=True, frozen=True)
 class Start:
     state: str
@@ -138,8 +146,4 @@ class SegmentRunner:
         return self.wrapper.routes.remaining(self.ram.position(), self.ram.dynamics())
 
     def key(self, frames: int) -> CellKey:
-        state, position = self.wrapper.state_machine.state_name, self.ram.position()
-        if position is None:
-            return (state, *self.ram.dynamics()) if self.ram.dynamics() else (state, frames // TIME_BUCKET_FRAMES)
-        cell = (position.x // CELL_PIXELS, position.y // CELL_PIXELS, position.height // CELL_PIXELS)
-        return (state, position.area, *cell, position.airborne, self.ram.dynamics())
+        return cell_key(self.wrapper.state_machine.state_name, self.ram, frames)

@@ -40,4 +40,5 @@ speedrun:
   segment_seconds: 240
   policy: false
   policy_emulators: 3
+  beam_kernel: cartridge
   category: Any%

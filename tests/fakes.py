@@ -159,6 +159,7 @@ def write_config(tmp_path: Path) -> Path:
                 "  segment_seconds: 0.05",
                 "  policy: false",
                 "  policy_emulators: 1",
+                "  beam_kernel: cartridge",
                 "  category: Any%",
                 "log_level: INFO",
             ]

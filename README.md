@@ -113,6 +113,15 @@ levels: [{name: Level 1, goal: Deliver the parcel, route: Over the ridge, hazard
 ram: [{address: 0x0010, name: fuel, meaning: Fuel left, verified: true}]
 ```
 
+## Game kernels
+
+A game may ship a kernel next to its speedrun wrapper, `speedrun.kernels.<slug>.kernel`: its frame logic
+and the judgement of its states rewritten as plain functions on the RAM, which Numba compiles from one
+source for the CPU and, through Numba-CUDA-MLIR, for the GPU. With `speedrun.beam_kernel` set to `cpu`
+or `cuda`, the beam scout expands every candidate of a layer in one batch, one game copy per thread,
+and replays only the candidates that leave the stage on the cartridge. The cartridge stays the referee:
+records, movies and verification never use a kernel. The `cuda` extra installs the GPU compiler.
+
 ## PPO policy
 
 With `speedrun.policy: true` and the `vision` extra (PyTorch and
@@ -230,6 +239,7 @@ when the configuration is loaded.
 | `speedrun.scouts`, `speedrun.backtrackers`, `speedrun.beam_scouts`, `speedrun.vision_scouts`, `speedrun.polishers` | Search processes per role |
 | `speedrun.segment_seconds` | Seconds per segment round, doubled with each retry |
 | `speedrun.policy`, `speedrun.policy_emulators` | PPO policy on or off and its parallel environments |
+| `speedrun.beam_kernel` | How the beam scout steps its candidates: `cartridge` one at a time in Python, `cpu` or `cuda` in batches through the game's kernel |
 | `speedrun.category` | The category run |
 | `video.encoder` | `libx264` encodes on the CPU, `h264_nvenc` on an NVIDIA GPU |
 | `events.sink`, `events.options` | Event sink and its options; `null` publishes nothing |

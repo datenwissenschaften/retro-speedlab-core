@@ -3,9 +3,11 @@ from functools import cache
 from pathlib import Path
 
 import numpy as np
+from loguru import logger
 
 from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.environment.wrapper import state_class
+from datenwissenschaften.kernel.batch import Batch, BeamKernel, game_kernel
 from datenwissenschaften.knowledge import knowledge_path, load_knowledge
 from datenwissenschaften.policy.prior import POLICY_FILE, PolicyPrior
 from datenwissenschaften.settings import load_config
@@ -27,6 +29,16 @@ from datenwissenschaften.workflow.wrapper import wrapper_class
 @cache
 def worker_runner(wrapper: str, config: Path) -> SegmentRunner:
     return SegmentRunner(make_environment(wrapper_class(wrapper), load_config(config)))
+
+
+@cache
+def worker_batch(config: Path) -> Batch | None:
+    settings = load_config(config)
+    device = settings.speedrun.beam_kernel
+    if device == BeamKernel.CARTRIDGE:
+        return None
+    logger.info(f"The beam scout of {settings.training.game} expands its candidates on the {device} kernel")
+    return Batch(game_kernel(settings.training.game), device)
 
 
 @cache
@@ -63,9 +75,8 @@ def polish(wrapper: str, config: Path, start: Start, crossing: Crossing, seconds
 
 def beam(wrapper: str, config: Path, start: Start, seed: int, seconds: float, live: Path | None) -> Attempt:
     watched = None if live is None else WorkerLive(live, seed, BEAM_SCOUT, BEAM_MODE)
-    return attempted(
-        start, seed, BEAM_SCOUT, lambda: beam_search(worker_runner(wrapper, config), start, seconds, watched)
-    )
+    runner, batch = worker_runner(wrapper, config), worker_batch(config)
+    return attempted(start, seed, BEAM_SCOUT, lambda: beam_search(runner, start, seconds, watched, batch))
 
 
 def vision(wrapper: str, config: Path, start: Start, seed: int, live: Path | None) -> Attempt:

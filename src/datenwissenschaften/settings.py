@@ -7,6 +7,8 @@ from box import Box
 from speedlab_engine.collection import cartridge_name, listed, load_collection
 from speedlab_engine.video import Encoder
 
+from datenwissenschaften.kernel.batch import BeamKernel
+
 
 @dataclass(frozen=True)
 class RetroSpeedlabPaths:
@@ -62,6 +64,7 @@ class SpeedrunSettings:
     segment_seconds: float
     policy: bool
     policy_emulators: int
+    beam_kernel: BeamKernel
     game: GameSettings
 
 
@@ -127,6 +130,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             segment_seconds=_positive_number(document.speedrun.segment_seconds, "speedrun.segment_seconds"),
             policy=_boolean(document.speedrun.policy, "speedrun.policy"),
             policy_emulators=_positive_int(document.speedrun.policy_emulators, "speedrun.policy_emulators"),
+            beam_kernel=_beam_kernel(document.speedrun.beam_kernel),
             game=_game(collection, slug, document.speedrun),
         ),
         events=EventSettings(
@@ -149,6 +153,12 @@ def _encoder(value: Any) -> Encoder:
     if value not in list(Encoder):
         raise RuntimeError(f"Configuration value 'video.encoder' must be one of {', '.join(Encoder)}.")
     return Encoder(value)
+
+
+def _beam_kernel(value: Any) -> BeamKernel:
+    if value not in list(BeamKernel):
+        raise RuntimeError(f"Configuration value 'speedrun.beam_kernel' must be one of {', '.join(BeamKernel)}.")
+    return BeamKernel(value)
 
 
 def _text(value: Any, name: str) -> str:
