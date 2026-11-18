@@ -96,6 +96,15 @@ def pieces(runner: object, kept: Routes) -> dict[str, int]:
     return {part.name: len(kept.segments(part.name)) for part in kept.parts if kept.segments(part.name)}
 
 
+class FakePolisher:
+    def __init__(self, calls: list) -> None:
+        self.calls = calls
+
+    def polish(self, part: Part, current: Part | None) -> bool:
+        self.calls.append(("polish", part.name, current))
+        return False
+
+
 def trainer_tas(tmp_path: Path, calls: list, extend, improve) -> SimpleNamespace:
     feed = SimpleNamespace(practised=lambda frames: calls.append(("practised", frames)))
     turn_file = tmp_path / "turn.json"
@@ -121,6 +130,7 @@ def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_th
     kept = routes(tmp_path)
     kept.save(Leg(FULL_RUN, POWER_ON, None), [*RUN[:3], Segment("Boss2", [[1]], b"won", True)])
     calls: list[tuple[str, str, int]] = []
+    monkeypatch.setattr(levels, "Polisher", lambda tas, searches: FakePolisher(calls))
 
     def extend(leg: Leg, segments: list[Segment], patience: int | None, rest: Callable[[], bool]) -> list[Segment]:
         calls.append(("extend", leg.name, len(segments)))
@@ -143,8 +153,11 @@ def test_the_trainer_beats_every_part_then_retrains_each_and_only_then_builds_th
     assert calls == [
         practice,
         ("improve", "Menu", 1),
+        ("polish", "Menu", None),
         ("improve", "Level 1", 2),
+        ("polish", "Level 1", None),
         ("improve", "Level 2", 1),
+        ("polish", "Level 2", None),
         practice,
         ("extend", FULL_RUN, 4),
         ("improve", FULL_RUN, 4),

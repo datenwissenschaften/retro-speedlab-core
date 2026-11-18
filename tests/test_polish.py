@@ -2,6 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from fakes import FAKE_VERSION
 
 from datenwissenschaften.speedrun import polish
@@ -62,3 +63,19 @@ def test_a_beaten_level_is_polished_only_every_third_rest_of_the_searched_one(tm
 
     assert [polisher.rest(LEVEL_2) for _ in range(3)] == [False, False, False]
     assert polisher.searches == 3
+
+
+def test_a_won_game_polishes_a_level_and_keeps_the_levels_after_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    routes = saved_routes(tmp_path)
+    faster = [piece("Level3", 9)]
+    events: list[tuple] = []
+    monkeypatch.setattr(polish, "frames", lambda segments: 100 * len(segments))
+    monkeypatch.setattr(polish.Polisher, "tail", lambda self, leg, segments, cut: (faster, None))
+    monkeypatch.setattr(polish, "still_replaying", lambda runner, entry, segments: segments)
+    monkeypatch.setattr(polish, "rebased", lambda runner, kept, name, current, end: events.append(current) or {})
+    feed = SimpleNamespace(event=lambda *event: events.append(event))
+    polisher = polish.Polisher(SimpleNamespace(routes=routes, runner=None, feed=feed), 0)
+
+    assert polisher.polish(LEVEL_2, None)
+    assert routes.segments("Level 2") == faster
+    assert events == [None, ("improved", "Level3", 100, 100, None)]

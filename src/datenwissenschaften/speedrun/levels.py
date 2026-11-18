@@ -59,8 +59,10 @@ class LevelTrainer:
         logger.info(f"All {len(self.routes.parts)} parts are beaten one after the other")
 
     def retrain(self) -> None:
+        polisher = Polisher(self.tas, 0)
         for part in self.routes.parts:
             self.tas.improve(self.leg(part), self.routes.segments(part.name))
+            polisher.polish(part, None)
         self.share_practice()
 
     def full_run(self) -> None:

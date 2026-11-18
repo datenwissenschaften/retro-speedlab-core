@@ -49,8 +49,13 @@ class Polisher:
         beaten = [part for part in routes.parts if part != current and finished(routes.segments(part.name), part.exit)]
         if self.searches % POLISH_EVERY or not beaten:
             return False
-        part = max(beaten, key=lambda each: frames(routes.segments(each.name)))
+        return self.polish(max(beaten, key=lambda each: frames(routes.segments(each.name))), current)
+
+    def polish(self, part: Part, current: Part | None) -> bool:
+        routes = self.tas.routes
         segments = routes.segments(part.name)
+        if frames(segments) <= SMALLEST_GAIN_FRAMES:
+            return False
         cut = random.choice(cut_points(frames(segments)))
         leg = Leg(part.name, Start(part.entry_state, routes.routes[part.name].entry), part.exit)
         faster = self.tail(leg, segments, cut)
@@ -66,20 +71,30 @@ class Polisher:
         return [*head, segment_of(found.crossing)], found.origin
 
     def commit(
-        self, part: Part, current: Part, leg: Leg, segments: list[Segment], faster: list[Segment], origin: Origin
+        self,
+        part: Part,
+        current: Part | None,
+        leg: Leg,
+        segments: list[Segment],
+        faster: list[Segment],
+        origin: Origin,
     ) -> bool:
         routes, runner = self.tas.routes, self.tas.runner
         replay = still_replaying(runner, leg.entry, faster)
         if len(replay) < len(faster):
             return False
         saved = frames(segments) - frames(replay)
-        moved = rebased(runner, routes, part.name, current.name, replay[-1].emulator_state)
+        searched = None if current is None else current.name
+        moved = rebased(runner, routes, part.name, searched, replay[-1].emulator_state)
         if moved is None:
             logger.info(f"{part.name} is {saved} frames faster but a beaten level after it no longer replays; it stays")
             return False
         routes.save(leg, replay)
         routes.move(moved)
-        kept = len(moved[current.name].segments) if current.name in moved else 0
-        logger.info(f"{part.name} is {saved} frames faster; {current.name} keeps {kept} pieces from its new start")
+        if searched is None:
+            logger.info(f"{part.name} is {saved} frames faster; the levels after it still replay")
+        else:
+            kept = len(moved[searched].segments) if searched in moved else 0
+            logger.info(f"{part.name} is {saved} frames faster; {searched} keeps {kept} pieces from its new start")
         self.tas.feed.event("improved", replay[-1].state, frames(replay), saved, origin)
         return True
