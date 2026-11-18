@@ -24,6 +24,7 @@ BOOLEAN_SCORES = frozenset({"accepted", DEPLOYED})
 MAX_TEXT = 4000
 NANOSECONDS = 1_000_000_000
 SECONDS_PER_MINUTE = 60
+EXPORT_TIMEOUT_SECONDS = 60
 TYPE = "langfuse.observation.type"
 INPUT = "langfuse.observation.input"
 OUTPUT = "langfuse.observation.output"
@@ -160,6 +161,7 @@ def langfuse_client(provider: TracerProvider) -> Langfuse:
         base_url=os.environ["LANGFUSE_BASE_URL"],
         tracer_provider=provider,
         should_export_span=exports_every_span,
+        timeout=EXPORT_TIMEOUT_SECONDS,
     )
 
 
