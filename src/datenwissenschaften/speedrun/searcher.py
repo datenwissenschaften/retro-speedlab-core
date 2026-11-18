@@ -24,6 +24,13 @@ class Job:
     future: Future[Attempt]
 
 
+def following_frames(search: Future[Attempt]) -> int:
+    if (error := search.exception()) is not None:
+        logger.opt(exception=error).error(f"A look-ahead job raised in the game and counts as stuck: {error!r}")
+        return UNBOUNDED
+    return min((after.frames for after in search.result().searched.crossings), default=UNBOUNDED)
+
+
 @dataclass(slots=True)
 class Searcher:
     wrapper: str
@@ -105,9 +112,7 @@ class Searcher:
             self.pool.submit(explore, *self._job(lead.crossing.end, UNBOUNDED, seed, seconds), None, SCOUT)
             for seed, lead in enumerate(found)
         ]
-        following = [
-            min((after.frames for after in search.result().searched.crossings), default=UNBOUNDED) for search in ahead
-        ]
+        following = [following_frames(search) for search in ahead]
         totals = [
             lead.crossing.frames + (0 if lead.crossing.won else after)
             for lead, after in zip(found, following, strict=True)

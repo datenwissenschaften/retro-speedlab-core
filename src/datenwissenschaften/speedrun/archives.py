@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 from cachetools import LRUCache
+from loguru import logger
 
 from datenwissenschaften.speedrun.archive_store import ARCHIVE_SUFFIX, load_archive, newest, save_archive
 from datenwissenschaften.speedrun.novelty import RamNovelty, novelty_of
@@ -57,6 +58,14 @@ def archive_key(start: Start, bound: int) -> ArchiveKey:
     return hashlib.sha256(b"|".join([start.state.encode(), start.emulator_state, str(bound).encode()])).hexdigest()
 
 
+def save_to_folder(folder: Path, start: Start, archive: Archive) -> None:
+    folder.mkdir(exist_ok=True)
+    try:
+        save_archive(folder / f"{os.getpid()}{ARCHIVE_SUFFIX}", start.state, archive.cells, archive.novelty)
+    except FileNotFoundError:
+        logger.warning(f"Another search pruned archive {folder.name} while this one saved it; it stays in memory only")
+
+
 class Archives:
     def __init__(self, directory: Path, files: int) -> None:
         self.directory = directory
@@ -80,8 +89,7 @@ class Archives:
         kept = pruned(archive)
         self.kept[key] = kept
         folder = self.directory / key
-        folder.mkdir(exist_ok=True)
-        save_archive(folder / f"{os.getpid()}{ARCHIVE_SUFFIX}", start.state, kept.cells, kept.novelty)
+        save_to_folder(folder, start, kept)
         (self.directory / f"{key}{ARCHIVE_SUFFIX}").unlink(missing_ok=True)
         for path in newest(folder.glob(f"*{ARCHIVE_SUFFIX}"))[self.files :]:
             path.unlink(missing_ok=True)

@@ -1,4 +1,5 @@
 import random
+import shutil
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -189,6 +190,20 @@ def test_the_places_a_search_found_survive_a_restart(tmp_path: Path):
     }
     assert (restarted.novelty.seen == kept.novelty.seen).all()
     assert all((cell.trail is None) == (restarted.cells[key].trail is None) for key, cell in kept.cells.items())
+
+
+def test_an_archive_another_search_prunes_while_this_one_saves_it_stays_in_memory(tmp_path: Path, monkeypatch):
+    archives = Archives(tmp_path, 2)
+    archive = fresh_archive(LineRunner(), START)
+
+    def pruned_first(path: Path, *stored: object) -> None:
+        shutil.rmtree(path.parent)
+        save_archive(path, *stored)
+
+    monkeypatch.setattr(archives_module, "save_archive", pruned_first)
+    archives.keep(START, UNBOUNDED, archive)
+
+    assert archives.resumed(LineRunner(), START, UNBOUNDED).cells.keys() == archive.cells.keys()
 
 
 def test_only_the_newest_archives_stay_on_disk(tmp_path: Path, monkeypatch):
