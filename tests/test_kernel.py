@@ -24,7 +24,10 @@ def test_a_batch_steps_every_node_with_every_macro_like_the_cartridge(tmp_path: 
     moves = macros(runner)
 
     found = Batch(walk_kernel, BeamKernel.CPU).expand(
-        np.frombuffer(start.emulator_state, np.uint8)[np.newaxis], *packed(moves), 0
+        np.frombuffer(start.emulator_state, np.uint8)[np.newaxis],
+        np.zeros((1, walk_kernel.MEMORY), np.int64),
+        *packed(moves),
+        0,
     )
 
     for index, macro in enumerate(moves):
@@ -65,12 +68,13 @@ def test_a_kernel_that_writes_past_a_byte_fails_loudly(monkeypatch: pytest.Monke
     right[0, walk_kernel.RIGHT] = 1
 
     with pytest.raises(RuntimeError, match="outside a byte"):
-        Batch(walk_kernel, BeamKernel.CPU).expand(ram, *packed([np.repeat(right, 8, axis=0)]), 0)
+        carried = np.zeros((1, walk_kernel.MEMORY), np.int64)
+        Batch(walk_kernel, BeamKernel.CPU).expand(ram, carried, *packed([np.repeat(right, 8, axis=0)]), 0)
 
 
 def test_the_expand_body_runs_as_plain_python():
     expand = expander(walk_kernel.step, walk_kernel.prime, walk_kernel.judge)
-    rams = np.zeros((1, RAM_SIZE), np.uint8)
+    rams, carried = np.zeros((1, RAM_SIZE), np.uint8), np.zeros((1, walk_kernel.MEMORY), np.int64)
     macros_array = np.zeros((1, HOLD, len(BUTTONS)), np.int32)
     macros_array[0, :, walk_kernel.RIGHT] = 1
     wide, found = np.zeros((1, RAM_SIZE), np.int32), np.zeros((1, RAM_SIZE), np.uint8)
@@ -78,7 +82,19 @@ def test_the_expand_body_runs_as_plain_python():
     rewards, outcomes, frames = (np.zeros(1, np.int64) for _ in range(3))
 
     expand(
-        0, rams, macros_array, np.array([HOLD]), 0, walk_kernel.DATA, wide, found, *working, rewards, outcomes, frames
+        0,
+        rams,
+        carried,
+        macros_array,
+        np.array([HOLD]),
+        0,
+        walk_kernel.DATA,
+        wide,
+        found,
+        *working,
+        rewards,
+        outcomes,
+        frames,
     )
 
     assert (found[0, walk_kernel.X], rewards[0], outcomes[0], frames[0]) == (HOLD, HOLD, STAY, HOLD)

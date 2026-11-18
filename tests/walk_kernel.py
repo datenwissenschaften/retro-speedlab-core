@@ -23,7 +23,7 @@ def step(ram: Ram, buttons: Ram, data: Counts) -> None:
     ram[CHEER] = ram[WON]
 
 
-def prime(ram: Ram, memory: Counts, scratch: Counts, data: Counts) -> None:
+def prime(ram: Ram, carried: Counts, memory: Counts, scratch: Counts, data: Counts) -> None:
     memory[WALKED] = ram[X]
 
 

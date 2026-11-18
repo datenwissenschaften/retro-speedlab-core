@@ -16,6 +16,7 @@ def expander(step: Any, prime: Any, judge: Any) -> Callable[..., None]:
     def expand(
         index: int,
         rams: Bytes,
+        carried: Counts,
         macros: Wide,
         lengths: Counts,
         phase: int,
@@ -33,7 +34,7 @@ def expander(step: Any, prime: Any, judge: Any) -> Callable[..., None]:
         ram = wide[index]
         for address in range(ram.shape[0]):
             ram[address] = rams[node, address]
-        prime(ram, memory[index], scratch[index], data)
+        prime(ram, carried[node], memory[index], scratch[index], data)
         reward, outcome, played = 0, STAY, 0
         while outcome == STAY and played < lengths[move]:
             step(ram, macros[move, played], data)

@@ -23,6 +23,7 @@ class Node:
     start: Start
     pressed: np.ndarray
     score: float
+    memory: Counts
 
 
 Layer = tuple[dict[CellKey, Node], list[Crossing]]
@@ -61,7 +62,7 @@ def expanded(runner: SegmentRunner, origin: Start, node: Node, macro: np.ndarray
             return confirmed(runner, np.concatenate([node.pressed, macro[:frame]]), won)
         if not alive or machine.state_name != origin.state:
             return None
-    return Node(runner.here(origin.state), np.concatenate([node.pressed, macro]), score)
+    return Node(runner.here(origin.state), np.concatenate([node.pressed, macro]), score, node.memory)
 
 
 def kept(runner: SegmentRunner, layer: Layer, child: Node | Crossing | None) -> None:
@@ -98,7 +99,8 @@ def batched(
     live: WorkerLive | None,
 ) -> Layer:
     rams = np.stack([np.frombuffer(node.start.emulator_state, np.uint8) for node in beam])
-    found = batch.expand(rams, *padded, runner.order.index(origin.state))
+    carried = np.stack([node.memory for node in beam])
+    found = batch.expand(rams, carried, *padded, runner.order.index(origin.state))
     layer: Layer = ({}, [])
     reader = runner.wrapper.ram_info_cls
     for index, (node, macro) in enumerate(itertools.product(beam, moves)):
@@ -106,7 +108,8 @@ def batched(
             kept(runner, layer, expanded(runner, origin, node, macro))
         elif found.outcomes[index] == STAY:
             start = Start(origin.state, found.rams[index].tobytes(), None)
-            child = Node(start, np.concatenate([node.pressed, macro]), node.score + float(found.rewards[index]))
+            pressed, score = np.concatenate([node.pressed, macro]), node.score + float(found.rewards[index])
+            child = Node(start, pressed, score, found.memories[index])
             keep(layer, child, cell_key(origin.state, reader.from_ram(found.rams[index]), len(child.pressed)))
     if live is not None:
         runner.restore(max(layer[0].values(), key=lambda child: child.score, default=beam[0]).start)
@@ -121,7 +124,8 @@ def beam_search(
     moves = macros(runner)
     expand: Expand = stepped if batch is None else partial(batched, batch, packed(moves))
     empty = np.zeros((0, len(moves[0][0])), dtype=np.int8)
-    beam, best = [Node(start, empty, 0.0)], Node(start, empty, 0.0)
+    root = Node(start, empty, 0.0, np.zeros(0 if batch is None else batch.memory, np.int64))
+    beam, best = [root], root
     crossings: list[Crossing] = []
     while beam and not crossings and time.monotonic() < deadline:
         children, crossings = expand(runner, start, beam, moves, live)

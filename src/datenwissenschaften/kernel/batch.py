@@ -21,6 +21,7 @@ class BeamKernel(StrEnum):
 @dataclass(slots=True, frozen=True)
 class Expanded:
     rams: Bytes
+    memories: Counts
     rewards: Counts
     outcomes: Counts
     frames: Counts
@@ -36,13 +37,13 @@ class Batch:
         self.data = target.resident(np.asarray(kernel.DATA, np.int64))
         self.launch = target.launcher(expander(functions["step"], functions["prime"], functions["judge"]))
 
-    def expand(self, rams: Bytes, macros: Wide, lengths: Counts, phase: int) -> Expanded:
-        found, rewards, outcomes, frames = self.launch(
-            rams, macros, lengths, phase, self.data, self.memory, self.scratch
+    def expand(self, rams: Bytes, carried: Counts, macros: Wide, lengths: Counts, phase: int) -> Expanded:
+        found, memories, rewards, outcomes, frames = self.launch(
+            rams, carried, macros, lengths, phase, self.data, self.memory, self.scratch
         )
         if (outcomes == BROKEN).any():
             raise RuntimeError("The game kernel wrote a value outside a byte into RAM")
-        return Expanded(found, rewards, outcomes, frames)
+        return Expanded(found, memories, rewards, outcomes, frames)
 
 
 def game_kernel(slug: str) -> ModuleType:
