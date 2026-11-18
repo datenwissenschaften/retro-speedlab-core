@@ -97,12 +97,18 @@ def search_forever(wrapper: str, config: Path) -> None:
 def speedrun_forever(wrapper: str, config: Path) -> None:
     settings = load_config(config)
     retire_other_major(settings)
-    if not settings.speedrun.policy:
-        search_forever(wrapper, config)
-        return
-    trainer = start_policy(wrapper, config)
+    trainer = start_policy(wrapper, config) if settings.speedrun.policy else None
     try:
         search_forever(wrapper, config)
+    except Exception:
+        logger.exception("The search raised and stops")
+        raise
     finally:
-        logger.info("The search stopped, so the policy stops too")
-        trainer.terminate()
+        stop_policy(trainer)
+
+
+def stop_policy(trainer: BaseProcess | None) -> None:
+    if trainer is None:
+        return
+    logger.info("The search stopped, so the policy stops too")
+    trainer.terminate()

@@ -4,8 +4,10 @@ from types import SimpleNamespace
 
 import pytest
 from fakes import write_config
+from loguru import logger
 
 from datenwissenschaften.settings import load_config
+from datenwissenschaften.speedrun import levels as levels_module
 from datenwissenschaften.workflow import speedrun as speedrun_module
 
 
@@ -43,3 +45,18 @@ def test_the_speedrun_task_relays_watches_the_lab_and_runs(tmp_path: Path, monke
     speedrun_module.speedrun("fakes:FakeWrapper", str(write_config(tmp_path)))
 
     assert calls == ["relay", "run"]
+
+
+def test_a_search_that_raises_logs_its_traceback_before_it_stops(tmp_path: Path, monkeypatch):
+    def broken(wrapper: str, config: Path) -> None:
+        raise IndexError("room 5")
+
+    monkeypatch.setattr(levels_module, "retire_other_major", lambda settings: None)
+    monkeypatch.setattr(levels_module, "search_forever", broken)
+    messages: list[str] = []
+    sink = logger.add(messages.append, format="{message}")
+    with pytest.raises(IndexError):
+        levels_module.speedrun_forever("fakes:FakeWrapper", write_config(tmp_path))
+    logger.remove(sink)
+
+    assert "The search raised and stops" in messages[0] and "IndexError: room 5" in messages[0]
