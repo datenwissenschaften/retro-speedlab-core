@@ -64,3 +64,36 @@ def test_shown_fields_name_the_memory_viewers_see_and_fail_when_undeclared():
     with pytest.raises(TypeError, match="_SampleRam must declare shown"):
         _SampleRam.shown_fields()
     assert viewed(Declared.shown_fields(), {"level": 0}) == {"Level": 1}
+
+
+def test_from_ram_builds_the_same_ram_info_as_its_dataclass_init():
+    @dataclass(frozen=True)
+    class Mixed(RamInfo):
+        lives: int = ram(0x02)
+        on_map: bool = seen(False)
+        tiles: list[int] = ram_array(0x04, 4)
+        mode: int = ram(0x01)
+
+    raw = np.arange(16, dtype=np.uint8)
+    read = Mixed.from_ram(raw)
+
+    assert read == Mixed(lives=2, tiles=[4, 5, 6, 7], mode=1)
+    assert list(vars(read).items()) == list(vars(Mixed(lives=2, tiles=[4, 5, 6, 7], mode=1)).items())
+    assert Mixed.from_ram(bytes(raw)) == Mixed.from_ram(bytearray(raw)) == read
+
+
+def test_from_ram_rejects_ram_info_it_cannot_fill_without_its_init():
+    @dataclass(frozen=True, slots=True)
+    class Slotted(RamInfo):
+        lives: int = ram(0x02)
+
+    @dataclass
+    class Checked(RamInfo):
+        lives: int = ram(0x02)
+
+        def __post_init__(self) -> None:
+            self.lives = 0
+
+    for ram_info in (Slotted, Checked):
+        with pytest.raises(TypeError, match="without slots or __post_init__"):
+            ram_info.from_ram(bytes(4))

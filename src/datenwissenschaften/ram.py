@@ -52,6 +52,13 @@ def mapped(cls: type) -> dict[str, tuple[int, int]]:
     }
 
 
+@cache
+def unread(cls: type) -> dict[str, Any]:
+    if hasattr(cls, "__post_init__") or any("__slots__" in vars(base) for base in cls.__mro__[:-1]):
+        raise TypeError(f"{cls.__name__} must keep its RAM fields in its __dict__, without slots or __post_init__")
+    return {f.name: f.default if "screen" in f.metadata else None for f in fields(cls)}
+
+
 class RamInfo:
     shown: ClassVar[dict[str, Shown]]
 
@@ -70,13 +77,15 @@ class RamInfo:
     @classmethod
     @final
     def from_ram(cls, raw_ram: bytes | bytearray | NDArray[np.uint8]) -> Self:
-        memory = bytes(raw_ram)
-        return cls(
-            **{
-                name: memory[address] if length == 1 else list(memory[address : address + length])
-                for name, (address, length) in cls.ram_map().items()
-            }
-        )
+        memory = memoryview(raw_ram).cast("B")
+        read = {
+            name: memory[address] if length == 1 else memory[address : address + length].tolist()
+            for name, (address, length) in cls.ram_map().items()
+        }
+        info = object.__new__(cls)
+        vars(info).update(unread(cls))
+        vars(info).update(read)
+        return info
 
     def describe(self) -> dict[str, int]:
         return {}
