@@ -74,6 +74,7 @@ class SegmentRunner:
         self.emulator.reset()
         self.ram = wrapper.read_ram()
         self.lives = self.ram.remaining_lives()
+        self.masks: dict[tuple[str, bytes], list[NDArray[np.uint8]]] = {}
 
     def power_on(self) -> Start:
         self.emulator.reset()
@@ -91,8 +92,14 @@ class SegmentRunner:
         if start.state_memory is not None:
             self.wrapper.state_machine.current_state.recall(start.state_memory)
 
+    def masks_of(self, buttons: np.ndarray) -> list[NDArray[np.uint8]]:
+        pressed = (buttons.dtype.str, buttons.tobytes())
+        if pressed not in self.masks:
+            self.masks[pressed] = self.emulator.action_to_array(buttons)
+        return self.masks[pressed]
+
     def press(self, buttons: np.ndarray) -> tuple[bool, bool, float]:
-        for player, mask in enumerate(self.emulator.action_to_array(buttons)):
+        for player, mask in enumerate(self.masks_of(buttons)):
             self.emulator.em.set_button_mask(mask, player)
         self.emulator.em.step()
         self.emulator.data.update_ram()
