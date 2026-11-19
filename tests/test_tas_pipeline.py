@@ -874,7 +874,7 @@ def test_the_search_log_tells_when_no_lab_hint_leads_out_of_a_state(tmp_path: Pa
     missed = [line for line in (tas.output / run.LOG_FILE).read_text().splitlines() if "No lab hint" in line]
     assert len(missed) == 1
     assert "out of Survive: tried 1 from 1 of its starts" in missed[0]
-    assert f"stands {HOLD_FRAMES} frames" in missed[0]
+    assert f"lives {HOLD_FRAMES} frames" in missed[0]
 
 
 def test_hints_are_read_from_next_to_the_config_and_name_real_buttons(tmp_path: Path):

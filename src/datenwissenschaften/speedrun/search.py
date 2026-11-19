@@ -146,15 +146,21 @@ def leaves(runner: SegmentRunner, start: Start, state: str, won: bool) -> bool:
     return won or (state != start.state and runner.forward(start.state, state))
 
 
-def holds(runner: SegmentRunner, state: str, idle: np.ndarray) -> bool:
+def stands(runner: SegmentRunner, end: Start, plan: np.ndarray) -> bool:
+    runner.restore(end)
     machine = runner.wrapper.state_machine
-    for _ in range(HOLD_FRAMES):
-        alive, won, _ = runner.press(idle)
+    for frame in range(HOLD_FRAMES):
+        alive, won, _ = runner.press(plan[frame % len(plan)])
         if won:
             return True
-        if not alive or runner.forward(machine.state_name, state):
+        if not alive or runner.forward(machine.state_name, end.state):
             return False
     return True
+
+
+def holds(runner: SegmentRunner, end: Start, idle: np.ndarray) -> bool:
+    plans = [idle[np.newaxis], *runner.wrapper.action_table]
+    return any(stands(runner, end, plan) for plan in plans)
 
 
 def left_at_once(pressed: list[list[int]] | np.ndarray) -> bool:
@@ -166,7 +172,7 @@ def confirmed(runner: SegmentRunner, pressed: np.ndarray, won: bool) -> Crossing
         return None
     state = runner.wrapper.state_machine.state_name
     crossing = Crossing(Start(state, runner.snapshot()), pressed, won, runner.key(0))
-    return crossing if won or holds(runner, state, np.zeros_like(pressed[-1])) else None
+    return crossing if won or holds(runner, crossing.end, np.zeros_like(pressed[-1])) else None
 
 
 def replay(runner: SegmentRunner, start: Start, pressed: np.ndarray) -> Crossing | None:

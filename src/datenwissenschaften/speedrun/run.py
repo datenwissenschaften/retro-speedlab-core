@@ -182,7 +182,7 @@ class Tas:
     def missed(self, state: str, hints: int, starts: int) -> None:
         logger.warning(
             f"No lab hint leads out of {state}: tried {hints} from {starts} of its starts, and none leaves it"
-            f" and then stands {HOLD_FRAMES} frames without buttons"
+            f" and then lives {HOLD_FRAMES} frames without buttons or holding one action"
         )
 
     def leave(self, state: str) -> None:
