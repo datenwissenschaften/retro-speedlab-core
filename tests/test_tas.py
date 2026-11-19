@@ -171,23 +171,34 @@ def test_progress_survives_a_restart_and_a_won_or_target_segment_finishes_the_ru
     assert not finished([], "Level2")
 
 
-def idle_runner(alive: bool, after: str) -> SimpleNamespace:
+def idle_runner(alive: bool, after: str, living: int | None = None) -> SimpleNamespace:
     machine = SimpleNamespace(state_name="Step")
 
-    def press(idle: np.ndarray) -> tuple[bool, bool, float]:
+    def press(buttons: np.ndarray) -> tuple[bool, bool, float]:
         machine.state_name = after
-        return alive, False, 0.0
+        return alive or bool(living is not None and buttons[living]), False, 0.0
 
     forward = lambda origin, reached: ORDER.index(reached) > ORDER.index(origin)  # noqa: E731
-    return SimpleNamespace(wrapper=SimpleNamespace(state_machine=machine), press=press, forward=forward)
+    table = np.eye(2, dtype=np.int8)[:, np.newaxis]
+    wrapper = SimpleNamespace(state_machine=machine, action_table=table)
+    return SimpleNamespace(wrapper=wrapper, press=press, forward=forward, restore=lambda start: None)
 
 
 def test_an_ending_holds_only_while_the_idle_player_lives_and_stays_in_it():
-    idle = np.zeros(1, dtype=np.int8)
+    idle = np.zeros(2, dtype=np.int8)
+    goal = Start("Goal", b"")
 
-    assert holds(idle_runner(True, "Goal"), "Goal", idle)
-    assert not holds(idle_runner(True, "Walk"), "Goal", idle)
-    assert not holds(idle_runner(False, "Goal"), "Goal", idle)
+    assert holds(idle_runner(True, "Goal"), goal, idle)
+    assert not holds(idle_runner(True, "Walk"), goal, idle)
+    assert not holds(idle_runner(False, "Goal"), goal, idle)
+
+
+def test_an_ending_holds_when_one_held_action_lives_where_standing_still_is_caught():
+    idle = np.zeros(2, dtype=np.int8)
+    goal = Start("Goal", b"")
+
+    assert holds(idle_runner(False, "Goal", living=1), goal, idle)
+    assert not holds(idle_runner(False, "Walk", living=1), goal, idle)
 
 
 def test_newest_skips_a_map_folder_another_worker_removed_after_listing(tmp_path: Path) -> None:
