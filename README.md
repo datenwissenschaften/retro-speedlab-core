@@ -7,7 +7,7 @@ Tool-assisted speedrun (TAS) search for the games of
 sequence of button presses from power-on to the end of a game, verifies that it
 replays, and relays the run to the live stream.
 
-The games are LAB24, a collection of Python cartridges written by an AI that run
+The games are RetroSpeedLab24, a collection of Python cartridges written by an AI that run
 on retro-speedlab-engine, a deterministic 8-bit console. Each game's search
 package supplies the RAM map, states, rewards and actions; this repository turns
 them into a speedrun. Nothing in it is specific to one game.
@@ -294,7 +294,7 @@ cartridge.
   Kafka, Spark and Delta Lake over the search's events.
 - **retro-speedlab-engine** (private): the 8-bit console, its movies, videos and
   browser builds.
-- **retro-speedlab-games** (private): the LAB24 cartridges and their search
+- **retro-speedlab-games** (private): the RetroSpeedLab24 cartridges and their search
   packages.
 - **retro-speedlab-runner** (private): runs the searches for the collection and
   schedules lab runs.
