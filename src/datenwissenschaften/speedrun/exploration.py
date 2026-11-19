@@ -1,7 +1,9 @@
+import random
 import time
 from dataclasses import dataclass, replace
 
 from datenwissenschaften.route.route_map import left_in
+from datenwissenschaften.speedrun.archive_index import ArchiveIndex
 from datenwissenschaften.speedrun.archives import Archive
 from datenwissenschaften.speedrun.live import WorkerLive
 from datenwissenschaften.speedrun.preferences import Preferences
@@ -52,20 +54,26 @@ class Exploration:
         runner.restore(start)
         self.novelty = archive.novelty
         self.archive: dict[CellKey, Cell] = archive.cells
+        self.index = ArchiveIndex(archive.cells)
         self.crossings: list[Crossing] = []
         self.guided = False
         self.guided_by: int | None = None
         known = [cell.remaining for cell in self.archive.values() if cell.remaining is not None]
         self.closest = min(known, default=None)
 
-    def cells(self) -> list[Cell]:
+    def guide(self) -> None:
         routes = self.runner.wrapper.routes
         route = routes.reload()
-        if not self.guided or routes.loaded != self.guided_by:
-            for key, cell in self.archive.items():
-                cell.remaining = left_in(route, route_cell(key), route_needs(key))
-            self.guided, self.guided_by = True, routes.loaded
-        return list(self.archive.values())
+        if self.guided and routes.loaded == self.guided_by:
+            return
+        for key, cell in self.archive.items():
+            cell.remaining = left_in(route, route_cell(key), route_needs(key))
+        self.index.reweigh()
+        self.guided, self.guided_by = True, routes.loaded
+
+    def choose(self, rng: random.Random) -> Cell:
+        self.guide()
+        return self.index.choose(rng)
 
     def running(self) -> bool:
         return time.monotonic() < self.deadline
@@ -93,12 +101,11 @@ class Exploration:
         if key in self.archive and self.archive[key].frames <= step.frames:
             return False
         if key not in self.archive and len(self.archive) >= MAX_CELLS:
-            places = [kept for kept, cell in self.archive.items() if cell.trail is not None]
-            del self.archive[min(places, key=lambda kept: (self.archive[kept].score, -self.archive[kept].visits))]
+            self.index.evict()
         here = self.runner.here(self.start.state)
         novelty = self.novelty.see(self.runner.memory())
         remaining = self.runner.remaining()
-        self.archive[key] = Cell(here, step.trail, step.frames, 0, remaining, step.score, novelty)
+        self.index.put(key, Cell(here, step.trail, step.frames, 0, remaining, step.score, novelty))
         if remaining is not None and (self.closest is None or remaining < self.closest):
             self.closest = remaining
         return True

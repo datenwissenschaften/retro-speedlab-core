@@ -5,7 +5,6 @@ from dataclasses import dataclass
 
 from datenwissenschaften.speedrun.exploration import Exploration, Step, step_of
 from datenwissenschaften.speedrun.runner import Start
-from datenwissenschaften.speedrun.search import choose
 from datenwissenschaften.speedrun.strategies import actions_of, next_action
 
 TREE_SECONDS = 20.0
@@ -72,7 +71,7 @@ def simulate(exploration: Exploration, root: Node, rng: random.Random) -> bool:
 
 
 def tree(exploration: Exploration, rng: random.Random) -> None:
-    cell = choose(exploration.cells(), rng)
+    cell = exploration.choose(rng)
     root = Node(cell.start, step_of(cell), 0, 0.0, {})
     budget = min(exploration.deadline, time.monotonic() + TREE_SECONDS)
     for _ in range(TREE_SIMULATIONS):

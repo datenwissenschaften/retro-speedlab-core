@@ -73,7 +73,9 @@ def test_archived_cells_take_their_distance_from_the_newest_route_map(tmp_path: 
     archive = Archive({key: Cell(start, None, 0, 0, None, 0.0, 0)}, cast(RamNovelty, None))
     exploration = Exploration(cast(SegmentRunner, runner), start, 100, 0.0, None, cast(Preferences, None), archive)
 
-    assert [cell.remaining for cell in exploration.cells()] == [5]
+    exploration.guide()
+    assert [cell.remaining for cell in exploration.archive.values()] == [5]
     path.write_text(json.dumps([[1, 0, 0, 0, 2]]), encoding="utf-8")
     os.utime(path, ns=(path.stat().st_atime_ns, path.stat().st_mtime_ns + 1_000_000_000))
-    assert [cell.remaining for cell in exploration.cells()] == [2]
+    exploration.guide()
+    assert [cell.remaining for cell in exploration.archive.values()] == [2]

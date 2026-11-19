@@ -1,5 +1,4 @@
 import math
-import random
 import sys
 import time
 from dataclasses import dataclass
@@ -132,14 +131,6 @@ def fastest_distinct(crossings: list[Crossing]) -> list[Crossing]:
     for crossing in sorted(crossings, key=lambda crossing: crossing.frames):
         fastest.setdefault(crossing.key, crossing)
     return list(fastest.values())[:BEAM]
-
-
-def choose(cells: list[Cell], rng: random.Random) -> Cell:
-    if rng.random() < EXPLOIT:
-        cells = sorted(cells, key=lambda cell: cell.score)[-max(1, len(cells) // LEADING_SHARE) :]
-    cell = rng.choices(cells, weights=[cell.weight for cell in cells])[0]
-    cell.visits += 1
-    return cell
 
 
 def leaves(runner: SegmentRunner, start: Start, state: str, won: bool) -> bool:

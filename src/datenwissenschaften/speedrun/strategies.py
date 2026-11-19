@@ -4,7 +4,7 @@ from collections import deque
 from itertools import product
 
 from datenwissenschaften.speedrun.exploration import Exploration, Step, step_of
-from datenwissenschaften.speedrun.search import EXPLORE_DECISIONS, KEEP_ACTION, STILL_FRAMES, choose
+from datenwissenschaften.speedrun.search import EXPLORE_DECISIONS, KEEP_ACTION, STILL_FRAMES
 
 FRONTIER_DEPTH = 3
 WALK = "walk"
@@ -25,7 +25,7 @@ def next_action(exploration: Exploration, rng: random.Random, action: int) -> in
 
 
 def walk(exploration: Exploration, rng: random.Random) -> None:
-    cell = choose(exploration.cells(), rng)
+    cell = exploration.choose(rng)
     exploration.runner.restore(cell.start)
     step, action = step_of(cell), rng.randrange(actions_of(exploration))
     last, decisions, still = exploration.runner.key(step.frames), 0, 0
@@ -51,7 +51,7 @@ def held(exploration: Exploration, step: Step, action: int, hold: int) -> Step:
 
 
 def frontier(exploration: Exploration, rng: random.Random) -> None:
-    cell = choose(exploration.cells(), rng)
+    cell = exploration.choose(rng)
     budget = min(exploration.deadline, time.monotonic() + FRONTIER_SECONDS)
     layer = deque([(cell.start, step_of(cell), FRONTIER_DEPTH)])
     while layer:
