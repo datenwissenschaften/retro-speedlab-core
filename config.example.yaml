@@ -30,6 +30,7 @@ twitch:
 
 video:
   encoder: libx264
+  max_encoders: 2
 
 speedrun:
   scouts: 3

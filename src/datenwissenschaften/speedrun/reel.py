@@ -31,7 +31,7 @@ class Reel:
         for number, part in enumerate(routes.parts[1:], 1):
             folder = self.directory / str(number)
             folder.mkdir(parents=True, exist_ok=True)
-            render = partial(render_movie, settings.paths, settings.video.encoder, folder)
+            render = partial(render_movie, settings.paths, settings.video, folder)
             upload = video_upload(settings, level_video(number))
             shown = Screen(level_video(number), render, upload, partial(feed.reeled, part.name))
             shown.start()

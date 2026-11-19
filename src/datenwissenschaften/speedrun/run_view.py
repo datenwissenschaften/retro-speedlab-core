@@ -13,6 +13,7 @@ from speedlab_engine.video import AUDIO_ENCODING, ENCODINGS, Encoder, cues_of
 
 from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.settings import load_config
+from datenwissenschaften.speedrun.encoders import encoder_slot
 from datenwissenschaften.speedrun.journal import Split
 from datenwissenschaften.speedrun.movie import Segment, memory_sample, pieces_pressed, recorded
 from datenwissenschaften.speedrun.report import Course, course_of, splits
@@ -66,7 +67,7 @@ def render_run_view(wrapper: str, config: Path, pieces: Path, video: Path) -> Pa
     with TemporaryDirectory() as folder:
         sound = soundtrack(runner, segments, settings.paths.collection, Path(folder))
         command = encoder_command(video, course.frame_rate, sound, settings.video.encoder)
-        with subprocess.Popen(command, stdin=subprocess.PIPE) as ffmpeg:
+        with encoder_slot(settings.video.max_encoders), subprocess.Popen(command, stdin=subprocess.PIPE) as ffmpeg:
             if ffmpeg.stdin is None:
                 raise RuntimeError("ffmpeg opened no input pipe")
             for screen, moment in moments(runner, course, segments):

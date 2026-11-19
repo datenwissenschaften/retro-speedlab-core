@@ -71,6 +71,7 @@ class SpeedrunSettings:
 @dataclass(frozen=True)
 class VideoSettings:
     encoder: Encoder
+    max_encoders: int
 
 
 @dataclass(frozen=True)
@@ -137,7 +138,10 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             sink=_optional_text(document.events.sink, "events.sink"),
             options=_mapping(document.events.options, "events.options"),
         ),
-        video=VideoSettings(encoder=_encoder(document.video.encoder)),
+        video=VideoSettings(
+            encoder=_encoder(document.video.encoder),
+            max_encoders=_positive_int(document.video.max_encoders, "video.max_encoders"),
+        ),
         log_level=_text(document.log_level, "log_level").upper(),
     )
 

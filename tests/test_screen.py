@@ -11,6 +11,7 @@ from speedlab_engine.video import Encoder
 
 from datenwissenschaften.ram import RamInfo, Shown, ram
 from datenwissenschaften.route.position import Position
+from datenwissenschaften.settings import VideoSettings
 from datenwissenschaften.speedrun import footage
 from datenwissenschaften.speedrun.footage import compare_cut, movie_cut, movie_field, render_compare, render_movie
 from datenwissenschaften.speedrun.movie import Segment, memory_field, memory_sample
@@ -151,17 +152,17 @@ def test_a_failed_render_is_not_retried_once_a_newer_cut_waits(tmp_path: Path):
 def test_the_movie_and_the_comparison_render_from_their_recordings(tmp_path: Path, monkeypatch):
     rendered: list[list[str]] = []
 
-    def render_video(paths: object, encoder: Encoder, recordings: list[Path]) -> list[Path]:
+    def render_video(paths: object, video: VideoSettings, recordings: list[Path]) -> list[Path]:
         rendered.append([recording.read_bytes().decode() for recording in recordings])
         return [recording.with_suffix(".mp4") for recording in recordings]
 
     monkeypatch.setattr(footage, "render_video", render_video)
     monkeypatch.setattr(
-        footage, "stack_videos", lambda left, right, stacked, encoder: (left.name, right.name, stacked.name)
+        footage, "stack_videos", lambda left, right, stacked, video: (left.name, right.name, stacked.name)
     )
 
-    movie = render_movie(SimpleNamespace(), Encoder.X264, tmp_path, (b"run",))
-    compare = render_compare(SimpleNamespace(), Encoder.X264, tmp_path, (b"old", b"new"))
+    movie = render_movie(SimpleNamespace(), VideoSettings(Encoder.X264, 1), tmp_path, (b"run",))
+    compare = render_compare(SimpleNamespace(), VideoSettings(Encoder.X264, 1), tmp_path, (b"old", b"new"))
 
     assert movie == tmp_path / "screen.mp4"
     assert compare == ("compare-before.mp4", "compare-after.mp4", "compare.mp4")

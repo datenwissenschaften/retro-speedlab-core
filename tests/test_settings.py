@@ -25,7 +25,7 @@ def _document() -> dict[str, Any]:
         "twitch": {"enabled": True},
         "agent": {"stall_minutes": 30},
         "events": {"sink": None, "options": {}},
-        "video": {"encoder": "h264_nvenc"},
+        "video": {"encoder": "h264_nvenc", "max_encoders": 3},
         "speedrun": {
             "scouts": 3,
             "backtrackers": 2,
@@ -114,6 +114,7 @@ def test_the_game_must_be_listed_in_the_collection(tmp_path: Path):
         ("speedrun", "segment_seconds", 0, "speedrun.segment_seconds"),
         ("upload", "api_key", " ", "upload.api_key"),
         ("video", "encoder", "libx265", "video.encoder"),
+        ("video", "max_encoders", 0, "video.max_encoders"),
         ("speedrun", "beam_kernel", "gpu", "speedrun.beam_kernel"),
     ],
 )

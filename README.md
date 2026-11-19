@@ -267,6 +267,7 @@ when the configuration is loaded.
 | `speedrun.beam_kernel` | How the beam scout steps its candidates: `cartridge` one at a time in Python, `cpu` or `cuda` in batches through the game's kernel |
 | `speedrun.category` | The category run |
 | `video.encoder` | `libx264` encodes on the CPU, `h264_nvenc` on an NVIDIA GPU |
+| `video.max_encoders` | Encodes at once across every process on the host, below a GeForce's NVENC session limit |
 | `events.sink`, `events.options` | Event sink and its options; `null` publishes nothing |
 | `log_level` | Loguru log level |
 

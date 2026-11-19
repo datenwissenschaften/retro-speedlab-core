@@ -4,9 +4,8 @@ from pathlib import Path
 from typing import Any
 
 import msgspec
-from speedlab_engine.video import Encoder
 
-from datenwissenschaften.settings import RetroSpeedlabPaths
+from datenwissenschaften.settings import RetroSpeedlabPaths, VideoSettings
 from datenwissenschaften.speedrun.journal import now
 from datenwissenschaften.speedrun.movie import Segment, recorded
 from datenwissenschaften.speedrun.paths import atomic_write
@@ -58,18 +57,22 @@ def compare_cut(runner: SegmentRunner, start: Start, before: Segment, after: Cro
     return Cut(b"".join(recordings), recordings, field, {})
 
 
-def render_movie(paths: RetroSpeedlabPaths, encoder: Encoder, directory: Path, recordings: tuple[bytes, ...]) -> Path:
+def render_movie(
+    paths: RetroSpeedlabPaths, video: VideoSettings, directory: Path, recordings: tuple[bytes, ...]
+) -> Path:
     recording = directory / SCREEN_MOVIE
     atomic_write(recording, recordings[0])
-    return render_video(paths, encoder, [recording])[0]
+    return render_video(paths, video, [recording])[0]
 
 
-def render_compare(paths: RetroSpeedlabPaths, encoder: Encoder, directory: Path, recordings: tuple[bytes, ...]) -> Path:
+def render_compare(
+    paths: RetroSpeedlabPaths, video: VideoSettings, directory: Path, recordings: tuple[bytes, ...]
+) -> Path:
     pieces = [directory / name for name in COMPARE_PIECES]
     for piece, recording in zip(pieces, recordings, strict=True):
         atomic_write(piece, recording)
-    before, after = render_video(paths, encoder, pieces)
-    return stack_videos(before, after, directory / COMPARE_VIDEO, encoder)
+    before, after = render_video(paths, video, pieces)
+    return stack_videos(before, after, directory / COMPARE_VIDEO, video)
 
 
 def render_run(wrapper: str, config: Path, directory: Path, recordings: tuple[bytes, ...]) -> Path:
