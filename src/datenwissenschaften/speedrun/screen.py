@@ -76,21 +76,30 @@ class Screen:
                 self.changed.notify_all()
 
     def _present(self, cut: Cut) -> None:
-        began = time.monotonic()
-        try:
-            video = self.render(cut.recordings)
-        except subprocess.CalledProcessError as error:
-            logger.error(f"The {self.name} video does not render: {error.stderr}")
-            return
+        began, failures = time.monotonic(), 0
+        while (video := self._rendered(cut, retry_seconds(failures))) is None:
+            if self._superseded(retry_seconds(failures)):
+                return
+            failures += 1
         field = {"version": version(video), **cut.field}
         logger.info(f"Rendered the {self.name} video {field['version']} in {time.monotonic() - began:.1f} s")
         failures = 0
         while not self._uploaded(video, field["version"], cut, retry_seconds(failures)):
-            with self.changed:
-                if self.changed.wait_for(lambda: self.pending is not None, retry_seconds(failures)):
-                    return
+            if self._superseded(retry_seconds(failures)):
+                return
             failures += 1
         self.show(field)
+
+    def _superseded(self, seconds: float) -> bool:
+        with self.changed:
+            return self.changed.wait_for(lambda: self.pending is not None, seconds)
+
+    def _rendered(self, cut: Cut, retry: float) -> Path | None:
+        try:
+            return self.render(cut.recordings)
+        except subprocess.CalledProcessError as error:
+            logger.error(f"The {self.name} video does not render, retrying in {retry:.0f} s: {error.stderr}")
+            return None
 
     def _uploaded(self, video: Path, shown: str, cut: Cut, retry: float) -> bool:
         if self.upload is None:

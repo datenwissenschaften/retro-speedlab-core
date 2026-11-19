@@ -16,7 +16,7 @@ from datenwissenschaften.speedrun.footage import compare_cut, movie_cut, movie_f
 from datenwissenschaften.speedrun.movie import Segment, memory_field, memory_sample
 from datenwissenschaften.speedrun.routes import Leg
 from datenwissenschaften.speedrun.runner import Start
-from datenwissenschaften.speedrun.screen import Cut, Screen
+from datenwissenschaften.speedrun.screen import Cut, Render, Screen
 from datenwissenschaften.speedrun.search import Crossing
 
 COURSE = SimpleNamespace(first="PowerOn", frame_rate=60.0)
@@ -116,13 +116,34 @@ def test_a_video_without_an_upload_is_shown_locally(tmp_path: Path):
     assert shown[0]["frames"] == 1
 
 
-def test_a_video_that_does_not_render_is_skipped():
-    def fail(recordings: tuple[bytes, ...]) -> Path:
-        raise subprocess.CalledProcessError(1, ["python"], "", "ffmpeg failed")
+def flaky_render(failures: int) -> Render:
+    def attempt(recordings: tuple[bytes, ...]) -> Path:
+        nonlocal failures
+        if failures:
+            failures -= 1
+            raise subprocess.CalledProcessError(1, ["python"], "", "OpenEncodeSessionEx failed")
+        return render(recordings)
 
+    return attempt
+
+
+def test_a_video_that_does_not_render_is_retried_until_it_renders(tmp_path: Path, monkeypatch):
+    render.directory = tmp_path
+    monkeypatch.setattr("datenwissenschaften.speedrun.screen.RETRY_SECONDS", 0.0)
     shown: list[dict] = []
 
-    Screen("movie", fail, None, shown.append)._present(cut(b"movie", {"frames": 1}))
+    Screen("movie", flaky_render(2), None, shown.append)._present(cut(b"movie", {"frames": 1}))
+
+    assert shown[0]["frames"] == 1
+
+
+def test_a_failed_render_is_not_retried_once_a_newer_cut_waits(tmp_path: Path):
+    render.directory = tmp_path
+    shown: list[dict] = []
+    movies = Screen("movie", flaky_render(1), None, shown.append)
+    movies.pending = cut(b"newer", {"frames": 2})
+
+    movies._present(cut(b"older", {"frames": 1}))
 
     assert shown == []
 
