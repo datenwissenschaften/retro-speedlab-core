@@ -262,3 +262,28 @@ def test_without_levels_or_progress_the_record_splits_into_the_levels_and_starts
 
     assert [kept.segments(part.name) for part in kept.parts] == [won[:1], won[1:3], won[3:]]
     assert started == [won]
+
+
+def test_a_record_faster_than_the_levels_splits_into_the_levels_again(tmp_path: Path):
+    kept = routes(tmp_path)
+    slower = [*RUN[:3], Segment("Boss2", [[1]] * 9, b"slow won", True)]
+    kept.split(slower, POWER_ON)
+    won = [*RUN[:3], Segment("Boss2", [[1]], b"won", True)]
+    tas = trainer_tas(tmp_path, [], None, None)
+    tas.record = SimpleNamespace(segments=won)
+
+    LevelTrainer(tas, kept, POWER_ON, NO_REEL)
+
+    assert routes(tmp_path).stitched() == won
+
+
+def test_levels_faster_than_the_record_stay(tmp_path: Path):
+    kept = routes(tmp_path)
+    won = [*RUN[:3], Segment("Boss2", [[1]], b"won", True)]
+    kept.split(won, POWER_ON)
+    tas = trainer_tas(tmp_path, [], None, None)
+    tas.record = SimpleNamespace(segments=[*RUN[:3], Segment("Boss2", [[1]] * 9, b"slow won", True)])
+
+    LevelTrainer(tas, kept, POWER_ON, NO_REEL)
+
+    assert routes(tmp_path).stitched() == won
