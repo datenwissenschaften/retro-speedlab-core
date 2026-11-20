@@ -78,7 +78,8 @@ class LevelTrainer:
 
     def full_run(self) -> None:
         leg = Leg(FULL_RUN, self.power_on, None)
-        segments = load_progress(self.routes.progress) or self.tas.record.segments or self.routes.stitched()
+        progress, record = load_progress(self.routes.progress), self.tas.record.segments
+        segments = record if behind(progress, record) else progress or self.routes.stitched()
         self.tas.improve(leg, self.tas.extend(leg, segments, None, never_rest))
 
     def forever(self) -> None:
