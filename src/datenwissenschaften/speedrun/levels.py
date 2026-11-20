@@ -7,6 +7,7 @@ from loguru import logger
 
 from datenwissenschaften.route.paths import route_path
 from datenwissenschaften.settings import load_config
+from datenwissenschaften.speedrun.movie import Segment, frames
 from datenwissenschaften.speedrun.polish import Polisher
 from datenwissenschaften.speedrun.practice import practised, write_practice_route
 from datenwissenschaften.speedrun.prior import PRIOR_FILE, write_prior
@@ -18,6 +19,10 @@ from datenwissenschaften.speedrun.runner import Start
 from datenwissenschaften.speedrun.versions import retire_other_major
 
 
+def behind(stitched: list[Segment], record: list[Segment]) -> bool:
+    return bool(record) and (not finished(stitched, None) or frames(record) < frames(stitched))
+
+
 class LevelTrainer:
     def __init__(self, tas: Tas, routes: Routes, power_on: Start, reel: Reel) -> None:
         self.tas = tas
@@ -27,6 +32,12 @@ class LevelTrainer:
         if not routes.path.is_file():
             routes.split(load_progress(routes.progress) or tas.record.segments, power_on)
             save_progress(routes.progress, [], routes.version)
+        elif behind(routes.stitched(), tas.record.segments):
+            logger.info(
+                f"The record in {frames(tas.record.segments)} frames is faster than the levels in"
+                f" {frames(routes.stitched())} frames; it splits into the levels again"
+            )
+            routes.split(tas.record.segments, power_on)
 
     def leg(self, part: Part) -> Leg:
         entry = self.routes.entry(part, self.power_on)
