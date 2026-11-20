@@ -287,3 +287,34 @@ def test_levels_faster_than_the_record_stay(tmp_path: Path):
     LevelTrainer(tas, kept, POWER_ON, NO_REEL)
 
     assert routes(tmp_path).stitched() == won
+
+
+def full_run_start(tmp_path: Path, progress: list[Segment], record: list[Segment]) -> list[Segment]:
+    kept = routes(tmp_path)
+    kept.split(record, POWER_ON)
+    kept.save(Leg(FULL_RUN, POWER_ON, None), progress)
+    started: list[list[Segment]] = []
+
+    def extend(leg: Leg, segments: list[Segment], patience: int | None, rest: Callable[[], bool]) -> list[Segment]:
+        started.append(segments)
+        raise OneRound
+
+    tas = trainer_tas(tmp_path, [], extend, None)
+    tas.record = SimpleNamespace(segments=record)
+    with pytest.raises(OneRound):
+        LevelTrainer(tas, kept, POWER_ON, NO_REEL).full_run()
+    return started[0]
+
+
+def test_the_full_run_starts_from_the_record_when_the_stored_progress_is_slower(tmp_path: Path):
+    won = [*RUN[:3], Segment("Boss2", [[1]], b"won", True)]
+    slower = [*RUN[:3], Segment("Boss2", [[1]] * 9, b"slow won", True)]
+
+    assert full_run_start(tmp_path, slower, won) == won
+
+
+def test_the_full_run_continues_its_progress_when_it_is_faster_than_the_record(tmp_path: Path):
+    won = [*RUN[:3], Segment("Boss2", [[1]], b"won", True)]
+    slower = [*RUN[:3], Segment("Boss2", [[1]] * 9, b"slow won", True)]
+
+    assert full_run_start(tmp_path, won, slower) == won
