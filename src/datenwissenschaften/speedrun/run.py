@@ -185,9 +185,9 @@ class Tas:
             f" and then lives {HOLD_FRAMES} frames without buttons or holding one action"
         )
 
-    def leave(self, state: str) -> None:
+    def leave(self, start: str, end: str) -> None:
         stuck = load_stuck(self.stuck_file)
-        if stuck is not None and stuck.state != state:
+        if stuck is not None and (stuck.state != end or start == end):
             self.stuck_file.unlink()
 
     def resume_stuck(self, state: str) -> None:
@@ -257,7 +257,7 @@ class Tas:
             turn = turn.found()
             if patience is not None:
                 save_turn(self.turn_file, turn)
-            self.leave(found.end.state)
+            self.leave(start.state, found.end.state)
             self.feed.event("found", found.end.state, found.frames, None, origin)
             segments = self.keep(leg, [*segments, segment_of(found)], found.end.state)
             logger.info(
