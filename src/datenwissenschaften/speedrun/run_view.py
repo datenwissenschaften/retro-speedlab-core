@@ -9,7 +9,7 @@ import typer
 from numpy.typing import NDArray
 from speedlab_engine.movie import Movie
 from speedlab_engine.soundtrack import mix
-from speedlab_engine.video import AUDIO_ENCODING, ENCODINGS, Encoder, cues_of
+from speedlab_engine.video import ENCODINGS, Encoder, audio_command, cues_of
 
 from datenwissenschaften.environment.factory import make_environment
 from datenwissenschaften.settings import load_config
@@ -45,15 +45,19 @@ def moments(
         )
 
 
-def encoder_command(video: Path, frame_rate: float, soundtrack: Path | None, encoder: Encoder) -> list[str]:
+def encoder_command(
+    video: Path, frame_rate: float, soundtrack: tuple[Path, Path] | None, encoder: Encoder
+) -> list[str]:
     command = ["ffmpeg", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24"]
     command += ["-s", f"{WIDTH}x{HEIGHT}", "-framerate", f"{frame_rate:.6f}", "-i", "pipe:"]
     if soundtrack is not None:
-        command += ["-i", str(soundtrack), *AUDIO_ENCODING]
+        command += audio_command(soundtrack)
     return [*command, *ENCODINGS[encoder], str(video)]
 
 
-def soundtrack(runner: SegmentRunner, segments: list[Segment], collection: Path, folder: Path) -> Path | None:
+def soundtrack(
+    runner: SegmentRunner, segments: list[Segment], collection: Path, folder: Path
+) -> tuple[Path, Path] | None:
     movie = msgspec.msgpack.decode(recorded(runner, runner.power_on(), pieces_pressed(segments)), type=Movie)
     cues = cues_of(movie, collection)
     return None if cues is None else mix(cues, len(movie.frames), folder)
