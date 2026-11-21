@@ -67,6 +67,7 @@ class LevelTrainer:
             part = unbeaten[0]
             self.tas.extend(self.leg(part), self.routes.segments(part.name), None, partial(self.rest, polisher, part))
             self.share_practice()
+        self.tas.stuck_file.unlink(missing_ok=True)
         logger.info(f"All {len(self.routes.parts)} parts are beaten one after the other")
 
     def retrain(self) -> None:

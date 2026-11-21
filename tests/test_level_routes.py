@@ -18,6 +18,7 @@ from datenwissenschaften.speedrun.routes import (
     parts_of,
 )
 from datenwissenschaften.speedrun.runner import Start
+from datenwissenschaften.speedrun.stuck import STUCK_FILE, load_stuck, mark_stuck
 
 COURSE = SimpleNamespace(first="Menu", levels={"Level 1": ("Play", "Heavy"), "Level 2": ("Level2", "Boss2")})
 POWER_ON = Start("Menu", b"on")
@@ -115,6 +116,7 @@ def trainer_tas(tmp_path: Path, calls: list, extend, improve) -> SimpleNamespace
         runner=None,
         settings=None,
         turn_file=turn_file,
+        stuck_file=tmp_path / STUCK_FILE,
         output=tmp_path,
         record=SimpleNamespace(segments=[]),
     )
@@ -217,6 +219,23 @@ def test_a_level_is_searched_until_it_is_beaten_before_the_next_one_starts(
         trainer.beat_levels()
 
     assert searched == ["Level 1", "Level 1", "Level 1"]
+
+
+def test_a_stuck_mark_left_from_before_every_level_was_beaten_is_cleared(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(levels, "route_path", lambda settings: tmp_path / "route.json")
+    monkeypatch.setattr(levels, "write_practice_route", lambda runner, kept, path, done: None)
+    monkeypatch.setattr(levels, "write_prior", lambda runner, kept, path: None)
+    monkeypatch.setattr(levels, "practised", pieces)
+    kept = routes(tmp_path)
+    kept.split([*RUN[:3], Segment("Boss2", [[1]], b"won", True)], POWER_ON)
+    tas = trainer_tas(tmp_path, [], None, None)
+    mark_stuck(tas.stuck_file, "Boss2")
+
+    LevelTrainer(tas, kept, POWER_ON, NO_REEL).beat_levels()
+
+    assert load_stuck(tas.stuck_file) is None
 
 
 def test_a_level_shows_its_new_pieces_while_it_is_still_searched(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
