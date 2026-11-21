@@ -67,6 +67,7 @@ from datenwissenschaften.speedrun.stuck import (
     load_barred,
     load_failures,
     load_stuck,
+    mark_stuck,
     unbar,
 )
 from datenwissenschaften.speedrun.turns import Turn, load_turn, save_turn
@@ -249,6 +250,16 @@ def test_a_segment_without_a_way_out_is_marked_stuck_and_the_way_into_it_searche
         ("stuck", "Survive"),
         ("found", "Boss"),
     ]
+
+
+def test_a_state_left_by_the_winning_crossing_into_itself_is_no_longer_stuck(tmp_path: Path, monkeypatch):
+    runner = SegmentRunner(saving_environment(tmp_path))
+    tas = local_tas(tmp_path, monkeypatch, runner)
+    mark_stuck(tas.stuck_file, "Boss")
+
+    tas.leave("Boss", "Boss")
+
+    assert load_stuck(tas.stuck_file) is None
 
 
 class SearchOver(Exception):
