@@ -16,6 +16,9 @@ events:
   sink: null
   options: {}
 
+experiments:
+  repo: working/aim
+
 upload:
   url: https://api.retrospeedlab.com
   api_key: null

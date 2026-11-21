@@ -5,9 +5,9 @@ import time
 from functools import partial
 from pathlib import Path
 
+import aim
 import numpy as np
 import torch
-import wandb
 from loguru import logger
 from numpy.typing import NDArray
 from stable_baselines3 import PPO
@@ -40,9 +40,6 @@ SPAWN = "spawn"
 ENTROPY_LOSS = "train/entropy_loss"
 EXPLAINED_VARIANCE = "train/explained_variance"
 LOSS = "train/loss"
-CHECKPOINT_ROUNDS = 50
-CHECKPOINT_TYPE = "model"
-LATEST = "latest"
 HYPERPARAMETERS = {
     "rollout_decisions": ROLLOUT_DECISIONS,
     "hidden": HIDDEN,
@@ -50,7 +47,6 @@ HYPERPARAMETERS = {
     "epochs": EPOCHS,
     "learning_rate": LEARNING_RATE,
     "entropy_weight": ENTROPY_WEIGHT,
-    "checkpoint_rounds": CHECKPOINT_ROUNDS,
 }
 
 
@@ -92,7 +88,7 @@ def policy_model(env: VecEnv, device: torch.device) -> PPO:
 
 
 class RoundCallback(BaseCallback):
-    def __init__(self, output: Path, experiment: wandb.Run, events: Events, game: str) -> None:
+    def __init__(self, output: Path, experiment: aim.Run, events: Events, game: str) -> None:
         super().__init__()
         self.output = output
         self.experiment = experiment
@@ -134,9 +130,8 @@ class RoundCallback(BaseCallback):
             "policy/exit_rate": self.exits / self.episodes,
             **self.learning(),
         }
-        self.experiment.log(metrics)
-        if self.rounds % CHECKPOINT_ROUNDS == 0:
-            self.checkpoint()
+        for name, value in metrics.items():
+            self.experiment.track(value, name=name, step=self.rounds)  # pyright: ignore[reportUnknownMemberType]
         self.publish(metrics)
         logger.info(
             f"Policy round {self.rounds}: reward {reward:.2f} per episode, {self.exits} exits in "
@@ -154,15 +149,10 @@ class RoundCallback(BaseCallback):
             "policy/loss": learned[LOSS],
         }
 
-    def checkpoint(self) -> None:
-        artifact = wandb.Artifact(f"policy-{self.game}", CHECKPOINT_TYPE, metadata={"round": self.rounds})
-        artifact.add_file(str(self.output / POLICY_FILE))
-        self.experiment.log_artifact(artifact, aliases=[LATEST, f"round-{self.rounds}"])
-
     def publish(self, metrics: dict[str, float]) -> None:
         payload = {
             "game": self.game,
-            "run": self.experiment.path,
+            "run": self.experiment.hash,
             "round": self.rounds,
             "steps": self.num_timesteps,
             **{name.removeprefix("policy/"): value for name, value in metrics.items() if math.isfinite(value)},
@@ -200,5 +190,6 @@ def train_policy_forever(wrapper: str, config: Path) -> None:
     callback = RoundCallback(output, experiment, load_events(settings.events), settings.training.game)
     while speedrun_alive():
         model.learn(ROLLOUT_DECISIONS * env.num_envs, callback=callback, reset_num_timesteps=False)  # pyright: ignore[reportUnknownMemberType]
+    experiment.close()
     env.close()
     logger.warning("The speedrun has stopped, so the policy stops with it")

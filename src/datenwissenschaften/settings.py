@@ -81,6 +81,11 @@ class EventSettings:
 
 
 @dataclass(frozen=True)
+class ExperimentSettings:
+    repo: str
+
+
+@dataclass(frozen=True)
 class RetroSpeedlabConfig:
     paths: RetroSpeedlabPaths
     training: TrainingSettings
@@ -89,6 +94,7 @@ class RetroSpeedlabConfig:
     lab: LabSettings
     speedrun: SpeedrunSettings
     events: EventSettings
+    experiments: ExperimentSettings
     video: VideoSettings
     log_level: str
 
@@ -138,6 +144,7 @@ def load_config(config_path: Path) -> RetroSpeedlabConfig:
             sink=_optional_text(document.events.sink, "events.sink"),
             options=_mapping(document.events.options, "events.options"),
         ),
+        experiments=ExperimentSettings(repo=_text(document.experiments.repo, "experiments.repo")),
         video=VideoSettings(
             encoder=_encoder(document.video.encoder),
             max_encoders=_positive_int(document.video.max_encoders, "video.max_encoders"),

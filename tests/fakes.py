@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
-import wandb
 from speedlab_engine.cartridge import BUTTONS
 from speedlab_engine.collection import DEMO_COLLECTION
 
@@ -17,7 +16,6 @@ from datenwissenschaften.states.state import State
 
 FRAME_RATE = 60.0
 FAKE_VERSION = "1.0.0"
-NO_EXPERIMENT = wandb.init(project="tests", mode="disabled")
 NO_EVENTS = SearchEvents(Unpublished(), "walk", "1.0.0", 60.0)
 SAVING_SCRIPT = [(3, 0), (3, 1), (3, 2), (3, 5), (3, 6), (3, 6), (3, 6), (3, 6)]
 FAKE_BUTTONS = ["A", "START"]
@@ -149,6 +147,7 @@ def write_config(tmp_path: Path) -> Path:
                 "twitch: {enabled: true}",
                 "agent: {stall_minutes: 30}",
                 "events: {sink: null, options: {}}",
+                "experiments: {repo: aim}",
                 "video: {encoder: libx264, max_encoders: 2}",
                 "speedrun:",
                 "  scouts: 1",

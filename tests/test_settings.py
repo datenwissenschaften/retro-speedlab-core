@@ -25,6 +25,7 @@ def _document() -> dict[str, Any]:
         "twitch": {"enabled": True},
         "agent": {"stall_minutes": 30},
         "events": {"sink": None, "options": {}},
+        "experiments": {"repo": "aim://experiments.test:53800"},
         "video": {"encoder": "h264_nvenc", "max_encoders": 3},
         "speedrun": {
             "scouts": 3,
@@ -57,6 +58,7 @@ def test_complete_config_loads(tmp_path: Path):
     assert config.speedrun == SpeedrunSettings(3, 2, 2, 1, 2, 60.0, False, 3, BeamKernel.CPU, game)
     assert config.upload.api_key is None
     assert config.video.encoder is Encoder.NVENC
+    assert config.experiments.repo == "aim://experiments.test:53800"
     assert config.log_level == "INFO"
 
 

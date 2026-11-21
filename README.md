@@ -157,10 +157,10 @@ around one console: RAM in, a button combination out. After every round the
 policy is exported to `tas/policy.npz`, which the search workers read with numpy,
 and the shortest exit it found becomes a hint for the search.
 
-Each round is logged to [Weights & Biases](https://wandb.ai) (project
-`retro-speedlab`) and published as a `policy.rounds` event; every 50 rounds the
-policy is stored as a versioned `policy-<game>` model artifact. Without
-`WANDB_API_KEY` tracking is disabled.
+Each round's metrics are tracked in [Aim](https://aimstack.io), in the repository
+`experiments.repo` names (a local path or a remote `aim://` tracking server), one
+run per policy process in the release's experiment, and published as a
+`policy.rounds` event.
 
 ## Lab
 
@@ -269,6 +269,7 @@ when the configuration is loaded.
 | `video.encoder` | `libx264` encodes on the CPU, `h264_nvenc` on an NVIDIA GPU |
 | `video.max_encoders` | Encodes at once across every process on the host, below a GeForce's NVENC session limit |
 | `events.sink`, `events.options` | Event sink and its options; `null` publishes nothing |
+| `experiments.repo` | Aim repository of the policy runs: a local path or an `aim://` tracking server |
 | `log_level` | Loguru log level |
 
 ## Checks

@@ -2,11 +2,12 @@ import random
 from pathlib import Path
 from types import SimpleNamespace
 
+import aim
 import msgspec
 import numpy as np
 import pytest
 import torch
-from fakes import NO_EXPERIMENT, RecordedEvents
+from fakes import RecordedEvents
 from stable_baselines3.common.vec_env import DummyVecEnv
 from test_tas import START, LineRunner
 
@@ -96,13 +97,18 @@ def test_ppo_rounds_export_the_policy_and_keep_the_shortest_way_out(
     monkeypatch.setattr(trainer_module, "MINIBATCH", 32)
     model = policy_model(DummyVecEnv([lambda: line_env]), CPU)
     events = RecordedEvents()
-    callback = RoundCallback(tmp_path, NO_EXPERIMENT, events, "walk")
+    experiment = aim.Run(
+        repo=str(tmp_path), experiment="local", capture_terminal_logs=False, system_tracking_interval=None
+    )
+    callback = RoundCallback(tmp_path, experiment, events, "walk")
 
     model.learn(128, callback=callback)
     model.learn(64, callback=callback, reset_num_timesteps=False)
 
     published = [(topic, key, payload["round"]) for topic, key, payload in events.published]
     assert published[0] == ("policy.rounds", "walk", 1)
+    assert events.published[0][2]["run"] == experiment.hash
+    assert "policy/reward" in {metric.name for metric in experiment.metrics()}
     assert "loss" in events.published[-1][2] and "entropy" in events.published[-1][2]
     assert PolicyPrior(tmp_path / POLICY_FILE).probabilities(np.zeros(1, dtype=np.uint8), 3) is not None
     assert [report.mode for report in read_reports(tmp_path / "live")] == ["policy"]
