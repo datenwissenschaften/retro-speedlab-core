@@ -56,6 +56,9 @@ dev = [
     "pyright==1.1.408",
 ]
 
+[tool.uv]
+override-dependencies = ["filelock==4.2.12"]
+
 [tool.uv.sources]
 retro-speedlab-engine = { path = "../retro-speedlab-engine", editable = true }
 
